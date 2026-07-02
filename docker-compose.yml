@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: stockflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stockflow
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - stockflow_pgdata:/var/lib/postgresql/data
+
+  app:
+    image: node:20-alpine
+    container_name: stockflow-app
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@192.168.1.92:5432/stockflow
+      PORT: 4173
+      HOST: 0.0.0.0
+    ports:
+      - "4173:4173"
+    volumes:
+      - ./:/app
+    command: sh -c "npm install && npm run db:init && node server.js"
+    depends_on:
+      - postgres
+
+volumes:
+  stockflow_pgdata:

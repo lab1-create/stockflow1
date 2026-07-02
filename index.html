@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>StockFlow</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <section id="login-screen" class="login-screen">
+      <form id="login-form" class="login-card">
+        <div class="brand login-brand">
+          <div class="brand-mark">S</div>
+          <div>
+            <strong>StockFlow</strong>
+            <span>Acesso operacional</span>
+          </div>
+        </div>
+        <div class="flow-title">
+          <p class="eyebrow">Entrar</p>
+          <h2>Selecione seu usuario</h2>
+        </div>
+        <label>
+          Usuario
+          <select id="login-user"></select>
+        </label>
+        <label>
+          PIN
+          <input id="login-pin" type="password" inputmode="numeric" placeholder="0000" required>
+        </label>
+        <button class="primary-action wide">Entrar</button>
+        <p id="login-error" class="login-error"></p>
+        <p class="muted">Administrador: 0000 | Tecnicos: 1111</p>
+      </form>
+    </section>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Navegacao principal">
+        <div class="brand">
+          <div class="brand-mark">S</div>
+          <div>
+            <strong>StockFlow</strong>
+            <span>Controle de insumos</span>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+          <button class="nav-item" data-view="withdraw">Retirar Insumo</button>
+          <button class="nav-item" data-view="return">Devolver Insumo</button>
+          <button class="nav-item" data-view="replenish">Repor Estoque</button>
+          <button class="nav-item" data-view="items">Insumos</button>
+          <button class="nav-item" data-view="history">Historico</button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div>
+            <span class="status-dot"></span>
+            <span id="session-label">Operacao rapida ativa</span>
+          </div>
+          <button id="logout-button" class="ghost-action">Sair</button>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Assistencia tecnica</p>
+            <h1 id="view-title">Dashboard</h1>
+          </div>
+          <label class="search">
+            <span>Pesquisar</span>
+            <input id="global-search" type="search" placeholder="Digite: iphone 11, TAG, Luiz...">
+          </label>
+        </header>
+
+        <section id="dashboard-view" class="view active">
+          <div class="metrics-grid">
+            <article class="metric">
+              <span>Total de Insumos</span>
+              <strong id="metric-total-items">0</strong>
+            </article>
+            <article class="metric danger">
+              <span>Itens Criticos</span>
+              <strong id="metric-critical">0</strong>
+            </article>
+            <article class="metric">
+              <span>Ultimas Retiradas</span>
+              <strong id="metric-withdrawals">0</strong>
+            </article>
+            <article class="metric success">
+              <span>Estoque Total</span>
+              <strong id="metric-stock">0</strong>
+            </article>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>Solicitacoes em tempo real</h2>
+                <span class="pill warning" id="pending-count">0 pendentes</span>
+              </div>
+              <div id="pending-requests" class="request-list"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>Itens criticos</h2>
+                <button class="ghost-action" data-view-jump="replenish">Repor</button>
+              </div>
+              <div id="critical-list" class="compact-list"></div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Tempo medio de uso</h2>
+              <span class="muted">KPI administrativo</span>
+            </div>
+            <div id="usage-kpis" class="table"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Ultimas movimentacoes</h2>
+              <button class="ghost-action" data-view-jump="history">Ver historico</button>
+            </div>
+            <div id="recent-history" class="table"></div>
+          </section>
+        </section>
+
+        <section id="withdraw-view" class="view">
+          <div class="flow-layout" data-flow="withdraw">
+            <section class="flow-card">
+              <div class="stepper" id="withdraw-stepper"></div>
+              <div id="withdraw-content"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="return-view" class="view">
+          <div class="flow-layout">
+            <section class="flow-card">
+              <div class="flow-title">
+                <p class="eyebrow">Devolucao</p>
+                <h2>Bipe o insumo devolvido</h2>
+              </div>
+              <div class="scan-row">
+                <input id="return-code" class="scan-input" placeholder="Codigo do insumo">
+                <button id="return-button" class="primary-action">Devolver</button>
+              </div>
+              <div id="return-result" class="result-box muted">Aguardando leitura...</div>
+            </section>
+          </div>
+        </section>
+
+        <section id="replenish-view" class="view">
+          <div class="flow-layout">
+            <section class="flow-card">
+              <div class="flow-title">
+                <p class="eyebrow">Administrador</p>
+                <h2>Repor estoque</h2>
+              </div>
+              <div class="form-grid">
+                <label>
+                  Codigo
+                  <input id="replenish-code" placeholder="Ex: TG012">
+                </label>
+                <label>
+                  Quantidade recebida
+                  <input id="replenish-qty" type="number" min="1" value="1">
+                </label>
+              </div>
+              <button id="replenish-button" class="primary-action wide">Adicionar ao Estoque</button>
+              <div id="replenish-result" class="result-box muted">Bipe o codigo e informe a quantidade.</div>
+            </section>
+          </div>
+        </section>
+
+        <section id="items-view" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Insumos</h2>
+              <button id="new-item-button" class="primary-action">Novo Insumo</button>
+            </div>
+            <div id="items-grid" class="items-grid"></div>
+          </section>
+        </section>
+
+        <section id="history-view" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Historico completo</h2>
+              <select id="technician-filter">
+                <option value="">Todos os tecnicos</option>
+              </select>
+            </div>
+            <div id="history-table" class="table"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="item-dialog">
+      <form method="dialog" id="item-form" class="dialog-body">
+        <div class="panel-head">
+          <h2 id="dialog-title">Novo Insumo</h2>
+          <button type="button" id="close-dialog" class="icon-button" aria-label="Fechar">x</button>
+        </div>
+        <input type="hidden" id="item-original-code">
+        <div class="form-grid">
+          <label>Codigo<input id="item-code" required></label>
+          <label>Nome<input id="item-name" required></label>
+          <label>Categoria<input id="item-category" required></label>
+          <label>Quantidade Atual<input id="item-qty" type="number" min="0" required></label>
+          <label>Quantidade Minima<input id="item-min" type="number" min="0" required></label>
+          <label>Fornecedor<input id="item-supplier"></label>
+          <label class="span-2">Observacao<input id="item-note"></label>
+        </div>
+        <button class="primary-action wide" value="default">Salvar Insumo</button>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>

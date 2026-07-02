@@ -1,0 +1,23 @@
+databases:
+  - name: stockflow-db
+    databaseName: stockflow
+    user: stockflow
+
+services:
+  - type: web
+    name: stockflow
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm run deploy:start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stockflow-db
+          property: connectionString
+      - key: APP_ACCESS_KEY
+        generateValue: true

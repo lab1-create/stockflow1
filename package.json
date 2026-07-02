@@ -1,0 +1,25 @@
+{
+  "name": "stockflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sistema de controle de insumos para assistencia tecnica.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "deploy:start": "npm run db:init && node server.js",
+    "db:init": "node scripts/run-sql.js db/schema.sql db/seed.sql",
+    "db:schema": "node scripts/run-sql.js db/schema.sql",
+    "db:seed": "node scripts/run-sql.js db/seed.sql",
+    "db:clear": "node scripts/run-sql.js db/clear-data.sql"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": "20.x"
+  }
+}
