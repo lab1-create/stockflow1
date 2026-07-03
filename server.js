@@ -460,7 +460,7 @@ async function requireAdminUser(req) {
   const actorName = String(req.headers["x-stockflow-user"] || "").trim();
   if (!actorName) {
     const error = new Error("Administrador nao informado.");
-    error.status = 403;
+    error.status = 200;
     throw error;
   }
 
