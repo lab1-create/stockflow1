@@ -754,7 +754,7 @@ async function handleLogin(event) {
       currentUser = result.user;
     } else {
       const user = (state.users || seedState.users).find((entry) => entry.name === name);
-      const expectedPin = user?.role === "admin" ? "0000" : "1111";
+      const expectedPin = user?.role === "admin" ? "0000" : "1234";
       if (!user || pin !== expectedPin) throw new Error("Usuario ou PIN invalido.");
       currentUser = user;
     }
