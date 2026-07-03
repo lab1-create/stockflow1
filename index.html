@@ -1,4 +1,13 @@
-<section id="login-screen" class="login-screen">
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>StockFlow</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <section id="login-screen" class="login-screen">
       <form id="login-form" class="login-card">
         <div class="brand login-brand">
           <div class="brand-mark">S</div>
@@ -13,13 +22,196 @@
         </div>
         <label>
           Usuário
-          <input id="login-user" type="text" placeholder="Digite seu usuário" required>
+          <input id="login-user" type="text" placeholder="Digite seu usuário" required style="width: 100%; box-sizing: border-box;">
         </label>
         <label>
           Senha
-          <input id="login-pin" type="password" placeholder="Digite sua senha" required>
+          <input id="login-pin" type="password" placeholder="Digite sua senha" required style="width: 100%; box-sizing: border-box;">
         </label>
         <button class="primary-action wide">Entrar</button>
         <p id="login-error" class="login-error"></p>
       </form>
     </section>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Navegacao principal">
+        <div class="brand">
+          <div class="brand-mark">S</div>
+          <div>
+            <strong>StockFlow</strong>
+            <span>Controle de insumos</span>
+          </div>
+        </div>
+
+        <nav class="nav-group">
+          <button class="nav-item active" data-view="dashboard" id="nav-dashboard">
+            <span class="nav-icon">📊</span> Dashboard
+          </button>
+          <button class="nav-item" data-view="inventory" id="nav-inventory">
+            <span class="nav-icon">📦</span> Inventario
+          </button>
+          <button class="nav-item" data-view="withdraw" id="nav-withdraw">
+            <span class="nav-icon">📤</span> Retirada
+          </button>
+          <button class="nav-item" data-view="return" id="nav-return">
+            <span class="nav-icon">📥</span> Devolucao
+          </button>
+          <button class="nav-item" data-view="history" id="nav-history">
+            <span class="nav-icon">📜</span> Historico
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="user-profile">
+            <div class="avatar" id="user-avatar">?</div>
+            <div class="user-info">
+              <strong id="user-name">Carregando...</strong>
+              <span id="user-role">---</span>
+            </div>
+          </div>
+          <button id="logout-button" class="logout-button" title="Sair do sistema">Sair</button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="top-bar">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="search" id="global-search" placeholder="Buscar insumos por codigo, nome ou categoria...">
+          </div>
+          <div class="top-actions">
+            <button id="new-item-button" class="primary-action admin-only">+ Novo Insumo</button>
+          </div>
+        </header>
+
+        <section id="dashboard-view" class="view active">
+          <div class="dashboard-grid">
+            <section class="panel admin-only" id="requests-panel">
+              <div class="panel-head">
+                <h2>Solicitacoes de Retirada</h2>
+                <span class="badge" id="requests-count">0</span>
+              </div>
+              <div id="requests-list" class="requests-list"></div>
+            </section>
+
+            <section class="panel admin-only" id="admin-user-panel" style="display: none;">
+              <div class="panel-head">
+                <h2>Cadastrar Novo Usuário</h2>
+              </div>
+              <form id="create-user-form" style="display: grid; gap: 12px; margin-top: 12px;">
+                <label style="display: grid; gap: 4px;">
+                  Nome do Usuário
+                  <input id="new-user-name" type="text" required placeholder="Ex: João Silva" style="padding: 8px; border-radius: 4px; border: 1px solid #40566f; background: #0f1720; color: #f8fafc;">
+                </label>
+                <label style="display: grid; gap: 4px;">
+                  Cargo/Função
+                  <select id="new-user-role" required style="padding: 8px; border-radius: 4px; border: 1px solid #40566f; background: #0f1720; color: #f8fafc;">
+                    <option value="tecnico">Técnico</option>
+                    <option value="admin">Administrador</option>
+                    <option value="estoque">Estoque</option>
+                  </select>
+                </label>
+                <button type="submit" class="primary-action" style="padding: 10px; font-weight: bold;">Salvar Usuário</button>
+                <p id="create-user-message" style="margin: 0; font-size: 14px;"></p>
+              </form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>Alertas de Estoque Critico</h2>
+              </div>
+              <div id="alerts-list" class="alerts-list"></div>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-head">
+                <h2>Movimentacoes Recentes</h2>
+              </div>
+              <div id="recent-table" class="table"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="inventory-view" class="view">
+          <section class="panel">
+            <div id="inventory-table" class="table"></div>
+          </section>
+        </section>
+
+        <section id="withdraw-view" class="view">
+          <div class="flow-container">
+            <div id="withdraw-step-1" class="flow-card">
+              <div class="flow-title">
+                <p class="eyebrow">Passo 1 de 2</p>
+                <h2>Onde os insumos serão aplicados?</h2>
+              </div>
+              <div class="selection-grid" id="destinations-grid"></div>
+            </div>
+
+            <div id="withdraw-step-2" class="flow-card" style="display: none;">
+              <div class="flow-title">
+                <p class="eyebrow" id="withdraw-step-2-eyebrow">Passo 2 de 2</p>
+                <h2>Bip ou digite o codigo do insumo</h2>
+              </div>
+              <div class="scanner-input-container">
+                <input id="withdraw-code" class="scanner-input" placeholder="Aguardando leitura..." autocomplete="off">
+                <div class="scanner-laser"></div>
+              </div>
+              <div id="withdraw-feedback" class="feedback-card" style="display: none;"></div>
+              <button id="withdraw-back" class="secondary-button" style="margin-top: 24px;">Voltar</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="return-view" class="view">
+          <div class="flow-container">
+            <div class="flow-card">
+              <div class="flow-title">
+                <p class="eyebrow">Devolucao</p>
+                <h2>Bip ou digite o insumo a ser devolvido</h2>
+              </div>
+              <div class="scanner-input-container">
+                <input id="return-code" class="scanner-input" placeholder="Aguardando leitura..." autocomplete="off">
+                <div class="scanner-laser"></div>
+              </div>
+              <div id="return-feedback" class="feedback-card" style="display: none;"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="history-view" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Historico completo</h2>
+              <select id="technician-filter">
+                <option value="">Todos os tecnicos</option>
+              </select>
+            </div>
+            <div id="history-table" class="table"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="item-dialog">
+      <form method="dialog" id="item-form" class="dialog-body">
+        <div class="panel-head">
+          <h2 id="dialog-title">Novo Insumo</h2>
+          <button type="button" id="close-dialog" class="icon-button" aria-label="Fechar">x</button>
+        </div>
+        <input type="hidden" id="item-original-code">
+        <div class="form-grid">
+          <label>Codigo<input id=\"item-code\" required></label>
+          <label>Nome<input id=\"item-name\" required></label>
+          <label>Categoria<input id=\"item-category\" required></label>
+          <label>Quantidade Atual<input id=\"item-qty\" type=\"number\" min=\"0\" required></label>
+          <label>Quantidade Minima<input id=\"item-min\" type=\"number\" min=\"0\" required></label>
+          <label>Fornecedor<input id=\"item-supplier\"></label>
+          <label class=\"span-2\">Observacao<input id=\"item-note\"></label>
+        </div>
+        <button class=\"primary-action wide\" value=\"confirm\">Salvar Insumo</button>
+      </form>
+    </dialog>
+    <script src="app.js"></script>
+  </body>
+</html>
