@@ -38,13 +38,13 @@ function safeEquals(left, right) {
   return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-// Inicialização e limpeza do Banco de Dados para os usuários originais fixos
+// Inicialização e limpeza do Banco de Dados
 async function initDatabase() {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    // 1. Criação das tabelas base caso não existam
+    // Criação das tabelas base caso não existam
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_users (
         name TEXT PRIMARY KEY,
@@ -60,10 +60,10 @@ async function initDatabase() {
       );
     `);
 
-    // 2. Garante a remoção do Gabriel do Banco de Dados
+    // Remove permanentemente o Gabriel
     await client.query("DELETE FROM app_users WHERE name = 'Gabriel'");
 
-    // 3. Alinha a lista definitiva de técnicos originais e PINs aceitos
+    // Lista de técnicos originais fixos e PINs corretos
     const originalUsers = [
       { name: "Administrador", role: "admin", pin: "Out@adm" },
       { name: "Luiz", role: "tecnico", pin: "1111" },
@@ -82,7 +82,7 @@ async function initDatabase() {
       `, [u.name, u.role, u.pin]);
     }
 
-    // 4. Popula os destinos como texto simples (padrão array de strings exigido pelo front)
+    // Popula os destinos padrão exigidos pelo app.js
     const baseDestinations = [
       "Bancada 01", "Bancada 02", "Bancada 03", 
       "Bancada 04", "Bancada 05", "Bancada 06", "Teste"
@@ -95,16 +95,15 @@ async function initDatabase() {
     }
 
     await client.query("COMMIT");
-    console.log("Banco de dados sincronizado e limpo com sucesso (Sem Gabriel).");
+    console.log("Banco de dados sincronizado (Sem Gabriel).");
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("Erro ao inicializar tabelas e usuários:", err);
+    console.error("Erro ao inicializar tabelas:", err);
   } finally {
     client.release();
   }
 }
 
-// Executa a inicialização do banco assim que o servidor liga
 initDatabase();
 
 function broadcastState(state) {
@@ -126,11 +125,10 @@ async function getBootstrap() {
     const historyRes = await client.query("SELECT at, user_name as user, type, qty, item_code as \"itemCode\", item_name as \"itemName\", destination FROM stock_history ORDER BY at DESC LIMIT 100");
     const requestsRes = await client.query("SELECT id, at, technician, item_code as \"itemCode\", item_name as \"itemName\", destination, qty, status FROM requests WHERE status = 'pending' ORDER BY at DESC");
     
-    // Retorna os destinos puramente como array de strings simples [ "Bancada 01", ... ]
     const destsRes = await client.query("SELECT name FROM destinations ORDER BY name ASC");
     const destinations = destsRes.rows.map(d => d.name);
 
-    // KPIs de uso
+    // CORREÇÃO DA QUERY DO KPI (Mudado para IS NOT NULL)
     const kpisRes = await client.query(`
       SELECT item_code as "itemCode", item_name as "itemName", user_name as technician,
              CEIL(AVG(days_step))::INT as "averageDays"
@@ -140,7 +138,7 @@ async function getBootstrap() {
         FROM stock_history
         WHERE type = 'Retirada'
       ) sub
-      WHERE days_step IS NOT EXISTS AND days_step > 0
+      WHERE days_step IS NOT NULL AND days_step > 0
       GROUP BY item_code, item_name, user_name
       ORDER BY "averageDays" ASC
     `);
@@ -244,15 +242,14 @@ app.post("/api/login", async (req, res, next) => {
       client.release();
     }
 
-    if (!user) return res.status(401).json({ error: "Usuário não encontrado ou inativo." });
+    if (!user) return res.status(401).json({ error: "Usuário não encontrado." });
 
-    // Híbrido: Valida tanto o PIN salvo no DB quanto as senhas de contingência padrão
     const isDbPinMatch = user.pin_code && safeEquals(user.pin_code, pin);
     const isFallbackAdmin = user.role === "admin" && safeEquals("Out@adm", pin);
     const isFallbackTecnico = user.role === "tecnico" && (safeEquals("1111", pin) || safeEquals("Out2021adm", pin));
 
     if (!isDbPinMatch && !isFallbackAdmin && !isFallbackTecnico) {
-      return res.status(401).json({ error: "PIN incorreto para este usuário." });
+      return res.status(401).json({ error: "PIN incorreto." });
     }
 
     res.json({
@@ -321,7 +318,7 @@ app.post("/api/requests/:id/approve", async (req, res, next) => {
       const request = reqRes.rows[0];
       const itemRes = await client.query("SELECT qty FROM items WHERE code = $1 FOR UPDATE", [request.item_code]);
       if (itemRes.rows.length === 0 || Number(itemRes.rows[0].qty) < Number(request.qty)) {
-        throw new Error("Estoque insuficiente para liberar esta solicitação.");
+        throw new Error("Estoque insuficiente.");
       }
 
       await client.query("UPDATE items SET qty = qty - $1 WHERE code = $2", [request.qty, request.item_code]);
