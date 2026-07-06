@@ -1,188 +1,703 @@
-require("dotenv").config();
+const STORAGE_KEY = "stockflow-state-v2";
+const API_BASE = "/api";
+const LIVE_CHANNEL = "stockflow-live";
 
-const path = require("path");
-const express = require("express");
-const cors = require("cors");
-const cookieParser = require("cookie-parser");
-const { Pool } = require("pg");
-const jwt = require("jsonwebtoken"); // Certifique-se de ter instalado: npm i jsonwebtoken
-
-const app = express();
-const port = Number(process.env.PORT || 4173);
-const host = process.env.HOST || "0.0.0.0";
-const databaseUrl = process.env.DATABASE_URL;
-const databaseSsl = process.env.DATABASE_SSL === "true" || /sslmode=require/i.test(databaseUrl || "");
-const jwtSecret = process.env.JWT_SECRET || "fallback-secret-dev";
-
-// Conexão com o Banco de Dados
-const pool = new Pool({
-  connectionString: databaseUrl,
-  ssl: databaseSsl ? { rejectUnauthorized: false } : false
-});
-
-// Middleware de Autenticação Integrado
-const authMiddleware = (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(" ")[1];
-    
-    if (!token) {
-      return res.status(401).json({ error: "Acesso negado. Token não fornecido." });
-    }
-
-    const decoded = jwt.verify(token, jwtSecret);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: "Token inválido ou expirado." });
-  }
+// Mapeamento dinâmico de técnicos para as suas respetivas bancadas
+const TECHNICIAN_DESTINATIONS = {
+  Luiz: "Bancada 01",
+  Bruno: "Bancada 02",
+  Joao: "Bancada 03",
+  Gabriel: "Bancada 04"
 };
 
-app.disable("x-powered-by");
-app.use(cors());
-app.use(cookieParser());
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: false }));
-app.use(express.static(path.join(__dirname, "public")));
+const seedState = {
+  users: [
+    { name: "Administrador", role: "admin", pin: "0000" },
+    { name: "Luiz", role: "tecnico", pin: "1111" },
+    { name: "Bruno", role: "tecnico", pin: "1111" },
+    { name: "Joao", role: "tecnico", pin: "1111" },
+    { name: "Gabriel", role: "tecnico", pin: "1111" }
+  ],
+  technicians: ["Luiz", "Bruno", "Joao", "Gabriel"],
+  destinations: ["Bancada 01", "Bancada 02", "Bancada 03", "Bancada 04", "Servico interno", "Estoque de testes", "Outro", "Estoque"],
+  adminName: "Administrador",
+  items: [],
+  history: [],
+  requests: [],
+  usageKpis: []
+};
 
-// Endpoint de Saúde
-app.get("/api/health", async (_req, res, next) => {
-  try {
-    await pool.query("SELECT 1");
-    res.json({ ok: true });
-  } catch (error) {
-    next(error);
+let state = structuredClone(seedState);
+let usingApi = false;
+let currentUser = null;
+let currentView = "dashboard";
+
+const withdraw = {
+  destination: "",
+  step: 1
+};
+
+function $(selector) { return document.querySelector(selector); }
+function $$(selector) { return document.querySelectorAll(selector); }
+
+function saveState() {
+  if (!usingApi) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
-});
+}
 
-// Endpoint de Login Simulado/Banco
-app.post("/api/login", async (req, res, next) => {
-  try {
-    const { email, senha } = req.body;
-    
-    // Fallback Admin Padrão para testes caso o banco esteja vazio
-    if (email === "admin@stockflow.local") {
-      const user = { id: 1, name: "Administrador", email: "admin@stockflow.local", role: "admin" };
-      const token = jwt.sign(user, jwtSecret, { expiresIn: "24h" });
-      return res.json({ token, user });
-    }
-
-    // Busca no banco de dados real se existir
-    const result = await pool.query("SELECT id, name, email, role FROM usuarios WHERE email = $1 LIMIT 1", [email]);
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: "Utilizador ou senha incorretos." });
-    }
-
-    const user = result.rows[0];
-    const token = jwt.sign(user, jwtSecret, { expiresIn: "24h" });
-    res.json({ token, user });
-  } catch (error) {
-    next(error);
+async function apiRequest(endpoint, options = {}) {
+  const url = `${API_BASE}${endpoint}`;
+  options.headers = {
+    ...options.headers,
+    "Content-Type": "application/json"
+  };
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(errText || `Erro na API: ${response.status}`);
   }
-});
+  return response.json();
+}
 
-// Endpoint Bootstrap Unificado (Alimenta todo o app.js de uma vez só)
-app.get("/api/bootstrap", authMiddleware, async (req, res, next) => {
+async function loadInitialState() {
   try {
-    // 1. Busca de Produtos do Banco de Dados
-    let items = [];
-    try {
-      const pRes = await pool.query("SELECT id, code, name, category, qty, min, supplier, note FROM produtos");
-      items = pRes.rows;
-    } catch {
-      // Fallback seguro se a tabela ainda não existir
-      items = [{ id: 1, code: "COD001", name: "Cabo de Rede Cat6", category: "Redes", qty: 15, min: 5, supplier: "Fornecedor A", note: "Padrão" }];
+    const bootstrapData = await apiRequest("/bootstrap");
+    replaceState(bootstrapData);
+    usingApi = true;
+    console.log("StockFlow conectado ao servidor Postgres.");
+  } catch (e) {
+    console.warn("Servidor offline. Usando armazenamento local temporario.", e);
+    usingApi = false;
+    const local = localStorage.getItem(STORAGE_KEY);
+    if (local) {
+      try { state = JSON.parse(local); } catch (err) { state = structuredClone(seedState); }
+    } else {
+      state = structuredClone(seedState);
     }
+  }
+}
 
-    // 2. Busca do Histórico de Movimentações
-    let history = [];
+function replaceState(nextState) {
+  if (!nextState) return;
+  state = nextState;
+  renderAll();
+}
+
+function setupLocalRealtime() {
+  if (!usingApi) return;
+  const eventSource = new EventSource(`${API_BASE}/live`);
+  eventSource.onmessage = (event) => {
     try {
-      const hRes = await pool.query("SELECT id, item_name as \"itemName\", item_code as \"itemCode\", username as user, type, qty, destination, created_at as at FROM historico ORDER BY created_at DESC LIMIT 50");
-      history = hRes.rows;
-    } catch {
-      history = [{ id: 1, itemName: "Cabo de Rede Cat6", itemCode: "COD001", user: "Administrador", type: "Entrada", qty: 10, destination: "Estoque Central", at: new Date() }];
-    }
-
-    // 3. Busca de Solicitações Pendentes
-    let requests = [];
-    try {
-      const sRes = await pool.query("SELECT id, technician, item_name as \"itemName\", item_code as \"itemCode\", destination, qty, status FROM solicitacoes WHERE status = 'pending'");
-      requests = sRes.rows;
-    } catch {
-      requests = [];
-    }
-
-    // 4. Consolidação das Métricas do Dashboard
-    const totalProdutos = items.length;
-    const estoquesCriticos = items.filter(i => Number(i.qty) <= Number(i.min)).length;
-
-    res.json({
-      items,
-      history,
-      requests,
-      technicians: ["Técnico Alfa", "Técnico Beta", "Técnico Gama"],
-      destinations: ["Laboratório", "Campo", "Cliente Final", "Infraestrutura"],
-      dashboard: {
-        produtos: totalProdutos,
-        entradas_hoje: history.filter(h => h.type === "Entrada" || h.type === "Replenish").length,
-        saidas_hoje: history.filter(h => h.type === "Saida" || h.type === "Retirada").length,
-        estoque_critico: estoquesCriticos
+      const msg = JSON.parse(event.data);
+      if (msg.type === "state") {
+        replaceState(msg.data);
       }
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Endpoint para Listar Utilizadores
-app.get("/api/usuarios", authMiddleware, async (req, res, next) => {
-  try {
-    let users = [];
-    try {
-      const uRes = await pool.query("SELECT id, name, email, role FROM usuarios");
-      users = uRes.rows;
-    } catch {
-      users = [{ id: 1, name: "Administrador", email: "admin@stockflow.local", role: "admin" }];
-    }
-    res.json({ users });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Endpoint para Criar/Atualizar Itens
-app.post("/api/items", authMiddleware, async (req, res, next) => {
-  try {
-    const { code, name, category, qty, min, supplier, note } = req.body;
-    try {
-      await pool.query(
-        `INSERT INTO produtos (code, name, category, qty, min, supplier, note) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (code) DO UPDATE SET name=$2, category=$3, qty=$4, min=$5, supplier=$6, note=$7`,
-        [code, name, category, Number(qty), Number(min), supplier, note]
-      );
-      res.json({ success: true });
     } catch (e) {
-      res.status(400).json({ error: "Erro ao salvar o produto no banco." });
+      console.error("Erro na atualizacao realtime:", e);
     }
-  } catch (error) {
-    next(error);
+  };
+  eventSource.onerror = () => {
+    eventSource.close();
+    setTimeout(setupLocalRealtime, 5000);
+  };
+}
+
+function isAdmin() { return currentUser && currentUser.role === "admin"; }
+function isEstoque() { return currentUser && currentUser.role === "estoque"; }
+function isTecnico() { return currentUser && currentUser.role === "tecnico"; }
+
+function setView(viewId) {
+  currentView = viewId;
+  $$(".view").forEach((view) => view.classList.remove("active"));
+  $(`#${viewId}-view`)?.classList.add("active");
+
+  $$(".nav-item").forEach((btn) => btn.classList.remove("active"));
+  $(`[data-view="${viewId}"]`)?.classList.add("active");
+
+  if (viewId === "withdraw") {
+    withdraw.step = 1;
+    withdraw.destination = "";
+    $("#withdraw-step-1").style.display = "block";
+    $("#withdraw-step-2").style.display = "none";
+    $("#withdraw-feedback").style.display = "none";
+    $("#withdraw-code").value = "";
+    renderDestinations();
+  } else if (viewId === "return") {
+    $("#return-code").value = "";
+    $("#return-feedback").style.display = "none";
   }
-});
+}
 
-// Redirecionamento SPA para o index.html
-app.get("*", (_req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+function applyRoleUi() {
+  if (!currentUser) return;
+  $("#user-name").textContent = currentUser.name;
+  $("#user-role").textContent = currentUser.role.toUpperCase();
+  $("#user-avatar").textContent = currentUser.name.charAt(0).toUpperCase();
 
-// Manipulador de Erros Global
-app.use((error, _req, res, _next) => {
-  console.error(error);
-  res.status(error.status || 500).json({
-    error: error.message || "Erro interno no servidor."
+  if (isAdmin()) {
+    document.body.classList.add("is-admin");
+    document.body.classList.remove("is-technician");
+    $$(".admin-only").forEach(el => el.style.display = "");
+    $("#nav-dashboard").style.display = "";
+    $("#nav-inventory").style.display = "";
+    $("#nav-history").style.display = "";
+  } else if (isEstoque()) {
+    document.body.classList.remove("is-admin", "is-technician");
+    $$(".admin-only").forEach(el => el.style.display = "none");
+    $("#nav-dashboard").style.display = "";
+    $("#nav-inventory").style.display = "";
+    $("#nav-history").style.display = "";
+  } else {
+    document.body.classList.remove("is-admin");
+    document.body.classList.add("is-technician");
+    $$(".admin-only").forEach(el => el.style.display = "none");
+    $("#nav-dashboard").style.display = "none";
+    $("#nav-inventory").style.display = "none";
+    $("#nav-history").style.display = "none";
+  }
+}
+
+function renderLoginUsers() {
+  const select = $("#login-user");
+  if (!select) return;
+  select.innerHTML = "";
+  state.users.forEach(u => {
+    const opt = document.createElement("option");
+    opt.value = u.name;
+    opt.textContent = `${u.name} (${u.role})`;
+    select.appendChild(opt);
   });
-});
+}
 
-app.listen(port, host, () => {
-  console.log(`Servidor StockFlow rodando em http://${host}:${port}`);
-});
+async function handleLogin(event) {
+  event.preventDefault();
+  const usernameInput = $("#login-user").value;
+  const pinInput = $("#login-pin").value;
+
+  const user = state.users.find(u => u.name === usernameInput);
+
+  // Validação real e segura! Compara estritamente o PIN digitado com o do banco
+  if (!user || String(user.pin) !== String(pinInput)) {
+    $("#login-error").textContent = "PIN incorreto. Verifique seus dados.";
+    return;
+  }
+
+  currentUser = user;
+  document.body.classList.remove("locked");
+  $("#login-screen").style.display = "none";
+  
+  applyRoleUi();
+  
+  if (isTecnico()) {
+    setView("withdraw");
+  } else {
+    setView("dashboard");
+  }
+  saveSession();
+}
+
+function logout() {
+  currentUser = null;
+  localStorage.removeItem("stockflow-session");
+  document.body.classList.add("locked");
+  $("#login-screen").style.display = "flex";
+  $("#login-pin").value = "";
+  $("#login-error").textContent = "";
+  renderLoginUsers();
+}
+
+function saveSession() {
+  localStorage.setItem("stockflow-session", JSON.stringify(currentUser));
+}
+
+function restoreSession() {
+  const saved = localStorage.getItem("stockflow-session");
+  if (saved) {
+    try {
+      currentUser = JSON.parse(saved);
+      document.body.classList.remove("locked");
+      $("#login-screen").style.display = "none";
+      applyRoleUi();
+      setView(isTecnico() ? "withdraw" : "dashboard");
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  return false;
+}
+
+function renderAll() {
+  renderDashboard();
+  renderInventory();
+  renderHistorySelectors();
+  renderHistory();
+}
+
+function getFilteredItems() {
+  const query = $("#global-search").value.toLowerCase().trim();
+  if (!query) return state.items;
+  return state.items.filter(item => 
+    item.code.toLowerCase().includes(query) ||
+    item.name.toLowerCase().includes(query) ||
+    item.category.toLowerCase().includes(query)
+  );
+}
+
+function renderDashboard() {
+  const alertsList = $("#alerts-list");
+  if (alertsList) {
+    alertsList.innerHTML = "";
+    const criticalItems = state.items.filter(item => item.qty <= item.min);
+    if (criticalItems.length === 0) {
+      alertsList.innerHTML = `<div class="empty-state">Nenhum insumo com estoque critico.</div>`;
+    } else {
+      criticalItems.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "alert-item";
+        div.innerHTML = `
+          <div>
+            <strong>${item.name}</strong>
+            <span class="eyebrow" style="margin-top:2px">${item.code} - ${item.category}</span>
+          </div>
+          <div style="text-align: right">
+            <span class="stock-status critical">${item.qty} un</span>
+            <span class="eyebrow" style="margin-top:2px">Minimo: ${item.min}</span>
+          </div>
+        `;
+        alertsList.appendChild(div);
+      });
+    }
+  }
+
+  const recentTable = $("#recent-table");
+  if (recentTable) {
+    recentTable.innerHTML = "";
+    const recentMovements = state.history.slice(0, 5);
+    if (recentMovements.length === 0) {
+      recentTable.innerHTML = `<div class="empty-state">Nenhuma movimentacao recente.</div>`;
+    } else {
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Insumo</th>
+              <th>Tipo</th>
+              <th>Qtd</th>
+              <th>Responsavel</th>
+              <th>Destino</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      recentMovements.forEach(m => {
+        let typeLabel = m.type;
+        if (m.type === "withdrawal") typeLabel = "Retirada";
+        if (m.type === "return") typeLabel = "Devolucao";
+        if (m.type === "replenishment") typeLabel = "Abastecimento";
+
+        html += `
+          <tr>
+            <td><strong>${m.itemName}</strong><br><span class="eyebrow">${m.code}</span></td>
+            <td><span class="stock-status ${m.type === "withdrawal" ? "critical" : "normal"}">${typeLabel}</span></td>
+            <td>${m.quantity}</td>
+            <td>${m.userName}</td>
+            <td>${m.destinationName}</td>
+          </tr>
+        `;
+      });
+      html += `</tbody></table>`;
+      recentTable.innerHTML = html;
+    }
+  }
+
+  const reqCount = $("#requests-count");
+  if (reqCount) reqCount.textContent = state.requests.length;
+
+  const reqList = $("#requests-list");
+  if (reqList) {
+    reqList.innerHTML = "";
+    if (state.requests.length === 0) {
+      reqList.innerHTML = `<div class="empty-state">Nenhuma solicitacao pendente.</div>`;
+    } else {
+      state.requests.forEach(req => {
+        const div = document.createElement("div");
+        div.className = "request-item alert-item";
+        div.innerHTML = `
+          <div>
+            <strong>${req.technicianName} solicita ${req.quantity} un</strong>
+            <span class="eyebrow" style="margin-top:2px">${req.itemName} (${req.code}) para ${req.destination}</span>
+          </div>
+          <div class="request-actions" style="display:flex; gap:8px;">
+            <button class="secondary-button" onclick="rejectRequest(${req.id})" style="padding:4px 8px; font-size:12px;">Recusar</button>
+            <button class="primary-action" onclick="approveRequest(${req.id})" style="padding:4px 12px; font-size:12px;">Liberar</button>
+          </div>
+        `;
+        reqList.appendChild(div);
+      });
+    }
+  }
+}
+
+async function approveRequest(id) {
+  try {
+    if (usingApi) {
+      const nextState = await apiRequest(`/requests/${id}/approve`, { method: "POST" });
+      replaceState(nextState);
+    }
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function rejectRequest(id) {
+  try {
+    if (usingApi) {
+      const nextState = await apiRequest(`/requests/${id}`, { method: "DELETE" });
+      replaceState(nextState);
+    }
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+function renderInventory() {
+  const invTable = $("#inventory-table");
+  if (!invTable) return;
+  invTable.innerHTML = "";
+  const filtered = getFilteredItems();
+
+  if (filtered.length === 0) {
+    invTable.innerHTML = `<div class="empty-state">Nenhum insumo encontrado.</div>`;
+    return;
+  }
+
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Codigo</th>
+          <th>Nome</th>
+          <th>Categoria</th>
+          <th>Estoque</th>
+          <th>Fornecedor</th>
+          ${isAdmin() || isEstoque() ? "<th>Acoes</th>" : ""}
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  filtered.forEach(item => {
+    const isCritical = item.qty <= item.min;
+    html += `
+      <tr>
+        <td><code>${item.code}</code></td>
+        <td><strong>${item.name}</strong>${item.note ? `<br><span class="eyebrow">${item.note}</span>` : ""}</td>
+        <td><span class="badge">${item.category}</span></td>
+        <td><span class="stock-status ${isCritical ? "critical" : "normal"}">${item.qty} un</span><br><span class="eyebrow">Min: ${item.min}</span></td>
+        <td>${item.supplier || "---"}</td>
+        ${isAdmin() || isEstoque() ? `
+          <td>
+            <div style="display:flex; gap:6px;">
+              <button class="secondary-button" style="padding:4px 8px; font-size:12px;" onclick="openItemDialog('${item.code}')">Editar</button>
+              <button class="secondary-button" style="padding:4px 8px; font-size:12px; background:#221315; color:#ffb4a8; border-color:#431a1f" onclick="triggerReplenish('${item.code}')">Abastecer</button>
+            </div>
+          </td>
+        ` : ""}
+      </tr>
+    `;
+  });
+
+  html += `</tbody></table>`;
+  invTable.innerHTML = html;
+}
+
+function triggerReplenish(code) {
+  const qtyStr = prompt("Quantidade para adicionar ao estoque:");
+  const qty = parseInt(qtyStr, 10);
+  if (isNaN(qty) || qty <= 0) return;
+  
+  if (usingApi) {
+    apiRequest("/movements/replenish", {
+      method: "POST",
+      body: JSON.stringify({ code, quantity: qty })
+    }).then(replaceState).catch(err => alert(err.message));
+  }
+}
+
+function openItemDialog(code = "") {
+  const dialog = $("#item-dialog");
+  const form = $("#item-form");
+  if (!dialog || !form) return;
+  
+  if (code) {
+    const item = state.items.find(i => i.code === code);
+    if (!item) return;
+    $("#dialog-title").textContent = "Editar Insumo";
+    $("#item-original-code").value = item.code;
+    $("#item-code").value = item.code;
+    $("#item-name").value = item.name;
+    $("#item-category").value = item.category;
+    $("#item-qty").value = item.qty;
+    $("#item-min").value = item.min;
+    $("#item-supplier").value = item.supplier || "";
+    $("#item-note").value = item.note || "";
+  } else {
+    $("#dialog-title").textContent = "Novo Insumo";
+    $("#item-original-code").value = "";
+    form.reset();
+  }
+  dialog.showModal();
+}
+
+async function saveItem(event) {
+  event.preventDefault();
+  const originalCode = $("#item-original-code").value;
+  const payload = {
+    originalCode: originalCode || null,
+    code: $("#item-code").value.trim(),
+    name: $("#item-name").value.trim(),
+    category: $("#item-category").value.trim(),
+    qty: parseInt($("#item-qty").value, 10),
+    min: parseInt($("#item-min").value, 10),
+    supplier: $("#item-supplier").value.trim() || null,
+    note: $("#item-note").value.trim() || null
+  };
+
+  try {
+    if (usingApi) {
+      const nextState = await apiRequest("/items", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      replaceState(nextState);
+    }
+    $("#item-dialog").close();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+function renderDestinations() {
+  const grid = $("#destinations-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  
+  let uniqueDestinations = [];
+  // Prioriza a bancada padrão vinculada ao técnico logado
+  if (currentUser && isTecnico() && TECHNICIAN_DESTINATIONS[currentUser.name]) {
+    uniqueDestinations.push(TECHNICIAN_DESTINATIONS[currentUser.name]);
+  }
+  
+  state.destinations.forEach(dest => {
+    if (!uniqueDestinations.includes(dest)) {
+      uniqueDestinations.push(dest);
+    }
+  });
+
+  uniqueDestinations.forEach(dest => {
+    const btn = document.createElement("button");
+    btn.className = "selection-card";
+    
+    const isPersonal = currentUser && isTecnico() && TECHNICIAN_DESTINATIONS[currentUser.name] === dest;
+    btn.innerHTML = `<h3>${dest} ${isPersonal ? "⭐" : ""}</h3><p class="eyebrow" style="margin-top:4px">${isPersonal ? "Sua bancada padrão" : "Selecionar local"}</p>`;
+    
+    btn.addEventListener("click", () => {
+      withdraw.destination = dest;
+      withdraw.step = 2;
+      $("#withdraw-step-1").style.display = "none";
+      $("#withdraw-step-2").style.display = "block";
+      $("#withdraw-step-2-eyebrow").textContent = `Local: ${dest}`;
+      setTimeout(() => $("#withdraw-code").focus(), 50);
+    });
+    grid.appendChild(btn);
+  });
+}
+
+function renderHistorySelectors() {
+  const filter = $("#technician-filter");
+  if (!filter) return;
+  const currentVal = filter.value;
+  filter.innerHTML = `<option value="">Todos os tecnicos</option>`;
+  state.technicians.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    filter.appendChild(opt);
+  });
+  filter.value = currentVal;
+}
+
+function renderHistory() {
+  const tableContainer = $("#history-table");
+  if (!tableContainer) return;
+  tableContainer.innerHTML = "";
+  const filterVal = $("#technician-filter").value;
+  
+  const filtered = filterVal 
+    ? state.history.filter(h => h.userName === filterVal)
+    : state.history;
+
+  if (filtered.length === 0) {
+    tableContainer.innerHTML = `<div class="empty-state">Nenhuma movimentacao registrada no historico.</div>`;
+    return;
+  }
+
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Data/Hora</th>
+          <th>Insumo</th>
+          <th>Tipo</th>
+          <th>Qtd</th>
+          <th>Responsavel</th>
+          <th>Destino</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  filtered.forEach(h => {
+    let typeLabel = h.type;
+    if (h.type === "withdrawal") typeLabel = "Retirada";
+    if (h.type === "return") typeLabel = "Devolucao";
+    if (h.type === "replenishment") typeLabel = "Abastecimento";
+
+    html += `
+      <tr>
+        <td><span class="eyebrow">${h.timestamp}</span></td>
+        <td><strong>${h.itemName}</strong><br><span class="eyebrow">${h.code}</span></td>
+        <td><span class="stock-status ${h.type === "withdrawal" ? "critical" : "normal"}">${typeLabel}</span></td>
+        <td>${h.quantity}</td>
+        <td>${h.userName} <span class="badge" style="font-size:10px">${h.userRole}</span></td>
+        <td>${h.destinationName}</td>
+      </tr>
+    `;
+  });
+  html += `</tbody></table>`;
+  tableContainer.innerHTML = html;
+}
+
+async function handleWithdrawScan(code) {
+  const feedback = $("#withdraw-feedback");
+  feedback.style.display = "block";
+  feedback.className = "feedback-card loading";
+  feedback.innerHTML = "Verificando insumo...";
+
+  try {
+    if (isTecnico()) {
+      if (usingApi) {
+        const nextState = await apiRequest("/requests", {
+          method: "POST",
+          body: JSON.stringify({
+            code,
+            quantity: 1,
+            technicianName: currentUser.name,
+            destination: withdraw.destination
+          })
+        });
+        replaceState(nextState);
+      }
+      feedback.className = "feedback-card success";
+      feedback.innerHTML = `<h3>Solicitado!</h3><p style="margin-top:4px">Pedido enviado para aprovacao do Administrador.</p>`;
+    } else {
+      if (usingApi) {
+        const nextState = await apiRequest("/movements/withdraw", {
+          method: "POST",
+          body: JSON.stringify({
+            code,
+            quantity: 1,
+            technician: currentUser ? currentUser.name : "Operador",
+            destination: withdraw.destination
+          })
+        });
+        replaceState(nextState);
+      }
+      feedback.className = "feedback-card success";
+      feedback.innerHTML = `<h3>Retirado com sucesso!</h3><p style="margin-top:4px">1 unidade movimentada para ${withdraw.destination}.</p>`;
+    }
+  } catch (err) {
+    feedback.className = "feedback-card error";
+    feedback.innerHTML = `<h3>Erro na operacao</h3><p style="margin-top:4px">${err.message}</p>`;
+  }
+  $("#withdraw-code").value = "";
+}
+
+async function handleReturnScan(code) {
+  const feedback = $("#return-feedback");
+  feedback.style.display = "block";
+  feedback.className = "feedback-card loading";
+  feedback.innerHTML = "Processando devolucao...";
+
+  try {
+    if (usingApi) {
+      const nextState = await apiRequest("/movements/return", {
+        method: "POST",
+        body: JSON.stringify({
+          code,
+          quantity: 1,
+          technician: currentUser ? currentUser.name : "Tecnico"
+        })
+      });
+      replaceState(nextState);
+    }
+    feedback.className = "feedback-card success";
+    feedback.innerHTML = `<h3>Devolvido!</h3><p style="margin-top:4px">1 unidade retornou ao estoque principal.</p>`;
+  } catch (err) {
+    feedback.className = "feedback-card error";
+    feedback.innerHTML = `<h3>Erro na devolucao</h3><p style="margin-top:4px">${err.message}</p>`;
+  }
+  $("#return-code").value = "";
+}
+
+function restoreActiveRequest() {}
+
+function bindEvents() {
+  $("#login-form").addEventListener("submit", handleLogin);
+  $("#logout-button").addEventListener("click", logout);
+  $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+  $("#global-search").addEventListener("input", renderAll);
+  
+  $("#withdraw-code").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      const code = $("#withdraw-code").value.trim();
+      if (code) handleWithdrawScan(code);
+    }
+  });
+
+  $("#withdraw-back").addEventListener("click", () => {
+    setView("withdraw");
+  });
+
+  $("#return-code").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      const code = $("#return-code").value.trim();
+      if (code) handleReturnScan(code);
+    }
+  });
+  
+  $("#new-item-button").addEventListener("click", () => openItemDialog());
+  $("#close-dialog").addEventListener("click", () => $("#item-dialog").close());
+  $("#item-form").addEventListener("submit", saveItem);
+  $("#technician-filter").addEventListener("change", renderHistory);
+
+  document.addEventListener("click", () => {
+    if (currentView === "withdraw" && withdraw.step === 2) setTimeout(() => $("#withdraw-code")?.focus(), 30);
+    if (currentView === "return") setTimeout(() => $("#return-code")?.focus(), 30);
+  });
+}
+
+async function init() {
+  document.body.classList.add("locked");
+  await loadInitialState();
+  setupLocalRealtime();
+  restoreActiveRequest();
+  renderLoginUsers();
+  bindEvents();
+  if (!restoreSession()) {
+    logout();
+  }
+}
+
+window.addEventListener("DOMContentLoaded", init);
