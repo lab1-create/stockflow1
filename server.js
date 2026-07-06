@@ -1,7 +1,6 @@
 require("dotenv").config();
 
 const path = require("path");
-const os = require("os");
 const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
@@ -59,7 +58,7 @@ function checkAccess(req, res, next) {
 async function getBootstrap() {
   const client = await pool.connect();
   try {
-    // CORREÇÃO: Puxa a coluna pin_code correta que você definiu no banco
+    // Busca os usuários puxando o pin_code que você configurou no banco
     const usersRes = await client.query("SELECT name, role, COALESCE(pin_code, '0000') as pin FROM app_users WHERE active = TRUE ORDER BY name ASC");
     const itemsRes = await client.query("SELECT code, name, category, qty, min, supplier, note FROM items ORDER BY name ASC");
     
@@ -80,7 +79,7 @@ async function getBootstrap() {
     const users = usersRes.rows;
     const technicians = users.filter(u => u.role === "tecnico").map(u => u.name);
     
-    // Puxa as bancadas e destinos cadastrados dinamicamente do banco
+    // Busca os destinos dinamicamente da tabela cadastrada por você
     const destsRes = await client.query("SELECT name FROM destinations ORDER BY name ASC");
     const destinations = destsRes.rows.length > 0 
       ? destsRes.rows.map(d => d.name)
