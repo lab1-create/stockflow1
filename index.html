@@ -1,136 +1,92 @@
-:root {
-  --bg: #f4f7fb;
-  --panel: #ffffff;
-  --panel-2: #eef3f8;
-  --text: #17202a;
-  --muted: #667085;
-  --line: #d9e2ec;
-  --accent: #0f766e;
-  --accent-2: #155e75;
-  --danger: #c2410c;
-  --warning: #b7791f;
-  --success: #15803d;
-  --shadow: 0 14px 38px rgba(17, 24, 39, 0.08);
-}
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>StockFlow ERP</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/login.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="stylesheet" href="/css/usuarios.css">
+  </head>
+  <body class="locked">
+    <section id="login-screen" class="login-screen">
+      <form id="login-form" class="login-card">
+        <div class="brand">
+          <div class="brand-mark">S</div>
+          <div>
+            <strong>StockFlow</strong>
+            <span>ERP de estoque tecnico</span>
+          </div>
+        </div>
+        <div>
+          <p class="eyebrow">Acesso seguro</p>
+          <h1>Entrar</h1>
+        </div>
+        <label>Email<input id="login-email" type="email" autocomplete="username" required placeholder="admin@stockflow.local"></label>
+        <label>Senha<input id="login-senha" type="password" autocomplete="current-password" required placeholder="Senha"></label>
+        <button class="primary-action wide">Entrar</button>
+        <p id="login-error" class="form-error"></p>
+        <p class="muted">Usuarios migrados usam o email gerado e a senha igual ao PIN antigo.</p>
+      </form>
+    </section>
 
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: var(--bg);
-  color: var(--text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-button, input, select { font: inherit; }
-button { cursor: pointer; }
-h1, h2, h3, p { margin: 0; }
-body.locked .app-shell { display: none; }
-body:not(.locked) .login-screen { display: none; }
+    <div class="app-shell">
+      <aside id="sidebar" class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">S</div>
+          <div class="brand-copy">
+            <strong>StockFlow</strong>
+            <span>ERP operacional</span>
+          </div>
+        </div>
+        <button id="toggle-sidebar" class="icon-button" title="Recolher menu">&#9776;</button>
+        <nav class="nav">
+          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+          <button class="nav-item" data-view="produtos">Produtos</button>
+          <button class="nav-item" data-view="entradas">Entradas</button>
+          <button class="nav-item" data-view="saidas">Saidas</button>
+          <button class="nav-item" data-view="historico">Historico</button>
+          <button class="nav-item" data-view="relatorios">Relatorios</button>
+        </nav>
+        <div class="nav-group admin-only">
+          <span>Administracao</span>
+          <button class="nav-item" data-view="usuarios">Usuarios</button>
+          <button class="nav-item" data-view="configuracoes">Configuracoes</button>
+        </div>
+        <div class="sidebar-footer">
+          <span id="session-label">Sessao</span>
+          <button id="logout-button" class="ghost-action">Sair</button>
+        </div>
+      </aside>
 
-.app-shell { display: grid; grid-template-columns: 272px 1fr; min-height: 100vh; }
-.sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  display: grid;
-  grid-template-rows: auto auto 1fr auto auto;
-  gap: 18px;
-  padding: 22px;
-  border-right: 1px solid var(--line);
-  background: #102025;
-  color: #f8fafc;
-}
-.sidebar.collapsed { grid-template-columns: 1fr; width: 86px; }
-.sidebar.collapsed .brand-copy, .sidebar.collapsed .nav-item, .sidebar.collapsed .nav-group span, .sidebar.collapsed .sidebar-footer { display: none; }
-.brand { display: flex; gap: 12px; align-items: center; }
-.brand-mark {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 800;
-}
-.brand span, .eyebrow, .muted, .search, .nav-group span { color: var(--muted); font-size: 13px; }
-.sidebar .brand span, .sidebar .nav-group span, .sidebar-footer { color: #a9bbc2; }
-.nav, .nav-group { display: grid; gap: 8px; align-content: start; }
-.nav-item, .primary-action, .ghost-action, .icon-button {
-  min-height: 42px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 0 14px;
-}
-.nav-item { background: transparent; color: #cfe0e5; text-align: left; }
-.nav-item:hover, .nav-item.active { background: rgba(255, 255, 255, 0.1); color: #fff; }
-.primary-action { background: var(--accent); color: #fff; font-weight: 700; }
-.primary-action:hover { background: var(--accent-2); }
-.ghost-action, .icon-button { background: var(--panel-2); border-color: var(--line); color: var(--text); }
-.sidebar .ghost-action, .sidebar .icon-button { background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.14); }
-.wide { width: 100%; }
-.workspace { padding: 24px; overflow: hidden; }
-.topbar { display: flex; gap: 18px; align-items: center; justify-content: space-between; margin-bottom: 22px; }
-.topbar h2 { font-size: 32px; }
-.search { display: grid; gap: 6px; width: min(430px, 42vw); }
-input, select {
-  min-height: 42px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--text);
-  outline: none;
-  padding: 0 12px;
-}
-input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14); }
-.view { display: none; }
-.view.active { display: block; }
-.panel, .card, .metric {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
-}
-.panel { padding: 18px; }
-.panel-head { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.table { display: grid; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.table-row, .table-head {
-  display: grid;
-  grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
-  gap: 10px;
-  align-items: center;
-  padding: 12px;
-  border-bottom: 1px solid var(--line);
-}
-.table-head { background: var(--panel-2); color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; }
-.table-row:last-child { border-bottom: 0; }
-.pill { justify-self: start; border-radius: 8px; padding: 5px 9px; background: #dff5ef; color: var(--success); font-size: 12px; font-weight: 800; }
-.pill.warning { background: #fff4d6; color: var(--warning); }
-.pill.danger { background: #ffe4d6; color: var(--danger); }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
-.span-2 { grid-column: span 2; }
-dialog { width: min(760px, calc(100vw - 28px)); border: 1px solid var(--line); border-radius: 8px; color: var(--text); box-shadow: var(--shadow); }
-dialog::backdrop { background: rgba(15, 23, 42, 0.48); }
-.dialog-body { display: grid; gap: 14px; padding: 10px; }
-.toast-stack { position: fixed; right: 18px; bottom: 18px; display: grid; gap: 10px; z-index: 5; }
-.toast { border-radius: 8px; padding: 12px 14px; background: #102025; color: #fff; box-shadow: var(--shadow); }
-.loading { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(255,255,255,0.68); z-index: 4; font-weight: 800; }
-.form-error { min-height: 20px; color: var(--danger); }
-#mobile-menu { display: none; }
-@media (max-width: 980px) {
-  .app-shell { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; z-index: 3; transform: translateX(-100%); transition: transform 180ms ease; }
-  .sidebar.open { transform: translateX(0); }
-  #mobile-menu { display: block; }
-  .search { width: 100%; }
-  .topbar, .grid-2, .grid-3 { grid-template-columns: 1fr; display: grid; }
-}
-@media (max-width: 680px) {
-  .workspace { padding: 14px; }
-  .form-grid, .table-row, .table-head { grid-template-columns: 1fr !important; }
-  .span-2 { grid-column: auto; }
-}
+      <main class="workspace">
+        <header class="topbar">
+          <button id="mobile-menu" class="icon-button">&#9776;</button>
+          <div>
+            <p class="eyebrow">StockFlow</p>
+            <h2 id="view-title">Dashboard</h2>
+          </div>
+          <label class="search">Pesquisar<input id="global-search" type="search" placeholder="Produto, codigo, tecnico..."></label>
+        </header>
+
+        <section id="dashboard-view" class="view active"></section>
+        <section id="produtos-view" class="view"></section>
+        <section id="entradas-view" class="view"></section>
+        <section id="saidas-view" class="view"></section>
+        <section id="historico-view" class="view"></section>
+        <section id="relatorios-view" class="view"></section>
+        <section id="usuarios-view" class="view"></section>
+        <section id="configuracoes-view" class="view"></section>
+      </main>
+    </div>
+
+    <dialog id="modal">
+      <form id="modal-form" method="dialog" class="dialog-body"></form>
+    </dialog>
+    <div id="toast-stack" class="toast-stack"></div>
+    <div id="loading" class="loading" hidden>Carregando...</div>
+
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>
