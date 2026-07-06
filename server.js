@@ -12,7 +12,6 @@ const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "0.0.0.0";
 const databaseUrl = process.env.DATABASE_URL;
 const databaseSsl = process.env.DATABASE_SSL === "true" || /sslmode=require/i.test(databaseUrl || "");
-const appAccessKey = process.env.APP_ACCESS_KEY || "";
 
 const pool = new Pool({
   connectionString: databaseUrl,
@@ -32,12 +31,13 @@ function safeEquals(left, right) {
   return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-// Inicialização segura e completa das tabelas
+// Inicialização segura e completa de todas as estruturas do Banco de Dados
 async function initDatabase() {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
+    // 1. Tabela de usuários do app
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_users (
         name TEXT PRIMARY KEY,
@@ -47,12 +47,14 @@ async function initDatabase() {
       );
     `);
 
+    // 2. Tabela de destinos operacionais
     await client.query(`
       CREATE TABLE IF NOT EXISTS destinations (
         name TEXT PRIMARY KEY
       );
     `);
 
+    // 3. Tabela de itens/insumos no estoque
     await client.query(`
       CREATE TABLE IF NOT EXISTS items (
         code TEXT PRIMARY KEY,
@@ -65,6 +67,7 @@ async function initDatabase() {
       );
     `);
 
+    // 4. Tabela de solicitações pendentes
     await client.query(`
       CREATE TABLE IF NOT EXISTS requests (
         id SERIAL PRIMARY KEY,
@@ -78,6 +81,7 @@ async function initDatabase() {
       );
     `);
 
+    // 5. Tabela de histórico de movimentações
     await client.query(`
       CREATE TABLE IF NOT EXISTS stock_history (
         id SERIAL PRIMARY KEY,
@@ -91,10 +95,10 @@ async function initDatabase() {
       );
     `);
 
-    // Remove usuários obsoletos
+    // Limpeza de usuários de teste obsoletos se necessário
     await client.query("DELETE FROM app_users WHERE name = 'Gabriel'");
 
-    // Carga de usuários iniciais
+    // Carga de usuários operacionais obrigatórios
     const originalUsers = [
       { name: "Administrador", role: "admin", pin: "Out@adm" },
       { name: "Luiz", role: "tecnico", pin: "1111" },
@@ -123,15 +127,16 @@ async function initDatabase() {
     }
 
     await client.query("COMMIT");
-    console.log(">> Banco de dados sincronizado e pronto!");
+    console.log(">> Banco de dados inicializado com sucesso e todas as tabelas criadas!");
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("Erro na inicialização do banco:", err.message);
+    console.error("Erro crítico na inicialização das tabelas do banco:", err.message);
   } finally {
     client.release();
   }
 }
 
+// Executa a criação das tabelas antes de qualquer requisição externa
 initDatabase();
 
 function broadcastState(state) {
@@ -173,7 +178,7 @@ async function getBootstrap() {
       `);
       usageKpis = kpisRes.rows;
     } catch (kpiError) {
-      // Ignora erro se não houver dados suficientes para calcular o KPI
+      // Ignora de forma segura se não houver dados suficientes no histórico
     }
 
     return {
@@ -339,7 +344,6 @@ app.post("/api/movements/withdraw", async (req, res, next) => {
   }
 });
 
-// MAPEAMENTO DO CORPO CORRIGIDO DE ACORDO COM O SEU APP.JS ORIGINAL ({ code, adminName })
 app.post("/api/requests/:id/approve", async (req, res, next) => {
   try {
     const { code, adminName } = req.body;
@@ -355,7 +359,6 @@ app.post("/api/requests/:id/approve", async (req, res, next) => {
 
       const request = reqRes.rows[0];
       
-      // Sanitização de String robusta para evitar divergências com leitores físicos de marcas diferentes
       if (code && request.item_code.trim().toUpperCase() !== code.trim().toUpperCase()) {
         throw new Error(`Código escaneado (${code.trim().toUpperCase()}) difere do solicitado (${request.item_code.trim().toUpperCase()}).`);
       }
@@ -423,7 +426,6 @@ app.post("/api/movements/replenish", async (req, res, next) => {
   }
 });
 
-// Garante o fornecimento correto dos arquivos estáticos
 app.use(express.static(path.join(__dirname)));
 
 app.get("*", (_req, res) => {
