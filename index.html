@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StockFlow - Acesso Operacional</title>
+  <title>StockFlow - Gestão de Estoque</title>
   <style>
     :root {
       --bg-color: #121214;
@@ -14,6 +14,7 @@
       --primary-hover: #c21330;
       --input-bg: #202024;
       --border-color: #29292e;
+      --success-color: #04d361;
     }
 
     * {
@@ -32,6 +33,7 @@
       min-height: 100vh;
     }
 
+    /* CONTAINER DE LOGIN */
     .login-container {
       background-color: var(--card-bg);
       padding: 2.5rem;
@@ -146,11 +148,104 @@
       margin-top: 0.5rem;
       display: none;
     }
+
+    /* CONTAINER DO PAINEL PRINCIPAL (ESCONDIDO POR PADRÃO) */
+    #dashboard-container {
+      display: none;
+      width: 100%;
+      max-width: 1200px;
+      padding: 2rem;
+      align-self: flex-start;
+    }
+
+    .nav-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 2rem;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge-role {
+      background-color: #29292e;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--primary-color);
+      font-weight: bold;
+    }
+
+    .btn-logout {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-logout:hover {
+      border-color: var(--primary-color);
+      color: white;
+    }
+
+    .grid-dashboard {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 768px) {
+      .grid-dashboard {
+        grid-template-columns: 2fr 1fr;
+      }
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1.5rem;
+    }
+
+    .card h3 {
+      margin-bottom: 1rem;
+      font-size: 1.2rem;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.5rem;
+    }
+
+    /* TABELAS SIMPLES PARA ITENS E HISTÓRICO */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.5rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.9rem;
+    }
+
+    th {
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
 
-  <div class="login-container">
+  <div id="login-screen" class="login-container">
     <div class="header-logo">
       <div class="logo-box">s</div>
       <div class="header-text">
@@ -183,28 +278,91 @@
     </form>
   </div>
 
+  <div id="dashboard-container">
+    <div class="nav-bar">
+      <div class="user-info">
+        <div class="logo-box" style="width:32px; height:32px; font-size:1rem;">s</div>
+        <h2>StockFlow <span style="font-weight: 300; font-size: 1.2rem;">| Painel</span></h2>
+      </div>
+      <div class="user-info">
+        <span id="nav-user-name" style="font-weight: 600;">---</span>
+        <span id="nav-user-role" class="badge-role">---</span>
+        <button class="btn-logout" onclick="logout()">Sair</button>
+      </div>
+    </div>
+
+    <div class="grid-dashboard">
+      <div class="card">
+        <h3>Insumos em Estoque</h3>
+        <div style="overflow-x: auto;">
+          <table id="items-table">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Nome</th>
+                <th>Categoria</th>
+                <th>Qtd</th>
+                <th>Mín</th>
+                <th>Fornecedor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="6" style="text-align:center; color:var(--text-secondary);">Nenhum insumo carregado.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Solicitações Recentes</h3>
+        <table id="requests-table">
+          <thead>
+            <tr>
+              <th>Técnico</th>
+              <th>Item</th>
+              <th>Qtd</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="3" style="text-align:center; color:var(--text-secondary);">Nenhuma pendência.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // Estado global do frontend
     let appState = {
-      users: []
+      users: [],
+      items: [],
+      requests: [],
+      history: []
     };
 
-    // 1. Busca os dados iniciais do servidor
+    // Função executada ao carregar a página
     async function initBootstrap() {
-      const selectElement = document.getElementById('user-select');
+      // Se o usuário já tiver uma sessão válida salva no navegador, pula a tela de login
+      const savedUser = localStorage.getItem("currentUser");
+      if (savedUser) {
+        const user = JSON.parse(savedUser);
+        showDashboard(user);
+        return;
+      }
+
       try {
-        // Rota relativa evita quebrar no Render procurando 'localhost'
         const response = await fetch('/api/bootstrap');
         if (!response.ok) throw new Error("Erro na resposta do servidor");
         
         const data = await response.json();
         appState.users = data.users || [];
-        
         renderUsers(appState.users);
       } catch (error) {
-        console.warn("⚠️ Servidor ou banco offline. Carregando lista de contingência local no frontend.", error.message);
+        console.warn("⚠️ Servidor inacessível, carregando contingência local de usuários.", error.message);
         
-        // Plano B: Se a rede do Render/Banco falhar, renderiza localmente de forma garantida
         const fallbackUsers = [
           { name: "Administrador", role: "admin" },
           { name: "Luiz", role: "tecnico" },
@@ -220,27 +378,21 @@
       }
     }
 
-    // 2. Renderiza as opções dentro do elemento HTML select
+    // Alimenta o Select do formulário
     function renderUsers(usersList) {
       const selectElement = document.getElementById('user-select');
       if (!selectElement) return;
 
       selectElement.innerHTML = '<option value="" disabled selected>Selecione seu usuário</option>';
-
-      if (usersList && usersList.length > 0) {
-        usersList.forEach(user => {
-          const option = document.createElement('option');
-          option.value = user.name;
-          option.textContent = user.name;
-          selectElement.appendChild(option);
-        });
-        console.log(`${usersList.length} usuários carregados no seletor.`);
-      } else {
-        selectElement.innerHTML = '<option value="" disabled selected>Nenhum usuário encontrado</option>';
-      }
+      usersList.forEach(user => {
+        const option = document.createElement('option');
+        option.value = user.name;
+        option.textContent = user.name;
+        selectElement.appendChild(option);
+      });
     }
 
-    // 3. Gerencia o envio do formulário de login
+    // Formulário de envio de Login
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       
@@ -263,11 +415,13 @@
           throw new Error(result.error || "Falha ao efetuar login.");
         }
 
-        console.log("Login efetuado com sucesso!", result);
+        // Salva dados na sessão local para persistência de abas
+        localStorage.setItem("currentUser", JSON.stringify(result.user));
+        
         alert(`Bem-vindo, ${result.user.name}!`);
         
-        // Aqui você pode redirecionar para a dashboard do app, ex:
-        // window.location.href = "/dashboard.html";
+        // Ativa a transição visual e renderiza o conteúdo do painel
+        showDashboard(result.user, result.state);
         
       } catch (err) {
         errorDiv.textContent = err.message;
@@ -275,7 +429,69 @@
       }
     });
 
-    // Inicializa a carga assim que a página é lida
+    // Função responsável por alternar as telas e exibir a Dashboard
+    function showDashboard(user, stateData) {
+      document.getElementById('login-screen').style.display = 'none';
+      
+      const dashboard = document.getElementById('dashboard-container');
+      dashboard.style.display = 'block';
+      document.body.style.alignItems = 'flex-start'; // Ajusta alinhamento para telas longas
+
+      document.getElementById('nav-user-name').textContent = user.name;
+      document.getElementById('nav-user-role').textContent = user.role;
+
+      if (stateData) {
+        updateTables(stateData);
+      } else {
+        fetch('/api/bootstrap')
+          .then(res => res.json())
+          .then(data => updateTables(data))
+          .catch(err => console.error("Erro ao atualizar tabelas do painel:", err));
+      }
+    }
+
+    // Atualiza dinamicamente as tabelas de insumos do painel com os dados reais do backend
+    function updateTables(data) {
+      // 1. Tabela de Insumos
+      const itemsBody = document.querySelector('#items-table tbody');
+      if (itemsBody && data.items && data.items.length > 0) {
+        itemsBody.innerHTML = '';
+        data.items.forEach(item => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td><strong>${item.code}</strong></td>
+            <td>${item.name}</td>
+            <td>${item.category || ''}</td>
+            <td style="color: ${item.qty <= item.min ? 'var(--primary-color)' : 'inherit'}; font-weight: bold;">${item.qty}</td>
+            <td>${item.min || 0}</td>
+            <td>${item.supplier || ''}</td>
+          `;
+          itemsBody.appendChild(row);
+        });
+      }
+
+      // 2. Tabela de Solicitações
+      const reqsBody = document.querySelector('#requests-table tbody');
+      if (reqsBody && data.requests && data.requests.length > 0) {
+        reqsBody.innerHTML = '';
+        data.requests.forEach(req => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${req.technician}</td>
+            <td>${req.itemName}</td>
+            <td><strong>${req.qty}</strong></td>
+          `;
+          reqsBody.appendChild(row);
+        });
+      }
+    }
+
+    // Função para fazer logout e limpar a sessão
+    function logout() {
+      localStorage.clear();
+      window.location.reload();
+    }
+
     document.addEventListener('DOMContentLoaded', initBootstrap);
   </script>
 </body>
