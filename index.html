@@ -22,15 +22,14 @@
         </div>
         <label>
           Usuario
-          <select id="login-user"></select>
+          <input id="login-user" type="text" placeholder="Digite seu usuário ou nome" required style="width: 100%; box-sizing: border-box;">
         </label>
         <label>
           PIN
-          <input id="login-pin" type="password" inputmode="numeric" placeholder="0000" required>
+          <input id="login-pin" type="password" placeholder="Digite sua senha" required>
         </label>
         <button class="primary-action wide">Entrar</button>
         <p id="login-error" class="login-error"></p>
-        <p class="muted">Administrador: 0000 | Tecnicos: 1111</p>
       </form>
     </section>
 
@@ -112,10 +111,20 @@
             </section>
           </div>
 
-          <section class="panel">
+          <div class="dashboard-grid" style="margin-top: 1.5rem;">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>Controle de Acesso</h2>
+                <button id="new-user-button" class="primary-action">Novo Usuário</button>
+              </div>
+              <p class="muted" style="padding: 1rem 0;">Adicione novos operadores e técnicos ao sistema com senhas exclusivas.</p>
+            </section>
+          </div>
+
+          <section class="panel" style="margin-top: 1.5rem;">
             <div class="panel-head">
               <h2>Tempo medio de uso</h2>
-              <span class="muted">KPI administrativo</span>
+              <span class="muted">KPI administrative</span>
             </div>
             <div id="usage-kpis" class="table"></div>
           </section>
@@ -218,6 +227,26 @@
           <label class="span-2">Observacao<input id="item-note"></label>
         </div>
         <button class="primary-action wide" value="default">Salvar Insumo</button>
+      </form>
+    </dialog>
+
+    <dialog id="user-dialog">
+      <form method="dialog" id="user-form" class="dialog-body">
+        <div class="panel-head">
+          <h2>Novo Usuário</h2>
+          <button type="button" id="close-user-dialog" class="icon-button" aria-label="Fechar">x</button>
+        </div>
+        <div class="form-grid">
+          <label>Nome do Usuário<input id="user-name" required placeholder="Ex: Luiz"></label>
+          <label>Função / Cargo
+            <select id="user-role" required style="width: 100%; height: 38px; margin-top: 4px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 0 8px;">
+              <option value="tecnico">Técnico</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </label>
+          <label class="span-2">Senha / PIN<input id="user-pin" type="password" required placeholder="Digite a senha numérica ou texto"></label>
+        </div>
+        <button class="primary-action wide" value="default">Salvar Usuário</button>
       </form>
     </dialog>
 
