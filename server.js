@@ -56,7 +56,6 @@ async function initDatabase() {
   try {
     await client.query("BEGIN");
 
-    // Cria as tabelas básicas apenas se elas não existirem de forma simples
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_users (
         name TEXT PRIMARY KEY,
@@ -65,7 +64,7 @@ async function initDatabase() {
         active BOOLEAN DEFAULT TRUE
       );
     `);
-    
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS destinations (
         name TEXT PRIMARY KEY
@@ -94,7 +93,6 @@ async function initDatabase() {
       `, [u.name, u.role, u.pin]);
     }
 
-    // Alinha os destinos de bancadas padrão exigidos pelo front
     const baseDestinations = [
       "Bancada 01", "Bancada 02", "Bancada 03", 
       "Bancada 04", "Bancada 05", "Bancada 06", "Teste"
@@ -134,11 +132,10 @@ async function getBootstrap() {
     const itemsRes = await client.query("SELECT code, name, category, qty, min, supplier, note FROM items ORDER BY name ASC");
     const historyRes = await client.query("SELECT at, user_name as user, type, qty, item_code as \"itemCode\", item_name as \"itemName\", destination FROM stock_history ORDER BY at DESC LIMIT 100");
     const requestsRes = await client.query("SELECT id, at, technician, item_code as \"itemCode\", item_name as \"itemName\", destination, qty, status FROM requests WHERE status = 'pending' ORDER BY at DESC");
-    
+
     const destsRes = await client.query("SELECT name FROM destinations ORDER BY name ASC");
     const destinations = destsRes.rows.map(d => d.name);
 
-    // KPI de uso perfeitamente tratado para evitar erros matemáticos
     let usageKpis = [];
     try {
       const kpisRes = await client.query(`
@@ -249,7 +246,7 @@ app.post("/api/login", async (req, res, next) => {
   try {
     const { name, pin } = req.body;
     const client = await pool.connect();
-    
+
     let user;
     try {
       const userRes = await client.query("SELECT name, role, pin_code FROM app_users WHERE name = $1 AND active = TRUE", [name]);
@@ -322,7 +319,7 @@ app.post("/api/movements/withdraw", async (req, res, next) => {
   }
 });
 
-// ROTA CORRIGIDA: Valida se o código de barras escaneado pelo Administrador confere com o item solicitado
+// ROTA CORRIGIDA (Sem duplicações)
 app.post("/api/requests/:id/approve", async (req, res, next) => {
   try {
     const { code, adminName } = req.body;
@@ -338,7 +335,6 @@ app.post("/api/requests/:id/approve", async (req, res, next) => {
 
       const request = reqRes.rows[0];
       
-      // Validação obrigatória do leitor de código de barras
       if (code && request.item_code.toUpperCase() !== code.trim().toUpperCase()) {
         throw new Error(`Código escaneado (${code}) difere do solicitado (${request.item_code}).`);
       }
@@ -406,7 +402,6 @@ app.post("/api/movements/replenish", async (req, res, next) => {
   }
 });
 
-// Arquivos Estáticos declarados ANTES da captura global asterisco (*)
 app.use(express.static(path.join(__dirname)));
 
 app.get("*", (_req, res) => {
