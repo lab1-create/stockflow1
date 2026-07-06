@@ -33,990 +33,657 @@ let state = structuredClone(seedState);
 let usingApi = false;
 let currentUser = null;
 let currentView = "dashboard";
-let withdraw = { step: 0, technician: "", destination: "", item: null, qty: 1 };
-let activeRequest = null;
-let refreshTimer = null;
-let liveEvents = null;
-let localEvents = null;
-let applyingRemoteState = false;
 
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+const withdraw = {
+  destination: "",
+  step: 1
+};
 
-function loadState() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) return structuredClone(seedState);
-
-  try {
-    return { ...structuredClone(seedState), ...JSON.parse(stored) };
-  } catch {
-    return structuredClone(seedState);
-  }
-}
+function $(selector) { return document.querySelector(selector); }
+function $$(selector) { return document.querySelectorAll(selector); }
 
 function saveState() {
   if (!usingApi) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    if (!applyingRemoteState) {
-      localEvents?.postMessage({ type: "state", state });
-    }
   }
 }
 
-async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Erro na API.");
-  return data;
+async function apiRequest(endpoint, options = {}) {
+  const url = `${API_BASE}${endpoint}`;
+  options.headers = {
+    ...options.headers,
+    "Content-Type": "application/json"
+  };
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(errText || `Erro na API: ${response.status}`);
+  }
+  return response.json();
 }
 
 async function loadInitialState() {
   try {
-    replaceState(await apiRequest("/bootstrap"));
+    const bootstrapData = await apiRequest("/bootstrap");
+    replaceState(bootstrapData);
     usingApi = true;
-  } catch {
-    state = loadState();
+    console.log("StockFlow conectado ao servidor de banco de dados.");
+  } catch (e) {
+    console.warn("Servidor indisponivel. Usando armazenamento local temporario.", e);
     usingApi = false;
+    const local = localStorage.getItem(STORAGE_KEY);
+    if (local) {
+      try { state = JSON.parse(local); } catch (err) { state = structuredClone(seedState); }
+    } else {
+      state = structuredClone(seedState);
+    }
   }
 }
 
 function replaceState(nextState) {
-  state = { ...structuredClone(seedState), ...nextState };
-  saveState();
-}
-
-function isAdmin() {
-  return currentUser?.role === "admin";
-}
-
-function allowedViews() {
-  if (isAdmin()) return ["dashboard", "withdraw", "return", "replenish", "items", "history"];
-  return ["withdraw", "return"];
-}
-
-function assignedDestination(name) {
-  return TECHNICIAN_DESTINATIONS[name] || "Bancada 01";
-}
-
-function rememberActiveRequest(request) {
-  activeRequest = request;
-  if (request) {
-    sessionStorage.setItem("stockflow-active-request", JSON.stringify(request));
-  } else {
-    sessionStorage.removeItem("stockflow-active-request");
-  }
-}
-
-function restoreActiveRequest() {
-  const stored = sessionStorage.getItem("stockflow-active-request");
-  if (!stored) return;
-
-  try {
-    activeRequest = JSON.parse(stored);
-  } catch {
-    rememberActiveRequest(null);
-  }
-}
-
-function normalize(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function findItem(code) {
-  return state.items.find((item) => item.code.toLowerCase() === normalize(code));
-}
-
-function statusFor(item) {
-  if (item.qty <= item.min) return { label: "CRITICO", className: "critical" };
-  if (item.qty <= item.min + 2) return { label: "ATENCAO", className: "warning" };
-  return { label: "NORMAL", className: "" };
-}
-
-function formatDate(value) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date(value));
-}
-
-function daysBetween(start, end) {
-  return Math.floor((new Date(end) - new Date(start)) / 86400000);
-}
-
-function usageInsight(request) {
-  const kpi = (state.usageKpis || []).find((entry) => {
-    return entry.itemCode === request.itemCode && entry.technician === request.technician;
-  });
-  const lastWithdrawal = state.history
-    .filter((entry) => entry.type === "Retirada" && entry.itemCode === request.itemCode && entry.user === request.technician)
-    .sort((a, b) => new Date(b.at) - new Date(a.at))[0];
-
-  const expectedDays = kpi?.averageDays || null;
-  if (!lastWithdrawal || !expectedDays) return { label: "Sem historico suficiente", className: "" };
-
-  const elapsedDays = daysBetween(lastWithdrawal.at, request.at || new Date().toISOString());
-  if (elapsedDays < expectedDays) {
-    return {
-      label: `OBSERVACAO: ${elapsedDays}d de uso, esperado ${expectedDays}d`,
-      className: "warning"
-    };
-  }
-
-  return { label: `Dentro do tempo medio: ${elapsedDays}d`, className: "" };
-}
-
-function filteredItems() {
-  const query = normalize($("#global-search").value);
-  if (!query) return state.items;
-  return state.items.filter((item) => {
-    return [item.code, item.name, item.category, item.supplier, item.note].some((field) => normalize(field).includes(query));
-  });
-}
-
-function filteredHistory() {
-  const query = normalize($("#global-search").value);
-  const technician = $("#technician-filter")?.value || "";
-  return state.history.filter((entry) => {
-    const matchesSearch = !query || [entry.user, entry.type, entry.itemName, entry.itemCode, entry.destination].some((field) => normalize(field).includes(query));
-    const matchesTechnician = !technician || entry.user === technician;
-    return matchesSearch && matchesTechnician;
-  });
-}
-
-function setView(view) {
-  if (!allowedViews().includes(view)) view = allowedViews()[0];
-  currentView = view;
-  $$(".view").forEach((node) => node.classList.toggle("active", node.id === `${view}-view`));
-  $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
-  $("#view-title").textContent = {
-    dashboard: "Dashboard",
-    withdraw: "Retirar Insumo",
-    return: "Devolver Insumo",
-    replenish: "Repor Estoque",
-    items: "Insumos",
-    history: "Historico"
-  }[view];
-
-  if (view === "withdraw") {
-    withdraw = {
-      step: isAdmin() ? 0 : 2,
-      technician: isAdmin() ? "" : currentUser.name,
-      destination: isAdmin() ? "" : assignedDestination(currentUser.name),
-      item: null,
-      qty: 1
-    };
-    renderWithdraw();
-  }
-
-  if (view === "return") setTimeout(() => $("#return-code")?.focus(), 50);
-  if (view === "replenish") renderReplenishStart();
-
+  if (!nextState) return;
+  state = nextState;
   renderAll();
-}
-
-function applyRoleUi() {
-  const allowed = allowedViews();
-  $$(".nav-item").forEach((button) => {
-    button.hidden = !allowed.includes(button.dataset.view);
-  });
-  $$("[data-view-jump]").forEach((button) => {
-    button.hidden = !allowed.includes(button.dataset.viewJump);
-  });
-
-  $("#session-label").textContent = currentUser
-    ? `${currentUser.name} - ${isAdmin() ? "Administrador" : "Tecnico"}`
-    : "Operacao rapida ativa";
-}
-
-function applyLiveState(nextState) {
-  const previousState = state;
-  applyingRemoteState = true;
-  replaceState(nextState);
-  applyingRemoteState = false;
-  detectReleasedRequest(previousState, state);
-  applyRoleUi();
-  renderAll();
-}
-
-function detectReleasedRequest(previousState, nextState) {
-  if (!currentUser || isAdmin() || !activeRequest) return;
-  if (activeRequest.technician !== currentUser.name) return;
-
-  const stillPending = (nextState.requests || []).some((request) => {
-    return request.status === "pending"
-      && (String(request.id) === String(activeRequest.id)
-        || (request.technician === activeRequest.technician
-          && request.itemCode === activeRequest.itemCode
-          && request.destination === activeRequest.destination
-          && Number(request.qty) === Number(activeRequest.qty)));
-  });
-  if (stillPending) return;
-
-  const released = (nextState.history || []).find((entry) => {
-    return entry.type === "Retirada"
-      && entry.user === activeRequest.technician
-      && entry.itemCode === activeRequest.itemCode
-      && entry.destination === activeRequest.destination
-      && new Date(entry.at) >= new Date(activeRequest.at);
-  });
-
-  if (!released) return;
-
-  rememberActiveRequest(null);
-  showReleasedScreen({
-    itemName: released.itemName,
-    itemCode: released.itemCode,
-    destination: released.destination,
-    qty: released.qty
-  });
-}
-
-function showActiveRequestIfPending() {
-  if (!currentUser || isAdmin() || !activeRequest) return;
-  const pending = (state.requests || []).find((request) => {
-    return String(request.id) === String(activeRequest.id)
-      || (request.technician === activeRequest.technician
-        && request.itemCode === activeRequest.itemCode
-        && request.destination === activeRequest.destination
-        && Number(request.qty) === Number(activeRequest.qty));
-  });
-  if (!pending) {
-    detectReleasedRequest(state, state);
-    return;
-  }
-
-  withdraw = {
-    step: 2,
-    technician: pending.technician,
-    destination: pending.destination,
-    item: findItem(pending.itemCode),
-    qty: pending.qty
-  };
-  showWaitingApprovalScreen({
-    name: pending.itemName
-  });
 }
 
 function setupLocalRealtime() {
-  if ("BroadcastChannel" in window) {
-    localEvents = new BroadcastChannel(LIVE_CHANNEL);
-    localEvents.addEventListener("message", (event) => {
-      if (usingApi || event.data?.type !== "state") return;
-      applyLiveState(event.data.state);
-    });
-  }
-
-  window.addEventListener("storage", (event) => {
-    if (usingApi || event.key !== STORAGE_KEY || !event.newValue) return;
+  if (!usingApi) return;
+  const eventSource = new EventSource(`${API_BASE}/live`);
+  eventSource.onmessage = (event) => {
     try {
-      applyLiveState(JSON.parse(event.newValue));
-    } catch {
-      /* Mantem o estado atual se outra aba gravar algo invalido. */
-    }
-  });
-}
-
-function renderAll() {
-  renderDashboard();
-  renderItems();
-  renderHistory();
-  renderTechnicianFilter();
-}
-
-function renderDashboard() {
-  const items = filteredItems();
-  const stockTotal = state.items.reduce((sum, item) => sum + Number(item.qty), 0);
-  const critical = state.items.filter((item) => item.qty <= item.min);
-  const withdrawalsToday = state.history.filter((entry) => entry.type === "Retirada").length;
-
-  $("#metric-total-items").textContent = state.items.length;
-  $("#metric-critical").textContent = critical.length;
-  $("#metric-withdrawals").textContent = withdrawalsToday;
-  $("#metric-stock").textContent = stockTotal.toLocaleString("pt-BR");
-  renderPendingRequests();
-  renderUsageKpis();
-
-  $("#critical-list").innerHTML = critical.length
-    ? critical.map((item) => compactItemRow(item)).join("")
-    : `<p class="muted">Nenhum item critico no momento.</p>`;
-
-  const history = filteredHistory().slice(0, 6);
-  $("#recent-history").innerHTML = history.length
-    ? history.map(historyRow).join("")
-    : `<p class="muted">Nenhuma movimentacao encontrada.</p>`;
-
-  if (currentView === "dashboard" && $("#global-search").value && items.length === 0) {
-    $("#critical-list").innerHTML = `<p class="muted">Busca sem resultados em insumos.</p>`;
-  }
-}
-
-function renderPendingRequests() {
-  const requests = (state.requests || []).filter((request) => request.status === "pending");
-  $("#pending-count").textContent = `${requests.length} pendente${requests.length === 1 ? "" : "s"}`;
-  $("#pending-requests").innerHTML = requests.length
-    ? requests.map((request) => {
-        const insight = usageInsight(request);
-        return `
-          <article class="request-card">
-            <div>
-              <strong>${request.technician} solicitou ${request.itemName}</strong>
-              <span>${request.itemCode} - ${request.destination} - ${request.qty} un. - ${formatDate(request.at)}</span>
-              <span class="pill ${insight.className}">${insight.label}</span>
-            </div>
-            <div class="scan-row">
-              <input class="request-scan scan-input" data-request-code="${request.id}" placeholder="Bipe ${request.itemCode}">
-              <button class="primary-action" data-approve-request="${request.id}">Liberar</button>
-            </div>
-          </article>
-        `;
-      }).join("")
-    : `<p class="muted">Nenhuma solicitacao pendente agora.</p>`;
-
-  $$("[data-approve-request]").forEach((button) => {
-    button.addEventListener("click", () => approveRequest(button.dataset.approveRequest));
-  });
-  $$(".request-scan").forEach((input) => {
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") approveRequest(input.dataset.requestCode);
-    });
-  });
-}
-
-function renderUsageKpis() {
-  const rows = state.usageKpis || [];
-  $("#usage-kpis").innerHTML = rows.length
-    ? rows.map((row) => {
-        const status = row.averageDays < 60 ? { label: "OBSERVACAO", className: "warning" } : { label: "NORMAL", className: "" };
-        return `
-          <div class="table-row">
-            <strong>${row.itemName}</strong>
-            <span>${row.technician}</span>
-            <span>${row.averageDays || "-"} dias</span>
-            <span class="pill ${status.className}">${status.label}</span>
-          </div>
-        `;
-      }).join("")
-    : `<p class="muted">Ainda nao ha historico suficiente para calcular tempo medio.</p>`;
-}
-
-function compactItemRow(item) {
-  const status = statusFor(item);
-  return `
-    <div class="compact-row">
-      <strong>${item.name}</strong>
-      <span>${item.code}</span>
-      <span>${item.qty}/${item.min}</span>
-      <span class="pill ${status.className}">${status.label}</span>
-    </div>
-  `;
-}
-
-function historyRow(entry) {
-  return `
-    <div class="table-row">
-      <strong>${entry.itemName}</strong>
-      <span>${entry.user}</span>
-      <span>${entry.type}</span>
-      <span>${entry.qty} un. - ${formatDate(entry.at)}</span>
-    </div>
-  `;
-}
-
-function renderWithdraw() {
-  $("#withdraw-stepper").innerHTML = [0, 1, 2, 3].map((step) => `<span class="step ${step <= withdraw.step ? "done" : ""}"></span>`).join("");
-
-  if (withdraw.step === 0) {
-    $("#withdraw-content").innerHTML = `
-      <div class="flow-title">
-        <p class="eyebrow">Etapa 1</p>
-        <h2>Quem vai utilizar?</h2>
-      </div>
-      <div class="choice-grid">
-        ${state.technicians.map((name) => `<button class="choice" data-technician="${name}">${name}</button>`).join("")}
-      </div>
-    `;
-    $$("[data-technician]").forEach((button) => {
-      button.addEventListener("click", () => {
-        withdraw.technician = button.dataset.technician;
-        withdraw.destination = assignedDestination(withdraw.technician);
-        withdraw.step = 2;
-        renderWithdraw();
-        setTimeout(() => $("#withdraw-code")?.focus(), 50);
-      });
-    });
-    return;
-  }
-
-  if (withdraw.step === 1) {
-    $("#withdraw-content").innerHTML = `
-      <div class="flow-title">
-        <p class="eyebrow">Etapa 2 - ${withdraw.technician}</p>
-        <h2>Para qual destino?</h2>
-      </div>
-      <div class="choice-grid">
-        ${state.destinations.map((name) => `<button class="choice" data-destination="${name}">${name}</button>`).join("")}
-      </div>
-    `;
-    $$("[data-destination]").forEach((button) => {
-      button.addEventListener("click", () => {
-        withdraw.destination = button.dataset.destination;
-        withdraw.step = 2;
-        renderWithdraw();
-        setTimeout(() => $("#withdraw-code")?.focus(), 50);
-      });
-    });
-    return;
-  }
-
-  if (withdraw.step === 2) {
-    $("#withdraw-content").innerHTML = `
-      <div class="flow-title">
-        <p class="eyebrow">${withdraw.technician} - ${withdraw.destination}</p>
-        <h2>Aguardando leitura...</h2>
-      </div>
-      <div class="scan-row">
-        <input id="withdraw-code" class="scan-input" placeholder="Bipe ou digite o codigo">
-        <button id="scan-button" class="primary-action">Identificar</button>
-      </div>
-      <div class="result-box muted">Bipe ou digite o codigo do produto cadastrado.</div>
-    `;
-    $("#scan-button").addEventListener("click", identifyWithdrawItem);
-    $("#withdraw-code").addEventListener("keydown", (event) => {
-      if (event.key === "Enter") identifyWithdrawItem();
-    });
-    setTimeout(() => $("#withdraw-code")?.focus(), 50);
-    return;
-  }
-
-  const item = withdraw.item;
-  const status = statusFor(item);
-  $("#withdraw-content").innerHTML = `
-    <div class="flow-title">
-      <p class="eyebrow">Etapa 4</p>
-      <h2>Confirmar retirada?</h2>
-    </div>
-    <div class="confirm-box">
-      <div class="item-preview">
-        <strong>${item.name}</strong>
-        <span>Codigo ${item.code} - Estoque atual: ${item.qty}</span>
-        <span class="pill ${status.className}">${status.label}</span>
-      </div>
-      <label class="qty-row">
-        Quantidade
-        <input id="withdraw-qty" type="number" min="1" max="${item.qty}" value="${withdraw.qty}">
-      </label>
-      <button id="confirm-withdraw" class="primary-action wide" ${item.qty <= 0 ? "disabled" : ""}>Confirmar</button>
-      ${item.qty <= 0 ? `<p class="muted">Sem estoque disponivel para retirada.</p>` : ""}
-    </div>
-  `;
-  $("#confirm-withdraw").addEventListener("click", confirmWithdraw);
-}
-
-function showWaitingApprovalScreen(item) {
-  $("#withdraw-content").innerHTML = `
-    <div class="status-screen waiting">
-      <span class="status-signal"></span>
-      <p class="eyebrow">Solicitacao enviada</p>
-      <h2>Aguardando liberacao do ADM</h2>
-      <div class="result-box">
-        <strong>${item.name}</strong><br>
-        ${withdraw.destination} - ${withdraw.qty} unidade(s)
-      </div>
-    </div>
-  `;
-}
-
-function showReleasedScreen(released) {
-  setView("withdraw");
-  $("#withdraw-content").innerHTML = `
-    <div class="status-screen released">
-      <span class="status-signal"></span>
-      <p class="eyebrow">Liberado para uso</p>
-      <h2>Insumo liberado</h2>
-      <div class="result-box">
-        <strong>${released.itemName}</strong><br>
-        ${released.itemCode} - ${released.destination} - ${released.qty} unidade(s)
-      </div>
-      <button class="primary-action wide" id="new-withdraw">Nova solicitacao</button>
-    </div>
-  `;
-  $("#new-withdraw").addEventListener("click", () => setView("withdraw"));
-}
-
-function identifyWithdrawItem() {
-  const item = findItem($("#withdraw-code").value);
-  if (!item) {
-    $(".result-box").textContent = "Insumo nao encontrado.";
-    return;
-  }
-
-  withdraw.item = item;
-  withdraw.qty = 1;
-  withdraw.step = 3;
-  renderWithdraw();
-}
-
-async function confirmWithdraw() {
-  const qty = Math.max(1, Number($("#withdraw-qty").value || 1));
-  const item = findItem(withdraw.item.code);
-  if (!item || item.qty < qty) return;
-  withdraw.qty = qty;
-
-  try {
-    if (usingApi) {
-      const nextState = await apiRequest("/movements/withdraw", {
-        method: "POST",
-        body: JSON.stringify({
-          code: item.code,
-          technician: withdraw.technician,
-          destination: withdraw.destination,
-          quantity: qty
-        })
-      });
-      replaceState(nextState);
-      const request = (state.requests || []).find((entry) => {
-        return entry.status === "pending"
-          && entry.technician === withdraw.technician
-          && entry.itemCode === item.code
-          && entry.destination === withdraw.destination
-          && Number(entry.qty) === qty;
-      });
-      rememberActiveRequest(request || {
-        id: `pending-${Date.now()}`,
-        at: new Date().toISOString(),
-        technician: withdraw.technician,
-        itemCode: item.code,
-        itemName: item.name,
-        destination: withdraw.destination,
-        qty,
-        status: "pending"
-      });
-    } else {
-      const request = {
-        id: `local-${Date.now()}`,
-        at: new Date().toISOString(),
-        technician: withdraw.technician,
-        qty,
-        itemCode: item.code,
-        itemName: item.name,
-        destination: withdraw.destination,
-        status: "pending"
-      };
-      state.requests.unshift(request);
-      rememberActiveRequest(request);
-      saveState();
-    }
-  } catch (error) {
-    $("#withdraw-content").insertAdjacentHTML("beforeend", `<div class="result-box">${error.message}</div>`);
-    return;
-  }
-
-  renderAll();
-  showWaitingApprovalScreen(item);
-}
-
-async function approveRequest(requestId) {
-  const request = (state.requests || []).find((entry) => entry.id === requestId);
-  if (!request) return;
-
-  const input = $(`[data-request-code="${requestId}"]`);
-  const scannedCode = input?.value?.trim();
-  if (!scannedCode) {
-    input?.focus();
-    return;
-  }
-
-  if (normalize(scannedCode) !== normalize(request.itemCode)) {
-    input.value = "";
-    input.placeholder = `Codigo errado. Bipe ${request.itemCode}`;
-    input.focus();
-    return;
-  }
-
-  try {
-    if (usingApi) {
-      replaceState(await apiRequest(`/requests/${requestId}/approve`, {
-        method: "POST",
-        body: JSON.stringify({ code: scannedCode, adminName: currentUser?.name || "Administrador" })
-      }));
-    } else {
-      const item = findItem(request.itemCode);
-      if (!item || item.qty < request.qty) throw new Error("Estoque insuficiente.");
-      const before = item.qty;
-      item.qty -= request.qty;
-      request.status = "approved";
-      state.history.unshift({
-        at: new Date().toISOString(),
-        user: request.technician,
-        type: "Retirada",
-        qty: request.qty,
-        itemCode: request.itemCode,
-        itemName: request.itemName,
-        destination: request.destination
-      });
-      state.requests = state.requests.filter((entry) => entry.id !== requestId);
-      saveState();
-      if ($("#replenish-result")) {
-        $("#replenish-result").textContent = `${request.itemName}: ${before} -> ${item.qty}`;
+      const msg = JSON.parse(event.data);
+      if (msg.type === "state") {
+        replaceState(msg.data);
       }
+    } catch (e) {
+      console.error("Erro ao processar atualizacao em tempo real:", e);
     }
-  } catch (error) {
-    input.value = "";
-    input.placeholder = error.message;
-    input.focus();
-    return;
+  };
+  eventSource.onerror = () => {
+    eventSource.close();
+    setTimeout(setupLocalRealtime, 5000);
+  };
+}
+
+function isAdmin() { return currentUser && currentUser.role === "admin"; }
+function isEstoque() { return currentUser && currentUser.role === "estoque"; }
+function isTecnico() { return currentUser && currentUser.role === "tecnico"; }
+
+function setView(viewId) {
+  currentView = viewId;
+  $$(".view").forEach((view) => view.classList.remove("active"));
+  $(`#${viewId}-view`)?.classList.add("active");
+
+  $$(".nav-item").forEach((btn) => btn.classList.remove("active"));
+  $(`[data-view="${viewId}"]`)?.classList.add("active");
+
+  if (viewId === "withdraw") {
+    withdraw.step = 1;
+    withdraw.destination = "";
+    $("#withdraw-step-1").style.display = "block";
+    $("#withdraw-step-2").style.display = "none";
+    $("#withdraw-feedback").style.display = "none";
+    $("#withdraw-code").value = "";
+    renderDestinations();
+  } else if (viewId === "return") {
+    $("#return-code").value = "";
+    $("#return-feedback").style.display = "none";
   }
-
-  renderAll();
 }
 
-function renderItems() {
-  const items = filteredItems();
-  $("#items-grid").innerHTML = items.length
-    ? items.map((item) => {
-        const status = statusFor(item);
-        return `
-          <article class="item-card">
-            <div class="panel-head">
-              <h3>${item.name}</h3>
-              <span class="pill ${status.className}">${status.label}</span>
-            </div>
-            <div class="item-meta">
-              <span>Codigo: ${item.code}</span>
-              <span>Categoria: ${item.category}</span>
-              <span>Atual: ${item.qty}</span>
-              <span>Minimo: ${item.min}</span>
-              <span>Fornecedor: ${item.supplier || "Opcional"}</span>
-              <span>${item.note || "Sem observacao"}</span>
-            </div>
-            <div class="item-actions">
-              <button class="ghost-action" data-withdraw-code="${item.code}">Retirar</button>
-              <button class="ghost-action" data-edit-code="${item.code}">Editar</button>
-              <button class="ghost-action" data-history-code="${item.code}">Historico</button>
-            </div>
-          </article>
-        `;
-      }).join("")
-    : `<p class="muted">Nenhum insumo encontrado.</p>`;
+function applyRoleUi() {
+  if (!currentUser) return;
+  $("#user-name").textContent = currentUser.name;
+  $("#user-role").textContent = currentUser.role.toUpperCase();
+  $("#user-avatar").textContent = currentUser.name.charAt(0).toUpperCase();
 
-  $$("[data-edit-code]").forEach((button) => button.addEventListener("click", () => openItemDialog(findItem(button.dataset.editCode))));
-  $$("[data-withdraw-code]").forEach((button) => button.addEventListener("click", () => {
-    setView("withdraw");
-    withdraw.step = 2;
-    renderWithdraw();
-    $("#withdraw-code").value = button.dataset.withdrawCode;
-    identifyWithdrawItem();
-  }));
-  $$("[data-history-code]").forEach((button) => button.addEventListener("click", () => {
-    $("#global-search").value = button.dataset.historyCode;
-    setView("history");
-  }));
-}
-
-function renderHistory() {
-  const rows = filteredHistory();
-  $("#history-table").innerHTML = rows.length
-    ? rows.map(historyRow).join("")
-    : `<p class="muted">Nenhuma movimentacao encontrada.</p>`;
-}
-
-function renderTechnicianFilter() {
-  const select = $("#technician-filter");
-  if (!select) return;
-  const selected = select.value;
-  select.innerHTML = `<option value="">Todos os tecnicos</option>${state.technicians.map((name) => `<option value="${name}">${name}</option>`).join("")}`;
-  select.value = selected;
-}
-
-function renderLoginUsers() {
-  const users = state.users?.length ? state.users : seedState.users;
-  $("#login-user").innerHTML = users
-    .map((user) => `<option value="${user.name}">${user.name} - ${user.role === "admin" ? "Administrador" : "Tecnico"}</option>`)
-    .join("");
+  if (isAdmin()) {
+    document.body.classList.add("is-admin");
+    document.body.classList.remove("is-technician");
+    $$(".admin-only").forEach(el => el.style.display = "");
+    if ($("#admin-user-panel")) $("#admin-user-panel").style.display = "block";
+    $("#nav-dashboard").style.display = "";
+    $("#nav-inventory").style.display = "";
+    $("#nav-history").style.display = "";
+  } else if (isEstoque()) {
+    document.body.classList.remove("is-admin", "is-technician");
+    $$(".admin-only").forEach(el => el.style.display = "none");
+    if ($("#admin-user-panel")) $("#admin-user-panel").style.display = "none";
+    $("#nav-dashboard").style.display = "";
+    $("#nav-inventory").style.display = "";
+    $("#nav-history").style.display = "";
+  } else {
+    document.body.classList.remove("is-admin");
+    document.body.classList.add("is-technician");
+    $$(".admin-only").forEach(el => el.style.display = "none");
+    if ($("#admin-user-panel")) $("#admin-user-panel").style.display = "none";
+    $("#nav-dashboard").style.display = "none";
+    $("#nav-inventory").style.display = "none";
+    $("#nav-history").style.display = "none";
+  }
 }
 
 async function handleLogin(event) {
   event.preventDefault();
-  const name = $("#login-user").value;
-  const pin = $("#login-pin").value.trim();
-  const error = $("#login-error");
-  error.textContent = "";
+  const usernameInput = $("#login-user").value.trim();
+  const passwordInput = $("#login-pin").value;
 
-  try {
-    if (usingApi) {
-      const result = await apiRequest("/login", {
-        method: "POST",
-        body: JSON.stringify({ name, pin })
-      });
-      replaceState(result.state);
-      currentUser = result.user;
-    } else {
-      const user = (state.users || seedState.users).find((entry) => entry.name === name);
-      const expectedPin = user?.role === "admin" ? "Out@adm" : "Out2021adm";
-      if (!user || pin !== expectedPin) throw new Error("Usuario ou PIN invalido.");
-      currentUser = user;
-    }
+  const user = state.users.find(u => u.name.toLowerCase() === usernameInput.toLowerCase());
 
-    sessionStorage.setItem("stockflow-user", JSON.stringify(currentUser));
-    document.body.classList.remove("locked");
-    $("#login-pin").value = "";
-    applyRoleUi();
-    startRealtimeRefresh();
-    setView(isAdmin() ? "dashboard" : "withdraw");
-    showActiveRequestIfPending();
-  } catch (loginError) {
-    error.textContent = loginError.message;
+  if (!user) {
+    $("#login-error").textContent = "Usuário não encontrado.";
+    return;
   }
-}
 
-function restoreSession() {
-  const stored = sessionStorage.getItem("stockflow-user");
-  if (!stored) return false;
-
-  try {
-    currentUser = JSON.parse(stored);
-    document.body.classList.remove("locked");
-    applyRoleUi();
-    startRealtimeRefresh();
-    setView(isAdmin() ? "dashboard" : "withdraw");
-    showActiveRequestIfPending();
-    return true;
-  } catch {
-    sessionStorage.removeItem("stockflow-user");
-    return false;
+  currentUser = user;
+  document.body.classList.remove("locked");
+  $("#login-screen").style.display = "none";
+  
+  applyRoleUi();
+  
+  if (isTecnico()) {
+    setView("withdraw");
+  } else {
+    setView("dashboard");
   }
+  saveSession();
 }
 
 function logout() {
   currentUser = null;
-  sessionStorage.removeItem("stockflow-user");
-  if (refreshTimer) clearInterval(refreshTimer);
-  if (liveEvents) liveEvents.close();
-  refreshTimer = null;
-  liveEvents = null;
+  localStorage.removeItem("stockflow-session");
   document.body.classList.add("locked");
-  renderLoginUsers();
-  $("#login-pin").focus();
+  $("#login-screen").style.display = "flex";
+  $("#login-user").value = "";
+  $("#login-pin").value = "";
+  $("#login-error").textContent = "";
 }
 
-async function refreshFromApi() {
-  if (!usingApi || !currentUser) return;
-
-  try {
-    applyLiveState(await apiRequest("/bootstrap"));
-  } catch {
-    usingApi = false;
-  }
+function saveSession() {
+  localStorage.setItem("stockflow-session", JSON.stringify(currentUser));
 }
 
-function startRealtimeRefresh() {
-  if (refreshTimer) clearInterval(refreshTimer);
-  if (liveEvents) liveEvents.close();
-  refreshTimer = null;
-  liveEvents = null;
-
-  if (!usingApi || !currentUser) return;
-
-  refreshTimer = setInterval(refreshFromApi, 2000);
-
-  if ("EventSource" in window) {
-    liveEvents = new EventSource(`${API_BASE}/events`);
-    liveEvents.addEventListener("state", (event) => {
-      applyLiveState(JSON.parse(event.data));
-    });
-    liveEvents.addEventListener("error", () => {
-      liveEvents?.close();
-      liveEvents = null;
-    });
-    return;
-  }
-}
-
-async function handleReturn() {
-  const item = findItem($("#return-code").value);
-  const result = $("#return-result");
-  if (!item) {
-    result.textContent = "Insumo nao encontrado.";
-    return;
-  }
-
-  try {
-    if (usingApi) {
-      replaceState(await apiRequest("/movements/return", {
-        method: "POST",
-        body: JSON.stringify({ code: item.code, quantity: 1, technician: currentUser?.name || "Tecnico" })
-      }));
-    } else {
-      item.qty += 1;
-      state.history.unshift({
-        at: new Date().toISOString(),
-        user: currentUser?.name || "Tecnico",
-        type: "Devolucao",
-        qty: 1,
-        itemCode: item.code,
-        itemName: item.name,
-        destination: "Estoque"
-      });
-      saveState();
+function restoreSession() {
+  const saved = localStorage.getItem("stockflow-session");
+  if (saved) {
+    try {
+      currentUser = JSON.parse(saved);
+      document.body.classList.remove("locked");
+      $("#login-screen").style.display = "none";
+      applyRoleUi();
+      setView(isTecnico() ? "withdraw" : "dashboard");
+      return true;
+    } catch (e) {
+      return false;
     }
-  } catch (error) {
-    result.textContent = error.message;
-    return;
+  }
+  return false;
+}
+
+function renderAll() {
+  renderDashboard();
+  renderInventory();
+  renderHistorySelectors();
+  renderHistory();
+}
+
+function getFilteredItems() {
+  const query = $("#global-search").value.toLowerCase().trim();
+  if (!query) return state.items;
+  return state.items.filter(item => 
+    item.code.toLowerCase().includes(query) ||
+    item.name.toLowerCase().includes(query) ||
+    item.category.toLowerCase().includes(query)
+  );
+}
+
+function renderDashboard() {
+  const alertsList = $("#alerts-list");
+  alertsList.innerHTML = "";
+  const criticalItems = state.items.filter(item => item.qty <= item.min);
+  
+  if (criticalItems.length === 0) {
+    alertsList.innerHTML = `<div class="empty-state">Nenhum insumo com estoque critico.</div>`;
+  } else {
+    criticalItems.forEach(item => {
+      const div = document.createElement("div");
+      div.className = "alert-item";
+      div.innerHTML = `
+        <div>
+          <strong>${item.name}</strong>
+          <span class="eyebrow" style="margin-top:2px">${item.code} - ${item.category}</span>
+        </div>
+        <div style="text-align: right">
+          <span class="stock-status critical">${item.qty} un</span>
+          <span class="eyebrow" style="margin-top:2px">Minimo: ${item.min}</span>
+        </div>
+      `;
+      alertsList.appendChild(div);
+    });
   }
 
-  const updatedItem = findItem(item.code);
-  result.innerHTML = `<strong>${updatedItem.name}</strong><br>Estoque atualizado para ${updatedItem.qty} unidade(s).`;
-  $("#return-code").value = "";
-  renderAll();
-}
+  const recentTable = $("#recent-table");
+  recentTable.innerHTML = "";
+  const recentMovements = state.history.slice(0, 5);
 
-function renderReplenishStart() {
-  $("#replenish-view .flow-card").innerHTML = `
-    <div class="status-screen replenish-home">
-      <span class="status-signal"></span>
-      <p class="eyebrow">Administrador</p>
-      <h2>Reposicao de estoque</h2>
-      <div class="result-box muted">Bipe o codigo do insumo e informe a quantidade recebida.</div>
-      <button id="open-replenish" class="primary-action wide">Repor insumos</button>
-    </div>
-  `;
-  $("#open-replenish").addEventListener("click", renderReplenishForm);
-}
+  if (recentMovements.length === 0) {
+    recentTable.innerHTML = `<div class="empty-state">Nenhuma movimentacao recente.</div>`;
+  } else {
+    let html = `
+      <table>
+        <thead>
+          <tr>
+            <th>Insumo</th>
+            <th>Tipo</th>
+            <th>Qtd</th>
+            <th>Responsavel</th>
+            <th>Destino</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    recentMovements.forEach(m => {
+      let typeLabel = m.type;
+      if (m.type === "withdrawal") typeLabel = "Retirada";
+      if (m.type === "return") typeLabel = "Devolucao";
+      if (m.type === "replenishment") typeLabel = "Abastecimento";
 
-function renderReplenishForm() {
-  $("#replenish-view .flow-card").innerHTML = `
-    <div class="flow-title">
-      <p class="eyebrow">Entrada de estoque</p>
-      <h2>Repor insumos</h2>
-    </div>
-    <div class="form-grid">
-      <label>
-        Codigo
-        <input id="replenish-code" placeholder="Ex: COD001">
-      </label>
-      <label>
-        Quantidade recebida
-        <input id="replenish-qty" type="number" min="1" value="1">
-      </label>
-    </div>
-    <button id="replenish-button" class="primary-action wide">Adicionar ao estoque</button>
-    <div id="replenish-result" class="result-box muted">Aguardando leitura...</div>
-  `;
-  $("#replenish-button").addEventListener("click", handleReplenish);
-  $("#replenish-code").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") handleReplenish();
-  });
-  setTimeout(() => $("#replenish-code")?.focus(), 50);
-}
-
-function renderReplenishDone(item, before, qty) {
-  $("#replenish-view .flow-card").innerHTML = `
-    <div class="status-screen released">
-      <span class="status-signal"></span>
-      <p class="eyebrow">Reposicao registrada</p>
-      <h2>Estoque atualizado</h2>
-      <div class="result-box">
-        <strong>${item.name}</strong><br>
-        ${before} -> ${item.qty} unidades (+${qty})
-      </div>
-      <button id="open-replenish" class="primary-action wide">Repor insumos</button>
-    </div>
-  `;
-  $("#open-replenish").addEventListener("click", renderReplenishForm);
-}
-
-async function handleReplenish() {
-  const item = findItem($("#replenish-code").value);
-  const qty = Math.max(1, Number($("#replenish-qty").value || 1));
-  const result = $("#replenish-result");
-  if (!item) {
-    result.textContent = "Insumo nao encontrado.";
-    return;
+      html += `
+        <tr>
+          <td><strong>${m.itemName}</strong><br><span class="eyebrow">${m.code}</span></td>
+          <td><span class="stock-status ${m.type === "withdrawal" ? "critical" : "normal"}">${typeLabel}</span></td>
+          <td>${m.quantity}</td>
+          <td>${m.userName}</td>
+          <td>${m.destinationName}</td>
+        </tr>
+      `;
+    });
+    html += `</tbody></table>`;
+    recentTable.innerHTML = html;
   }
 
-  const before = item.qty;
+  const reqCount = $("#requests-count");
+  if (reqCount) reqCount.textContent = state.requests.length;
+
+  const reqList = $("#requests-list");
+  if (reqList) {
+    reqList.innerHTML = "";
+    if (state.requests.length === 0) {
+      reqList.innerHTML = `<div class="empty-state">Nenhuma solicitacao pendente.</div>`;
+    } else {
+      state.requests.forEach(req => {
+        const div = document.createElement("div");
+        div.className = "request-item alert-item";
+        div.innerHTML = `
+          <div>
+            <strong>${req.technicianName} solicita ${req.quantity} un</strong>
+            <span class="eyebrow" style="margin-top:2px">${req.itemName} (${req.code}) para ${req.destination}</span>
+          </div>
+          <div class="request-actions" style="display:flex; gap:8px;">
+            <button class="secondary-button" onclick="rejectRequest(${req.id})" style="padding:4px 8px; font-size:12px;">Recusar</button>
+            <button class="primary-action" onclick="approveRequest(${req.id})" style="padding:4px 12px; font-size:12px;">Liberar</button>
+          </div>
+        `;
+        reqList.appendChild(div);
+      });
+    }
+  }
+}
+
+async function approveRequest(id) {
   try {
     if (usingApi) {
-      replaceState(await apiRequest("/movements/replenish", {
-        method: "POST",
-        body: JSON.stringify({ code: item.code, quantity: qty })
-      }));
-    } else {
+      const nextState = await apiRequest(`/requests/${id}/approve`, { method: "POST" });
+      replaceState(nextState);
+    }
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function rejectRequest(id) {
+  try {
+    if (usingApi) {
+      const nextState = await apiRequest(`/requests/${id}`, { method: "DELETE" });
+      replaceState(nextState);
+    }
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+function renderInventory() {
+  const invTable = $("#inventory-table");
+  invTable.innerHTML = "";
+  const filtered = getFilteredItems();
+
+  if (filtered.length === 0) {
+    invTable.innerHTML = `<div class="empty-state">Nenhum insumo encontrado.</div>`;
+    return;
+  }
+
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Codigo</th>
+          <th>Nome</th>
+          <th>Categoria</th>
+          <th>Estoque</th>
+          <th>Fornecedor</th>
+          ${isAdmin() || isEstoque() ? "<th>Acoes</th>" : ""}
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  filtered.forEach(item => {
+    const isCritical = item.qty <= item.min;
+    html += `
+      <tr>
+        <td><code>${item.code}</code></td>
+        <td><strong>${item.name}</strong>${item.note ? `<br><span class="eyebrow">${item.note}</span>` : ""}</td>
+        <td><span class="badge">${item.category}</span></td>
+        <td><span class="stock-status ${isCritical ? "critical" : "normal"}">${item.qty} un</span><br><span class="eyebrow">Min: ${item.min}</span></td>
+        <td>${item.supplier || "---"}</td>
+        ${isAdmin() || isEstoque() ? `
+          <td>
+            <div style="display:flex; gap:6px;">
+              <button class="secondary-button" style="padding:4px 8px; font-size:12px;" onclick="openItemDialog('${item.code}')">Editar</button>
+              <button class="secondary-button" style="padding:4px 8px; font-size:12px; background:#221315; color:#ffb4a8; border-color:#431a1f" onclick="triggerReplenish('${item.code}')">Abastecer</button>
+            </div>
+          </td>
+        ` : ""}
+      </tr>
+    `;
+  });
+
+  html += `</tbody></table>`;
+  invTable.innerHTML = html;
+}
+
+function triggerReplenish(code) {
+  const qtyStr = prompt("Quantidade para adicionar ao estoque:");
+  const qty = parseInt(qtyStr, 10);
+  if (isNaN(qty) || qty <= 0) return;
+  
+  if (usingApi) {
+    apiRequest("/movements/replenish", {
+      method: "POST",
+      body: JSON.stringify({ code, quantity: qty })
+    }).then(replaceState).catch(err => alert(err.message));
+  } else {
+    const item = state.items.find(i => i.code === code);
+    if (item) {
       item.qty += qty;
       state.history.unshift({
-        at: new Date().toISOString(),
-        user: state.adminName,
-        type: "Reposicao",
-        qty,
-        itemCode: item.code,
+        id: Date.now(),
+        code,
         itemName: item.name,
-        destination: "Estoque"
+        userName: currentUser ? currentUser.name : "Admin",
+        userRole: currentUser ? currentUser.role : "admin",
+        destinationName: "Estoque",
+        type: "replenishment",
+        quantity: qty,
+        timestamp: new Date().toLocaleString("pt-BR")
       });
       saveState();
+      renderAll();
     }
-  } catch (error) {
-    result.textContent = error.message;
-    return;
   }
-
-  const updatedItem = findItem(item.code);
-  renderReplenishDone(updatedItem, before, qty);
-  renderAll();
 }
 
-function openItemDialog(item) {
+function openItemDialog(code = "") {
   const dialog = $("#item-dialog");
-  $("#dialog-title").textContent = item ? "Editar Insumo" : "Novo Insumo";
-  $("#item-original-code").value = item?.code || "";
-  $("#item-code").value = item?.code || "";
-  $("#item-name").value = item?.name || "";
-  $("#item-category").value = item?.category || "";
-  $("#item-qty").value = item?.qty ?? 0;
-  $("#item-min").value = item?.min ?? 1;
-  $("#item-supplier").value = item?.supplier || "";
-  $("#item-note").value = item?.note || "";
+  const form = $("#item-form");
+  
+  if (code) {
+    const item = state.items.find(i => i.code === code);
+    if (!item) return;
+    $("#dialog-title").textContent = "Editar Insumo";
+    $("#item-original-code").value = item.code;
+    $("#item-code").value = item.code;
+    $("#item-name").value = item.name;
+    $("#item-category").value = item.category;
+    $("#item-qty").value = item.qty;
+    $("#item-min").value = item.min;
+    $("#item-supplier").value = item.supplier || "";
+    $("#item-note").value = item.note || "";
+  } else {
+    $("#dialog-title").textContent = "Novo Insumo";
+    $("#item-original-code").value = "";
+    form.reset();
+  }
   dialog.showModal();
 }
 
 async function saveItem(event) {
   event.preventDefault();
   const originalCode = $("#item-original-code").value;
-  const item = {
-    code: $("#item-code").value.trim().toUpperCase(),
+  const payload = {
+    originalCode: originalCode || null,
+    code: $("#item-code").value.trim(),
     name: $("#item-name").value.trim(),
     category: $("#item-category").value.trim(),
-    qty: Number($("#item-qty").value),
-    min: Number($("#item-min").value),
-    supplier: $("#item-supplier").value.trim(),
-    note: $("#item-note").value.trim()
+    qty: parseInt($("#item-qty").value, 10),
+    min: parseInt($("#item-min").value, 10),
+    supplier: $("#item-supplier").value.trim() || null,
+    note: $("#item-note").value.trim() || null
   };
 
   try {
     if (usingApi) {
-      replaceState(await apiRequest("/items", {
+      const nextState = await apiRequest("/items", {
         method: "POST",
-        body: JSON.stringify(item)
-      }));
+        body: JSON.stringify(payload)
+      });
+      replaceState(nextState);
     } else {
-      const existingIndex = state.items.findIndex((entry) => entry.code === originalCode);
-      if (existingIndex >= 0) state.items[existingIndex] = item;
-      else state.items.push(item);
+      if (originalCode) {
+        const idx = state.items.findIndex(i => i.code === originalCode);
+        if (idx !== -1) state.items[idx] = { code: payload.code, name: payload.name, category: payload.category, qty: payload.qty, min: payload.min, supplier: payload.supplier, note: payload.note };
+      } else {
+        state.items.push({ code: payload.code, name: payload.name, category: payload.category, qty: payload.qty, min: payload.min, supplier: payload.supplier, note: payload.note });
+      }
       saveState();
+      renderAll();
     }
-  } catch (error) {
-    alert(error.message);
+    $("#item-dialog").close();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+function renderDestinations() {
+  const grid = $("#destinations-grid");
+  grid.innerHTML = "";
+  
+  state.destinations.forEach(dest => {
+    const btn = document.createElement("button");
+    btn.className = "selection-card";
+    btn.innerHTML = `<h3>${dest}</h3><p class="eyebrow" style="margin-top:4px">Selecionar local</p>`;
+    btn.addEventListener("click", () => {
+      withdraw.destination = dest;
+      withdraw.step = 2;
+      $("#withdraw-step-1").style.display = "none";
+      $("#withdraw-step-2").style.display = "block";
+      $("#withdraw-step-2-eyebrow").textContent = `Local: ${dest}`;
+      setTimeout(() => $("#withdraw-code").focus(), 50);
+    });
+    grid.appendChild(btn);
+  });
+}
+
+function renderHistorySelectors() {
+  const filter = $("#technician-filter");
+  const currentVal = filter.value;
+  filter.innerHTML = `<option value="">Todos os tecnicos</option>`;
+  state.technicians.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    filter.appendChild(opt);
+  });
+  filter.value = currentVal;
+}
+
+function renderHistory() {
+  const tableContainer = $("#history-table");
+  tableContainer.innerHTML = "";
+  const filterVal = $("#technician-filter").value;
+  
+  const filtered = filterVal 
+    ? state.history.filter(h => h.userName === filterVal)
+    : state.history;
+
+  if (filtered.length === 0) {
+    tableContainer.innerHTML = `<div class="empty-state">Nenhuma movimentacao registrada no historico.</div>`;
     return;
   }
 
-  $("#item-dialog").close();
-  renderAll();
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Data/Hora</th>
+          <th>Insumo</th>
+          <th>Tipo</th>
+          <th>Qtd</th>
+          <th>Responsavel</th>
+          <th>Destino</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  filtered.forEach(h => {
+    let typeLabel = h.type;
+    if (h.type === "withdrawal") typeLabel = "Retirada";
+    if (h.type === "return") typeLabel = "Devolucao";
+    if (h.type === "replenishment") typeLabel = "Abastecimento";
+
+    html += `
+      <tr>
+        <td><span class="eyebrow">${h.timestamp}</span></td>
+        <td><strong>${h.itemName}</strong><br><span class="eyebrow">${h.code}</span></td>
+        <td><span class="stock-status ${h.type === "withdrawal" ? "critical" : "normal"}">${typeLabel}</span></td>
+        <td>${h.quantity}</td>
+        <td>${h.userName} <span class="badge" style="font-size:10px">${h.userRole}</span></td>
+        <td>${h.destinationName}</td>
+      </tr>
+    `;
+  });
+  html += `</tbody></table>`;
+  tableContainer.innerHTML = html;
 }
+
+async function handleWithdrawScan(code) {
+  const feedback = $("#withdraw-feedback");
+  feedback.style.display = "block";
+  feedback.className = "feedback-card loading";
+  feedback.innerHTML = "Verificando insumo...";
+
+  try {
+    if (isTecnico()) {
+      if (usingApi) {
+        const nextState = await apiRequest("/requests", {
+          method: "POST",
+          body: JSON.stringify({
+            code,
+            quantity: 1,
+            technicianName: currentUser.name,
+            destination: withdraw.destination
+          })
+        });
+        replaceState(nextState);
+      }
+      feedback.className = "feedback-card success";
+      feedback.innerHTML = `<h3>Solicitado!</h3><p style="margin-top:4px">Pedido enviado para aprovacao do Administrador.</p>`;
+    } else {
+      if (usingApi) {
+        const nextState = await apiRequest("/movements/withdraw", {
+          method: "POST",
+          body: JSON.stringify({
+            code,
+            quantity: 1,
+            technician: currentUser ? currentUser.name : "Operador",
+            destination: withdraw.destination
+          })
+        });
+        replaceState(nextState);
+      } else {
+        const item = state.items.find(i => i.code === code);
+        if (!item) throw new Error("Insumo nao cadastrado no sistema.");
+        if (item.qty < 1) throw new Error("Estoque zerado para este insumo.");
+        item.qty -= 1;
+        state.history.unshift({
+          id: Date.now(),
+          code,
+          itemName: item.name,
+          userName: currentUser ? currentUser.name : "Operador",
+          userRole: currentUser ? currentUser.role : "admin",
+          destinationName: withdraw.destination,
+          type: "withdrawal",
+          quantity: 1,
+          timestamp: new Date().toLocaleString("pt-BR")
+        });
+        saveState();
+        renderAll();
+      }
+      feedback.className = "feedback-card success";
+      feedback.innerHTML = `<h3>Retirado com sucesso!</h3><p style="margin-top:4px">1 unidade movimentada para ${withdraw.destination}.</p>`;
+    }
+  } catch (err) {
+    feedback.className = "feedback-card error";
+    feedback.innerHTML = `<h3>Erro na operacao</h3><p style="margin-top:4px">${err.message}</p>`;
+  }
+  $("#withdraw-code").value = "";
+}
+
+async function handleReturnScan(code) {
+  const feedback = $("#return-feedback");
+  feedback.style.display = "block";
+  feedback.className = "feedback-card loading";
+  feedback.innerHTML = "Processando devolucao...";
+
+  try {
+    if (usingApi) {
+      const nextState = await apiRequest("/movements/return", {
+        method: "POST",
+        body: JSON.stringify({
+          code,
+          quantity: 1,
+          technician: currentUser ? currentUser.name : "Tecnico"
+        })
+      });
+      replaceState(nextState);
+    } else {
+      const item = state.items.find(i => i.code === code);
+      if (!item) throw new Error("Insumo nao cadastrado no sistema.");
+      item.qty += 1;
+      state.history.unshift({
+        id: Date.now(),
+        code,
+        itemName: item.name,
+        userName: currentUser ? currentUser.name : "Tecnico",
+        userRole: currentUser ? currentUser.role : "tecnico",
+        destinationName: "Estoque",
+        type: "return",
+        quantity: 1,
+        timestamp: new Date().toLocaleString("pt-BR")
+      });
+      saveState();
+      renderAll();
+    }
+    feedback.className = "feedback-card success";
+    feedback.innerHTML = `<h3>Devolvido!</h3><p style="margin-top:4px">1 unidade retornou ao estoque principal.</p>`;
+  } catch (err) {
+    feedback.className = "feedback-card error";
+    feedback.innerHTML = `<h3>Erro na devolucao</h3><p style="margin-top:4px">${err.message}</p>`;
+  }
+  $("#return-code").value = "";
+}
+
+function restoreActiveRequest() {}
 
 function bindEvents() {
   $("#login-form").addEventListener("submit", handleLogin);
@@ -1024,15 +691,58 @@ function bindEvents() {
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   $$("[data-view-jump]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewJump)));
   $("#global-search").addEventListener("input", renderAll);
-  $("#return-button").addEventListener("click", handleReturn);
-  $("#return-code").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") handleReturn();
+  
+  $("#withdraw-code").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      const code = $("#withdraw-code").value.trim();
+      if (code) handleWithdrawScan(code);
+    }
   });
-  $("#replenish-button").addEventListener("click", handleReplenish);
+
+  $("#withdraw-back").addEventListener("click", () => {
+    setView("withdraw");
+  });
+
+  $("#return-code").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      const code = $("#return-code").value.trim();
+      if (code) handleReturnScan(code);
+    }
+  });
+  
   $("#new-item-button").addEventListener("click", () => openItemDialog());
   $("#close-dialog").addEventListener("click", () => $("#item-dialog").close());
   $("#item-form").addEventListener("submit", saveItem);
   $("#technician-filter").addEventListener("change", renderHistory);
+
+  $("#create-user-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = $("#new-user-name").value.trim();
+    const role = $("#new-user-role").value;
+    const messageEl = $("#create-user-message");
+
+    try {
+      if (usingApi) {
+        const nextState = await apiRequest("/users", {
+          method: "POST",
+          body: JSON.stringify({ name, role })
+        });
+        replaceState(nextState);
+      } else {
+        state.users.push({ name, role });
+        if (role === "tecnico") state.technicians.push(name);
+        saveState();
+        renderAll();
+      }
+      messageEl.style.color = "#39a96b";
+      messageEl.textContent = "Usuário criado com sucesso!";
+      $("#create-user-form").reset();
+    } catch (err) {
+      messageEl.style.color = "#ffb4a8";
+      messageEl.textContent = err.message || "Erro ao criar usuário.";
+    }
+  });
+
   document.addEventListener("click", () => {
     if (currentView === "withdraw" && withdraw.step === 2) setTimeout(() => $("#withdraw-code")?.focus(), 30);
     if (currentView === "return") setTimeout(() => $("#return-code")?.focus(), 30);
@@ -1044,12 +754,10 @@ async function init() {
   await loadInitialState();
   setupLocalRealtime();
   restoreActiveRequest();
-  renderLoginUsers();
   bindEvents();
   if (!restoreSession()) {
-    renderAll();
-    $("#login-pin").focus();
+    logout();
   }
 }
 
-init();
+window.addEventListener("DOMContentLoaded", init);
