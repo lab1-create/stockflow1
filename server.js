@@ -44,7 +44,7 @@ async function initDatabase() {
   try {
     await client.query("BEGIN");
 
-    // Criação das tabelas base (CORRIGIDO: Removido o 'NOT EXISTS' inválido do tipo da coluna)
+    // Criação das tabelas base (Sintaxe Corrigida)
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_users (
         name TEXT PRIMARY KEY,
@@ -89,9 +89,7 @@ async function initDatabase() {
     ];
 
     for (const dest of baseDestinations) {
-      await client.query(`
-        INSERT INTO destinations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING
-      `, [dest]);
+      await client.query("INSERT INTO destinations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [dest]);
     }
 
     await client.query("COMMIT");
@@ -128,7 +126,7 @@ async function getBootstrap() {
     const destsRes = await client.query("SELECT name FROM destinations ORDER BY name ASC");
     const destinations = destsRes.rows.map(d => d.name);
 
-    // CORREÇÃO DA QUERY DO KPI (Ajustado filtros de nulidade)
+    // Query de KPIs corrigida sem cláusulas inválidas
     const kpisRes = await client.query(`
       SELECT item_code as "itemCode", item_name as "itemName", user_name as technician,
              CEIL(AVG(days_step))::INT as "averageDays"
