@@ -486,6 +486,36 @@ app.post("/api/login", async (req, res, next) => {
   }
 });
 
+// Novo endpoint para Criação/Cadastro de Usuários via Painel Administrativo
+app.post("/api/usuarios", async (req, res, next) => {
+  try {
+    const { name, role, pin } = req.body;
+
+    if (!name || !role || !pin) {
+      return res.status(400).json({ error: "Todos os campos (Nome, Cargo e PIN) são obrigatórios." });
+    }
+
+    // Insere ou atualiza o PIN/Cargo caso o usuário já exista (sincronizado com o comportamento do banco)
+    await pool.query(
+      `
+        INSERT INTO app_users (name, role, pin_code, active)
+        VALUES ($1, $2, $3, TRUE)
+        ON CONFLICT (name) DO UPDATE SET
+          role = EXCLUDED.role,
+          pin_code = EXCLUDED.pin_code,
+          active = TRUE
+      `,
+      [name, role, pin]
+    );
+
+    const state = await getBootstrap();
+    broadcastState(state);
+    res.json(state);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/items", async (req, res, next) => {
   try {
     const item = req.body;
