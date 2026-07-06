@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StockFlow - Painel Operacional</title>
+  <title>StockFlow - Sistema de Estoque</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="locked">
@@ -41,14 +41,14 @@
         <div class="brand-mark">S</div>
         <div>
           <strong>StockFlow</strong>
-          <span id="user-role-badge">Operacional</span>
+          <span id="user-role-badge">Carregando...</span>
         </div>
       </div>
 
       <nav class="nav">
-        <button class="nav-item active" onclick="switchView('dashboard')">Dashboard</button>
-        <button class="nav-item" onclick="switchView('items')">Estoque de Insumos</button>
-        <button class="nav-item" onclick="switchView('requests')">Solicitações</button>
+        <button class="nav-item active" onclick="switchView('main-view')">Início</button>
+        <button class="nav-item view-admin-only" onclick="switchView('inventory')">Inventário Geral</button>
+        <button class="nav-item view-admin-only" onclick="switchView('history')">Histórico de Retiradas</button>
       </nav>
 
       <div class="sidebar-footer">
@@ -56,7 +56,7 @@
           <div class="status-dot"></div>
           <span id="connected-user-name">Usuário</span>
         </div>
-        <button class="ghost-action wide" style="margin-top: 10px;" onclick="logout()">Sair do Sistema</button>
+        <button class="ghost-action wide" style="margin-top: 12px;" onclick="logout()">Sair</button>
       </div>
     </aside>
 
@@ -64,110 +64,105 @@
       
       <div class="topbar">
         <div>
-          <p class="eyebrow">Visão Geral</p>
-          <h1 id="view-title">Dashboard</h1>
-        </div>
-        <div class="search">
-          Pesquisar no sistema
-          <input type="text" placeholder="Buscar insumos, códigos ou técnicos...">
+          <p class="eyebrow">Painel Operacional</p>
+          <h1 id="view-title">Início</h1>
         </div>
       </div>
 
-      <div id="view-dashboard" class="view active">
-        <div class="metrics-grid">
-          <div class="metric">
-            <span>Total de Itens</span>
-            <strong id="metric-total-items">0</strong>
-          </div>
-          <div class="metric danger">
-            <span>Itens Críticos</span>
-            <strong id="metric-critical-items">0</strong>
-          </div>
-          <div class="metric success">
-            <span>Solicitações Concluídas</span>
-            <strong id="metric-completed">0</strong>
-          </div>
-          <div class="metric">
-            <span>Pendentes</span>
-            <strong id="metric-pending">0</strong>
+      <div id="role-technician-content" style="display: none;">
+        <div class="flow-layout">
+          <div class="flow-card">
+            <div class="flow-title">
+              <p class="eyebrow">Retirada de Insumo</p>
+              <h2>Escaneie o código ou selecione a ação</h2>
+            </div>
+            
+            <div class="stepper">
+              <div class="step done"></div>
+              <div class="step"></div>
+              <div class="step"></div>
+              <div class="step"></div>
+            </div>
+
+            <div class="scan-row" style="margin-bottom: 20px;">
+              <input type="text" class="scan-input" placeholder="Bipar código de barras..." autofocus>
+              <button class="primary-action">Bipar</button>
+            </div>
+
+            <div class="choice-grid">
+              <button class="choice" onclick="alert('Retirada Normal iniciada')">Retirada Comum</button>
+              <button class="choice" onclick="alert('Devolução iniciada')">Devolver Item</button>
+            </div>
           </div>
         </div>
+      </div>
 
-        <div class="dashboard-grid">
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Fluxo de Consumo Recente</h2>
+      <div id="role-admin-content" style="display: none;">
+        
+        <div id="view-main-view" class="view active">
+          <div class="metrics-grid" style="margin-bottom: 20px;">
+            <div class="metric">
+              <span>Total de Insumos</span>
+              <strong id="admin-total-items">0</strong>
             </div>
-            <div class="compact-list" id="dashboard-items-preview">
+            <div class="metric danger">
+              <span>Abaixo do Mínimo</span>
+              <strong id="admin-critical-items">0</strong>
+            </div>
+          </div>
+
+          <div class="dashboard-grid">
+            <div class="panel">
+              <div class="panel-head">
+                <h2>Gerenciamento de Inventário</h2>
+                <button class="primary-action" onclick="alert('Abrir modal de cadastro')">+ Novo Insumo</button>
               </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Atividades de Técnicos</h2>
+              
+              <div class="compact-list" id="admin-inventory-list">
+                </div>
             </div>
-            <div class="request-list" id="dashboard-requests-preview">
+
+            <div class="panel">
+              <div class="panel-head">
+                <h2>Aprovações Pendentes</h2>
               </div>
+              <div class="request-list" id="admin-requests-list">
+                </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div id="view-items" class="view">
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Inventário Completo</h2>
-            <button class="primary-action" id="admin-add-btn" style="display: none;">+ Cadastrar Insumo</button>
-          </div>
-          <div id="inventory-list" class="compact-list" style="margin-top: 15px;">
+        <div id="view-inventory" class="view">
+          <div class="panel">
+            <h2>Lista Completa de Itens</h2>
             </div>
         </div>
-      </div>
 
-      <div id="view-requests" class="view">
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Pedidos de Liberação</h2>
-          </div>
-          <div class="request-list" id="requests-full-list" style="margin-top: 15px;">
-            </div>
-        </div>
       </div>
 
     </main>
   </div>
 
   <script>
-    // Estado interno da aplicação
-    let appState = {
-      users: [],
-      items: [],
-      requests: []
-    };
+    let appState = { users: [], items: [], requests: [] };
 
-    // 1. Executa assim que a página é carregada
     async function initBootstrap() {
-      // Se o usuário já tiver uma sessão ativa salva no navegador, pula a tela de login automaticamente
       const sessionUser = localStorage.getItem("currentUser");
       if (sessionUser) {
         setupUserSession(JSON.parse(sessionUser));
         return;
       }
-
       try {
         const response = await fetch('/api/bootstrap');
-        if (response.ok) {
-          appState = await response.json();
-          console.log("Banco de dados sincronizado.");
-        }
+        if (response.ok) appState = await response.json();
       } catch (error) {
-        console.warn("⚠️ Operando em modo offline/contingência.", error.message);
+        console.warn("⚠️ Modo contingência ativo.");
       }
     }
 
-    // 2. Processa o Login usando os seletores originais
+    // Processamento do Formulário de Login
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      
       const name = document.getElementById('login-user').value;
       const pin = document.getElementById('login-pin').value;
       const errorEl = document.getElementById('login-error');
@@ -183,15 +178,11 @@
         });
 
         const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Acesso recusado.");
 
-        if (!response.ok) {
-          throw new Error(result.error || "Acesso recusado. Verifique os dados.");
-        }
-
-        // Salva a sessão no navegador
         localStorage.setItem("currentUser", JSON.stringify(result.user));
         
-        // Destrava a tela aplicando as regras do seu CSS!
+        // Destrava a tela aplicando as regras de visualização separada!
         setupUserSession(result.user, result.state);
 
       } catch (err) {
@@ -200,101 +191,78 @@
       }
     });
 
-    // 3. Organiza a interface com base no usuário logado (Admin vs Técnico)
+    // SISTEMA DE SEPARAÇÃO VISUAL DE CARGOS (ADMIN vs TÉCNICO)
     function setupUserSession(user, freshState) {
-      // Remove a classe locked para esconder o Login e exibir o .app-shell!
+      if (freshState) appState = freshState;
+
+      // 1. Destrava a tela ocultando a tela de login via CSS
       document.body.classList.remove('locked');
 
-      // Alimenta os campos de perfil do cabeçalho e menu lateral
+      // 2. Preenche os dados de perfil na barra lateral
       document.getElementById('connected-user-name').textContent = user.name;
       document.getElementById('user-role-badge').textContent = user.role.toUpperCase();
 
-      // Controle de privilégios: Mostra o botão de cadastro apenas se for Admin
-      const addBtn = document.getElementById('admin-add-btn');
-      if (addBtn) {
-        addBtn.style.display = user.role === 'admin' ? 'inline-flex' : 'none';
+      // 3. SEPARAÇÃO CIRÚRGICA DE INTERFACES:
+      const adminContainer = document.getElementById('role-admin-content');
+      const techContainer = document.getElementById('role-technician-content');
+      const adminNavItems = document.querySelectorAll('.view-admin-only');
+
+      if (user.role === 'admin') {
+        // Mostra o ecossistema do Admin e esconde o do Técnico
+        adminContainer.style.display = 'block';
+        techContainer.style.display = 'none';
+        adminNavItems.forEach(item => item.style.display = 'block');
+        document.getElementById('view-title').textContent = "Painel Administrador";
+      } else {
+        // Mostra o ecossistema do Técnico (Fluxos, bips, scanner) e esconde o do Admin
+        adminContainer.style.display = 'none';
+        techContainer.style.display = 'block';
+        adminNavItems.forEach(item => item.style.display = 'none');
+        document.getElementById('view-title').textContent = "Área Técnica";
       }
 
-      if (freshState) {
-        appState = freshState;
-        renderData();
-      } else {
-        // Busca atualização em segundo plano
-        fetch('/api/bootstrap')
-          .then(res => res.json())
-          .then(data => {
-            appState = data;
-            renderData();
-          })
-          .catch(err => console.error("Erro ao sincronizar tabelas:", err));
-      }
+      // Dispara a carga das tabelas caso existam dados
+      fetch('/api/bootstrap')
+        .then(res => res.json())
+        .then(data => {
+          appState = data;
+          renderAdminPanel();
+        }).catch(err => console.log("Aguardando sincronismo..."));
     }
 
-    // 4. Renderiza as listas e métricas aproveitando suas classes CSS
-    function renderData() {
-      // Atualiza os contadores das caixas de métricas (metrics-grid)
-      if (appState.items) {
-        document.getElementById('metric-total-items').textContent = appState.items.length;
-        const critical = appState.items.filter(i => i.qty <= (i.min || 0)).length;
-        document.getElementById('metric-critical-items').textContent = critical;
-      }
+    // Preenche as informações na parte do admin
+    function renderAdminPanel() {
+      if (!appState.items) return;
+      
+      document.getElementById('admin-total-items').textContent = appState.items.length;
+      const critical = appState.items.filter(i => i.qty <= (i.min || 0)).length;
+      document.getElementById('admin-critical-items').textContent = critical;
 
-      // Renderiza prévia de itens na Dashboard
-      const previewContainer = document.getElementById('dashboard-items-preview');
-      if (previewContainer && appState.items) {
-        previewContainer.innerHTML = '';
-        appState.items.slice(0, 5).forEach(item => {
+      const list = document.getElementById('admin-inventory-list');
+      if (list) {
+        list.innerHTML = '';
+        appState.items.forEach(item => {
           const isCritical = item.qty <= (item.min || 0);
           const div = document.createElement('div');
           div.className = 'compact-row';
           div.innerHTML = `
             <strong>${item.name}</strong>
             <span class="muted">${item.code}</span>
-            <span>Qtd: ${item.qty}</span>
-            <span class="pill ${isCritical ? 'critical' : ''}">${isCritical ? 'CRÍTICO' : 'ESTÁVEL'}</span>
+            <span style="font-weight:700;">${item.qty} un</span>
+            <span class="pill ${isCritical ? 'critical' : ''}">${isCritical ? 'Crítico' : 'Ok'}</span>
           `;
-          previewContainer.appendChild(div);
-        });
-      }
-
-      // Renderiza os itens na aba Estoque Completo usando seu formato de tabela/linha
-      const fullInventory = document.getElementById('inventory-list');
-      if (fullInventory && appState.items) {
-        fullInventory.innerHTML = '';
-        appState.items.forEach(item => {
-          const isCritical = item.qty <= (item.min || 0);
-          const div = document.createElement('div');
-          div.className = 'table-row';
-          div.innerHTML = `
-            <div><strong>${item.name}</strong> <br><small class="muted">${item.code}</small></div>
-            <span>Cat: ${item.category || 'Geral'}</span>
-            <span style="font-weight:700; color:${isCritical ? 'var(--red)' : 'inherit'}">${item.qty} un</span>
-            <span class="pill ${isCritical ? 'critical' : ''}">${isCritical ? 'Repor' : 'Ok'}</span>
-          `;
-          fullInventory.appendChild(div);
+          list.appendChild(div);
         });
       }
     }
 
-    // 5. Gerenciador de navegação entre as suas Views (.view)
+    // Chaveador de abas internas para o administrador
     function switchView(viewId) {
-      // Remove a classe active de todas as abas e botões
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-      
-      // Ativa a aba selecionada
-      document.getElementById(`view-${viewId}`).classList.add('active');
-      
-      // Destaca o botão correto no menu lateral
-      const btn = Array.from(document.querySelectorAll('.nav-item')).find(b => b.textContent.toLowerCase().includes(viewId === 'items' ? 'estoque' : viewId));
-      if (btn) btn.classList.add('active');
-
-      // Atualiza o título do topo
-      const titles = { dashboard: 'Dashboard', items: 'Estoque de Insumos', requests: 'Solicitações' };
-      document.getElementById('view-title').textContent = titles[viewId] || 'Painel';
+      const targetView = document.getElementById(`view-${viewId}`);
+      if (targetView) targetView.classList.add('active');
     }
 
-    // 6. Encerra a sessão e bloqueia o app novamente
     function logout() {
       localStorage.removeItem("currentUser");
       document.body.classList.add('locked');
