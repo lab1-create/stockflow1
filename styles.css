@@ -1,19 +1,15 @@
 /* ==========================================
-   1. VARIÁVEIS GLOBAIS E CONFIGURAÇÕES BASE
+   CONFIGURAÇÕES GLOBAIS E IDENTIDADE VISUAL
    ========================================== */
 :root {
   --bg: #0b0b0d;
   --surface: #141416;
   --surface-2: #1d1d21;
-  --surface-3: #242429;
   --text: #f8f5f5;
   --muted: #a09a9a;
   --line: rgba(255, 255, 255, 0.09);
   --accent: #e11d2e;
   --accent-2: #ff3b4f;
-  --green: #31d07f;
-  --red: #ef233c;
-  --orange: #ffb020;
   --shadow: 0 22px 60px rgba(0, 0, 0, 0.34);
 }
 
@@ -24,685 +20,194 @@
 }
 
 body {
-  margin: 0;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #080809 0%, #111113 52%, #0b0b0d 100%);
+  background-color: var(--bg);
   color: var(--text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
 }
 
-button,
-input,
-select {
-  font: inherit;
-  background: none;
-  border: none;
-  color: inherit;
-}
-
-button {
-  cursor: pointer;
-}
+/* Mecânica de Bloqueio da Tela */
+body.locked .app-container { display: none; }
+body:not(.locked) .login-screen { display: none; }
 
 /* ==========================================
-   2. MECÂNICA DE LOGIN E TRAVA DE TELA (MÁGICA DO APP)
+   TELA DE LOGIN
    ========================================== */
-body.locked .app-shell {
-  display: none;
-}
-
-body:not(.locked) .login-screen {
-  display: none;
-}
-
 .login-screen {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 22px;
+  padding: 20px;
 }
 
 .login-card {
   width: min(430px, 100%);
-  display: grid;
-  gap: 16px;
-  padding: 28px;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(20, 20, 22, 0.94);
+  padding: 32px;
   box-shadow: var(--shadow);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.brand-mark {
+  background: var(--accent);
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 20px;
+}
+
+.flow-title h2 {
+  font-size: 32px;
+  margin: 8px 0 24px 0;
 }
 
 .login-card label {
   display: grid;
   gap: 8px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
+  margin-bottom: 20px;
 }
 
-.login-brand {
-  margin-bottom: 6px;
-}
-
-.login-error {
-  min-height: 20px;
-  color: var(--red);
-  font-size: 13px;
-  display: none; /* Escondido por padrão, controlado via JS */
-}
-
-/* ==========================================
-   3. ESTRUTURA PRINCIPAL (APP SHELL) & SIDEBAR
-   ========================================== */
-.app-shell {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  min-height: 100vh;
-}
-
-.sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  padding: 24px;
-  border-right: 1px solid var(--line);
-  background: rgba(11, 11, 13, 0.92);
-  backdrop-filter: blur(18px);
-}
-
-.brand {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 34px;
-}
-
-.brand-mark {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--accent);
-  color: white;
-  font-weight: 800;
-}
-
-.brand strong,
-.brand span {
-  display: block;
-}
-
-.brand span,
-.eyebrow,
-.metric span,
-.sidebar-footer {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.nav {
-  display: grid;
-  gap: 8px;
-}
-
-.nav-item,
-.ghost-action,
-.primary-action,
-.icon-button {
-  border: 1px solid transparent;
-  border-radius: 8px;
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
-}
-
-.nav-item {
-  width: 100%;
-  padding: 13px 14px;
-  background: transparent;
-  color: var(--muted);
-  text-align: left;
-}
-
-.nav-item:hover,
-.nav-item.active {
-  background: rgba(225, 29, 46, 0.11);
-  color: var(--text);
-  border-color: rgba(225, 29, 46, 0.4);
-}
-
-.sidebar-footer {
-  position: absolute;
-  bottom: 24px;
-  display: grid;
-  gap: 8px;
-  align-items: start;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 99px;
-  background: var(--green);
-}
-
-/* ==========================================
-   4. ÁREA DE TRABALHO & NAVEGAÇÃO INTERNA (VIEWS)
-   ========================================== */
-.workspace {
-  padding: 28px;
-  overflow: hidden;
-}
-
-.topbar {
-  display: flex;
-  gap: 22px;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 28px;
-}
-
-h1, h2, p {
-  margin: 0;
-}
-
-h1 {
-  margin-top: 4px;
-  font-size: clamp(32px, 4vw, 54px);
-  letter-spacing: 0;
-}
-
-h2 {
-  font-size: 20px;
-  letter-spacing: 0;
-}
-
-.search {
-  display: grid;
-  gap: 8px;
-  width: min(460px, 42vw);
-  color: var(--muted);
-  font-size: 13px;
-}
-
-input,
-select {
-  min-height: 46px;
+.login-card select, .login-card input {
+  background: #000;
   border: 1px solid var(--line);
+  color: #fff;
+  height: 48px;
+  padding: 0 16px;
   border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
   outline: none;
-  padding: 0 14px;
-  width: 100%;
+  font-size: 16px;
 }
 
-input:focus,
-select:focus {
-  border-color: rgba(255, 59, 79, 0.9);
-  box-shadow: 0 0 0 4px rgba(225, 29, 46, 0.16);
-}
-
-.view {
-  display: none;
-  animation: lift 220ms ease;
-}
-
-.view.active {
-  display: block;
-}
-
-@keyframes lift {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.login-card select:focus, .login-card input:focus {
+  border-color: var(--accent);
 }
 
 /* ==========================================
-   5. COMPONENTES VISUAIS (CARDS, PAINÉIS, TABELAS)
+   ESTRUTURA HORIZONTAL ORIGINAL (APP CONTAINER)
    ========================================== */
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+.app-container {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 24px;
 }
 
-.metric,
-.panel,
-.flow-card,
-.item-card {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(20, 20, 22, 0.9);
-  box-shadow: var(--shadow);
+/* Barra de Topo do seu Print */
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 20px;
+  margin-bottom: 32px;
 }
 
-.metric {
-  padding: 22px;
+.header-user-zone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.metric strong {
-  display: block;
-  margin-top: 14px;
-  font-size: 40px;
+.role-badge {
+  background: rgba(225, 29, 46, 0.2);
+  color: var(--accent-2);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
 }
 
-.metric.danger strong {
-  color: var(--red);
-}
-
-.metric.success strong {
-  color: var(--green);
-}
-
+/* Grid Layout dos Painéis lado a lado */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 1.35fr 1fr;
-  gap: 14px;
-  margin: 14px 0;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 24px;
 }
 
 .panel {
-  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 24px;
 }
 
 .panel-head {
   display: flex;
-  gap: 12px;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
-}
-
-.primary-action,
-.ghost-action,
-.icon-button {
-  min-height: 42px;
-  padding: 0 16px;
-  color: var(--text);
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  text-decoration: none;
-}
-
-.primary-action {
-  background: var(--accent);
-  border-color: rgba(255, 255, 255, 0.1);
-  font-weight: 700;
-}
-
-.primary-action:hover {
-  background: var(--accent-2);
-}
-
-.primary-action:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.ghost-action,
-.icon-button {
-  background: var(--surface-2);
-  border-color: var(--line);
-}
-
-.wide {
-  width: 100%;
-}
-
-.quick-flow {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-
-.quick-flow span {
-  min-height: 92px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--muted);
-  font-weight: 700;
-}
-
-.compact-list,
-.request-list {
-  display: grid;
-  gap: 10px;
-}
-
-.request-card {
-  display: grid;
-  grid-template-columns: 1fr minmax(260px, 0.9fr);
-  gap: 14px;
-  align-items: center;
-  padding: 14px;
-  border: 1px solid rgba(225, 29, 46, 0.24);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.025);
-}
-
-.request-card div:first-child {
-  display: grid;
-  gap: 8px;
-}
-
-.request-card span {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.compact-row,
-.table-row {
-  display: grid;
-  grid-template-columns: 1.4fr 0.7fr 0.7fr 0.8fr;
-  gap: 12px;
-  align-items: center;
-  padding: 13px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.compact-row:last-child,
-.table-row:last-child {
-  border-bottom: 0;
-}
-
-.pill {
-  justify-self: start;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: rgba(34, 197, 94, 0.12);
-  color: var(--green);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.pill.critical {
-  background: rgba(239, 68, 68, 0.13);
-  color: var(--red);
-}
-
-.pill.warning {
-  background: rgba(245, 158, 11, 0.13);
-  color: var(--orange);
-}
-
-/* ==========================================
-   6. FLUXO OPERACIONAL / STATUS SCREENS
-   ========================================== */
-.flow-layout {
-  display: grid;
-  min-height: 64vh;
-  place-items: center;
-}
-
-.flow-card {
-  width: min(760px, 100%);
-  padding: 26px;
-}
-
-.flow-title {
-  margin-bottom: 20px;
-}
-
-.flow-title h2 {
-  margin-top: 8px;
-  font-size: 30px;
-}
-
-.stepper {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
   margin-bottom: 24px;
 }
 
-.step {
-  height: 6px;
-  border-radius: 99px;
-  background: var(--surface-2);
-}
-
-.step.done {
-  background: var(--accent);
-}
-
-.choice-grid,
-.items-grid {
+/* ==========================================
+   ESTRUTURA DAS TABELAS (ALINHAMENTO HORIZONTAL)
+   ========================================== */
+.table-row-insumos {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: 1fr 1.5fr 1fr 0.8fr 0.8fr 1fr;
   gap: 12px;
-}
-
-.choice {
-  min-height: 82px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--text);
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.choice:hover {
-  border-color: rgba(225, 29, 46, 0.55);
-  background: rgba(225, 29, 46, 0.11);
-}
-
-.choice:hover,
-.primary-action:hover,
-.ghost-action:hover,
-.icon-button:hover {
-  transform: translateY(-1px);
-}
-
-.scan-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-}
-
-.scan-input {
-  height: 58px;
-  font-size: 20px;
-}
-
-.result-box {
-  margin-top: 14px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.035);
-}
-
-.status-screen {
-  display: grid;
-  gap: 16px;
-  align-content: center;
-  min-height: 360px;
-}
-
-.status-screen h2 {
-  max-width: 11ch;
-  font-size: clamp(42px, 8vw, 76px);
-  line-height: 0.95;
-}
-
-.status-screen .result-box {
-  max-width: 520px;
-  margin-top: 0;
-}
-
-.status-signal {
-  width: min(260px, 100%);
-  height: 6px;
-  border-radius: 99px;
-  background: linear-gradient(90deg, var(--accent), rgba(225, 29, 46, 0.12));
-  box-shadow: 0 0 28px rgba(225, 29, 46, 0.28);
-}
-
-.status-screen.waiting .status-signal {
-  background: linear-gradient(90deg, var(--orange), rgba(255, 176, 32, 0.12));
-  box-shadow: 0 0 28px rgba(255, 176, 32, 0.2);
-}
-
-.status-screen.released .status-signal {
-  background: linear-gradient(90deg, var(--green), rgba(49, 208, 127, 0.12));
-  box-shadow: 0 0 28px rgba(49, 208, 127, 0.2);
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.confirm-box {
-  display: grid;
-  gap: 16px;
-}
-
-.item-preview {
-  display: grid;
-  gap: 10px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(225, 29, 46, 0.08);
-}
-
-.qty-row {
-  display: flex;
-  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
   align-items: center;
 }
 
-.qty-row input {
-  width: 110px;
-}
-
-/* ==========================================
-   7. FORMULÁRIOS E GERENCIAMENTO DE ITENS
-   ========================================== */
-.form-grid {
+.table-row-solicitacoes {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr 1.5fr 1fr;
   gap: 12px;
-  margin-bottom: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  align-items: center;
 }
 
-.form-grid label {
-  display: grid;
-  gap: 7px;
+.table-headers {
+  font-weight: bold;
   color: var(--muted);
-  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
 }
 
-.span-2 {
-  grid-column: span 2;
-}
-
-.item-card {
-  display: grid;
-  gap: 14px;
-  padding: 18px;
-}
-
-.item-card h3 {
-  margin: 0;
-}
-
-.item-meta {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+.no-data {
+  text-align: center;
   color: var(--muted);
-  font-size: 13px;
+  padding: 32px 0;
+  font-size: 14px;
 }
 
-.item-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+/* Componentes de Ação */
+.primary-action {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
 }
 
-/* ==========================================
-   8. MODAIS DE DIÁLOGO (DIALOG)
-   ========================================== */
-dialog {
-  width: min(720px, calc(100vw - 32px));
+.primary-action:hover { background: var(--accent-2); }
+.ghost-btn {
+  background: none;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow);
-  margin: auto;
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
 }
-
-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.66);
-}
-
-.dialog-body {
-  padding: 8px;
-}
-
-/* ==========================================
-   9. RESPONSIVIDADE E ADAPTAÇÕES MULTITELA
-   ========================================== */
-@media (max-width: 980px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar {
-    position: static;
-    height: auto;
-  }
-
-  .sidebar-footer {
-    position: static;
-    margin-top: 18px;
-  }
-
-  .topbar,
-  .dashboard-grid,
-  .request-card {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .search {
-    width: 100%;
-  }
-
-  .metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 620px) {
-  .workspace,
-  .sidebar {
-    padding: 16px;
-  }
-
-  .metrics-grid,
-  .quick-flow,
-  .stepper,
-  .form-grid,
-  .scan-row,
-  .compact-row,
-  .table-row {
-    grid-template-columns: 1fr;
-  }
-
-  .span-2 {
-    grid-column: auto;
-  }
-}
+.ghost-btn:hover { color: #fff; border-color: #fff; }
+.wide { width: 100%; }
