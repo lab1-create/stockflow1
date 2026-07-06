@@ -50,12 +50,13 @@ function parseCookies(header) {
   return cookies;
 }
 
-// Inicialização segura do Banco de Dados
+// Inicialização e Criação de todas as tabelas necessárias no Banco de Dados
 async function initDatabase() {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
+    // 1. Tabela de usuários do app
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_users (
         name TEXT PRIMARY KEY,
@@ -65,9 +66,51 @@ async function initDatabase() {
       );
     `);
 
+    // 2. Tabela de destinos operacionais
     await client.query(`
       CREATE TABLE IF NOT EXISTS destinations (
         name TEXT PRIMARY KEY
+      );
+    `);
+
+    // 3. Tabela de itens/insumos no estoque
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS items (
+        code TEXT PRIMARY KEY,
+        name TEXT,
+        category TEXT,
+        qty INT DEFAULT 0,
+        min INT DEFAULT 0,
+        supplier TEXT,
+        note TEXT
+      );
+    `);
+
+    // 4. Tabela de solicitações pendentes (Usa SERIAL para bater com o ID numérico gerado)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS requests (
+        id SERIAL PRIMARY KEY,
+        at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        technician TEXT,
+        item_code TEXT,
+        item_name TEXT,
+        destination TEXT,
+        qty INT DEFAULT 1,
+        status TEXT DEFAULT 'pending'
+      );
+    `);
+
+    // 5. Tabela de histórico de movimentações
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS stock_history (
+        id SERIAL PRIMARY KEY,
+        at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        user_name TEXT,
+        type TEXT,
+        qty INT,
+        item_code TEXT,
+        item_name TEXT,
+        destination TEXT
       );
     `);
 
@@ -103,10 +146,10 @@ async function initDatabase() {
     }
 
     await client.query("COMMIT");
-    console.log(">> Banco de dados sincronizado (Sem Gabriel e pronto para uso!)");
+    console.log(">> Banco de dados sincronizado (Estruturas e tabelas verificadas!)");
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("Aviso ao rodar migrações básicas:", err.message);
+    console.error("Aviso ao rodar inicialização do banco:", err.message);
   } finally {
     client.release();
   }
@@ -319,10 +362,10 @@ app.post("/api/movements/withdraw", async (req, res, next) => {
   }
 });
 
-// ROTA CORRIGIDA (Sem duplicações)
+// TOTALMENTE ADAPTADA PARA RECEBER OS PARÂMETROS DO SEU APP.JS (scannedCode)
 app.post("/api/requests/:id/approve", async (req, res, next) => {
   try {
-    const { code, adminName } = req.body;
+    const { scannedCode, adminName } = req.body;
     const requestId = req.params.id;
 
     const client = await pool.connect();
@@ -335,8 +378,9 @@ app.post("/api/requests/:id/approve", async (req, res, next) => {
 
       const request = reqRes.rows[0];
       
-      if (code && request.item_code.toUpperCase() !== code.trim().toUpperCase()) {
-        throw new Error(`Código escaneado (${code}) difere do solicitado (${request.item_code}).`);
+      // Validação baseada no 'scannedCode' enviado pelo leitor no app.js
+      if (scannedCode && request.item_code.toUpperCase() !== scannedCode.trim().toUpperCase()) {
+        throw new Error(`Código escaneado (${scannedCode}) difere do solicitado (${request.item_code}).`);
       }
 
       const itemRes = await client.query("SELECT qty FROM items WHERE code = $1 FOR UPDATE", [request.item_code]);
