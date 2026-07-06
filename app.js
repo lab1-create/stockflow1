@@ -2,12 +2,11 @@ const STORAGE_KEY = "stockflow-state-v2";
 const API_BASE = "/api";
 const LIVE_CHANNEL = "stockflow-live";
 
-// Mapeamento atualizado incluindo TODOS os usuários antigos + Gabriel
+// Mapeamento original fixo para os técnicos existentes
 const TECHNICIAN_DESTINATIONS = {
   Luiz: "Bancada 01",
   Bruno: "Bancada 02",
   Joao: "Bancada 03",
-  Gabriel: "Bancada 04",
   Placo: "Bancada 04",
   Kaique: "Bancada 05",
   Cauã: "Bancada 06"
@@ -19,13 +18,12 @@ const seedState = {
     { name: "Luiz", role: "tecnico" },
     { name: "Bruno", role: "tecnico" },
     { name: "Joao", role: "tecnico" },
-    { name: "Gabriel", role: "tecnico" },
     { name: "Placo", role: "tecnico" },
     { name: "Kaique", role: "tecnico" },
     { name: "Cauã", role: "tecnico" }
   ],
-  technicians: ["Luiz", "Bruno", "Joao", "Gabriel", "Placo", "Kaique", "Cauã"],
-  destinations: ["Bancada 01", "Bancada 02", "Bancada 03", "Bancada 04", "Bancada 05", "Bancada 06", "Servico interno", "Estoque de testes", "Teste", "Outro"],
+  technicians: ["Luiz", "Bruno", "Joao", "Placo", "Kaique", "Cauã"],
+  destinations: ["Bancada 01", "Bancada 02", "Bancada 03", "Bancada 04", "Bancada 05", "Bancada 06", "Teste"],
   adminName: "Administrador",
   items: [],
   history: [],
@@ -162,17 +160,17 @@ function usageInsight(request) {
     .sort((a, b) => new Date(b.at) - new Date(a.at))[0];
 
   const expectedDays = kpi?.averageDays || null;
-  if (!lastWithdrawal || !expectedDays) return { label: "Sem historico suficiente", className: "" };
+  if (!lastWithdrawal || !expectedDays) return { label: "Sem histórico suficiente", className: "" };
 
   const elapsedDays = daysBetween(lastWithdrawal.at, request.at || new Date().toISOString());
   if (elapsedDays < expectedDays) {
     return {
-      label: `OBSERVACAO: ${elapsedDays}d de uso, esperado ${expectedDays}d`,
+      label: `OBSERVAÇÃO: ${elapsedDays}d de uso, esperado ${expectedDays}d`,
       className: "warning"
     };
   }
 
-  return { label: `Dentro do tempo medio: ${elapsedDays}d`, className: "" };
+  return { label: `Dentro do tempo médio: ${elapsedDays}d`, className: "" };
 }
 
 function filteredItems() {
@@ -204,7 +202,7 @@ function setView(view) {
     return: "Devolver Insumo",
     replenish: "Repor Estoque",
     items: "Insumos",
-    history: "Historico"
+    history: "Histórico"
   }[view];
 
   if (view === "withdraw") {
@@ -234,8 +232,8 @@ function applyRoleUi() {
   });
 
   $("#session-label").textContent = currentUser
-    ? `${currentUser.name} - ${isAdmin() ? "Administrador" : "Tecnico"}`
-    : "Operacao rapida ativa";
+    ? `${currentUser.name} - ${isAdmin() ? "Administrador" : "Técnico"}`
+    : "Operação rápida ativa";
 }
 
 function applyLiveState(nextState) {
@@ -347,12 +345,12 @@ function renderDashboard() {
 
   $("#critical-list").innerHTML = critical.length
     ? critical.map((item) => compactItemRow(item)).join("")
-    : `<p class="muted">Nenhum item critico no momento.</p>`;
+    : `<p class="muted">Nenhum item crítico no momento.</p>`;
 
   const history = filteredHistory().slice(0, 6);
   $("#recent-history").innerHTML = history.length
     ? history.map(historyRow).join("")
-    : `<p class="muted">Nenhuma movimentacao encontrada.</p>`;
+    : `<p class="muted">Nenhuma movimentação encontrada.</p>`;
 
   if (currentView === "dashboard" && $("#global-search").value && items.length === 0) {
     $("#critical-list").innerHTML = `<p class="muted">Busca sem resultados em insumos.</p>`;
@@ -379,7 +377,7 @@ function renderPendingRequests() {
           </article>
         `;
       }).join("")
-    : `<p class="muted">Nenhuma solicitacao pendente agora.</p>`;
+    : `<p class="muted">Nenhuma solicitação pendente agora.</p>`;
 
   $$("[data-approve-request]").forEach((button) => {
     button.addEventListener("click", () => approveRequest(button.dataset.approveRequest));
@@ -395,7 +393,7 @@ function renderUsageKpis() {
   const rows = state.usageKpis || [];
   $("#usage-kpis").innerHTML = rows.length
     ? rows.map((row) => {
-        const status = row.averageDays < 60 ? { label: "OBSERVACAO", className: "warning" } : { label: "NORMAL", className: "" };
+        const status = row.averageDays < 60 ? { label: "OBSERVAÇÃO", className: "warning" } : { label: "NORMAL", className: "" };
         return `
           <div class="table-row">
             <strong>${row.itemName}</strong>
@@ -405,7 +403,7 @@ function renderUsageKpis() {
           </div>
         `;
       }).join("")
-    : `<p class="muted">Ainda nao ha historico suficiente para calcular tempo medio.</p>`;
+    : `<p class="muted">Ainda não há histórico suficiente para calcular tempo médio.</p>`;
 }
 
 function compactItemRow(item) {
@@ -457,6 +455,7 @@ function renderWithdraw() {
   }
 
   if (withdraw.step === 1) {
+    // Renderização dos destinos vindo direto da string do Array da API
     $("#withdraw-content").innerHTML = `
       <div class="flow-title">
         <p class="eyebrow">Etapa 2 - ${withdraw.technician}</p>
@@ -484,10 +483,10 @@ function renderWithdraw() {
         <h2>Aguardando leitura...</h2>
       </div>
       <div class="scan-row">
-        <input id="withdraw-code" class="scan-input" placeholder="Bipe ou digite o codigo">
+        <input id="withdraw-code" class="scan-input" placeholder="Bipe ou digite o código">
         <button id="scan-button" class="primary-action">Identificar</button>
       </div>
-      <div class="result-box muted">Bipe ou digite o codigo do produto cadastrado.</div>
+      <div class="result-box muted">Bipe ou digite o código do produto cadastrado.</div>
     `;
     $("#scan-button").addEventListener("click", identifyWithdrawItem);
     $("#withdraw-code").addEventListener("keydown", (event) => {
@@ -507,7 +506,7 @@ function renderWithdraw() {
     <div class="confirm-box">
       <div class="item-preview">
         <strong>${item.name}</strong>
-        <span>Codigo ${item.code} - Estoque atual: ${item.qty}</span>
+        <span>Código ${item.code} - Estoque atual: ${item.qty}</span>
         <span class="pill ${status.className}">${status.label}</span>
       </div>
       <label class="qty-row">
@@ -515,7 +514,7 @@ function renderWithdraw() {
         <input id="withdraw-qty" type="number" min="1" max="${item.qty}" value="${withdraw.qty}">
       </label>
       <button id="confirm-withdraw" class="primary-action wide" ${item.qty <= 0 ? "disabled" : ""}>Confirmar</button>
-      ${item.qty <= 0 ? `<p class="muted">Sem estoque disponivel para retirada.</p>` : ""}
+      ${item.qty <= 0 ? `<p class="muted">Sem estoque disponível para retirada.</p>` : ""}
     </div>
   `;
   $("#confirm-withdraw").addEventListener("click", confirmWithdraw);
@@ -525,8 +524,8 @@ function showWaitingApprovalScreen(item) {
   $("#withdraw-content").innerHTML = `
     <div class="status-screen waiting">
       <span class="status-signal"></span>
-      <p class="eyebrow">Solicitacao enviada</p>
-      <h2>Aguardando liberacao do ADM</h2>
+      <p class="eyebrow">Solicitação enviada</p>
+      <h2>Aguardando liberação do ADM</h2>
       <div class="result-box">
         <strong>${item.name}</strong><br>
         ${withdraw.destination} - ${withdraw.qty} unidade(s)
@@ -546,7 +545,7 @@ function showReleasedScreen(released) {
         <strong>${released.itemName}</strong><br>
         ${released.itemCode} - ${released.destination} - ${released.qty} unidade(s)
       </div>
-      <button class="primary-action wide" id="new-withdraw">Nova solicitacao</button>
+      <button class="primary-action wide" id="new-withdraw">Nova solicitação</button>
     </div>
   `;
   $("#new-withdraw").addEventListener("click", () => setView("withdraw"));
@@ -555,7 +554,7 @@ function showReleasedScreen(released) {
 function identifyWithdrawItem() {
   const item = findItem($("#withdraw-code").value);
   if (!item) {
-    $(".result-box").textContent = "Insumo nao encontrado.";
+    $(".result-box").textContent = "Insumo não encontrado.";
     return;
   }
 
@@ -637,7 +636,7 @@ async function approveRequest(requestId) {
 
   if (normalize(scannedCode) !== normalize(request.itemCode)) {
     input.value = "";
-    input.placeholder = `Codigo errado. Bipe ${request.itemCode}`;
+    input.placeholder = `Código errado. Bipe ${request.itemCode}`;
     input.focus();
     return;
   }
@@ -691,17 +690,17 @@ function renderItems() {
               <span class="pill ${status.className}">${status.label}</span>
             </div>
             <div class="item-meta">
-              <span>Codigo: ${item.code}</span>
+              <span>Código: ${item.code}</span>
               <span>Categoria: ${item.category}</span>
               <span>Atual: ${item.qty}</span>
-              <span>Minimo: ${item.min}</span>
+              <span>Mínimo: ${item.min}</span>
               <span>Fornecedor: ${item.supplier || "Opcional"}</span>
-              <span>${item.note || "Sem observacao"}</span>
+              <span>${item.note || "Sem observação"}</span>
             </div>
             <div class="item-actions">
               <button class="ghost-action" data-withdraw-code="${item.code}">Retirar</button>
               <button class="ghost-action" data-edit-code="${item.code}">Editar</button>
-              <button class="ghost-action" data-history-code="${item.code}">Historico</button>
+              <button class="ghost-action" data-history-code="${item.code}">Histórico</button>
             </div>
           </article>
         `;
@@ -726,21 +725,21 @@ function renderHistory() {
   const rows = filteredHistory();
   $("#history-table").innerHTML = rows.length
     ? rows.map(historyRow).join("")
-    : `<p class="muted">Nenhuma movimentacao encontrada.</p>`;
+    : `<p class="muted">Nenhuma movimentação encontrada.</p>`;
 }
 
 function renderTechnicianFilter() {
   const select = $("#technician-filter");
   if (!select) return;
   const selected = select.value;
-  select.innerHTML = `<option value="">Todos os tecnicos</option>${state.technicians.map((name) => `<option value="${name}">${name}</option>`).join("")}`;
+  select.innerHTML = `<option value="">Todos os técnicos</option>${state.technicians.map((name) => `<option value="${name}">${name}</option>`).join("")}`;
   select.value = selected;
 }
 
 function renderLoginUsers() {
   const users = state.users?.length ? state.users : seedState.users;
   $("#login-user").innerHTML = users
-    .map((user) => `<option value="${user.name}">${user.name} - ${user.role === "admin" ? "Administrador" : "Tecnico"}</option>`)
+    .map((user) => `<option value="${user.name}">${user.name} - ${user.role === "admin" ? "Administrador" : "Técnico"}</option>`)
     .join("");
 }
 
@@ -761,10 +760,9 @@ async function handleLogin(event) {
       currentUser = result.user;
     } else {
       const user = (state.users || seedState.users).find((entry) => entry.name === name);
-      // Validação local híbrida para permitir que você entre usando tanto as senhas antigas quanto as novas em modo de contingência
       const expectedPin = user?.role === "admin" ? "Out@adm" : "1111";
       const fallbackPin = user?.role === "admin" ? "Out@adm" : "Out2021adm";
-      if (!user || (pin !== expectedPin && pin !== fallbackPin)) throw new Error("Usuario ou PIN invalido.");
+      if (!user || (pin !== expectedPin && pin !== fallbackPin)) throw new Error("Usuário ou PIN inválido.");
       currentUser = user;
     }
 
@@ -847,7 +845,7 @@ async function handleReturn() {
   const item = findItem($("#return-code").value);
   const result = $("#return-result");
   if (!item) {
-    result.textContent = "Insumo nao encontrado.";
+    result.textContent = "Insumo não encontrado.";
     return;
   }
 
@@ -855,14 +853,14 @@ async function handleReturn() {
     if (usingApi) {
       replaceState(await apiRequest("/movements/return", {
         method: "POST",
-        body: JSON.stringify({ code: item.code, quantity: 1, technician: currentUser?.name || "Tecnico" })
+        body: JSON.stringify({ code: item.code, quantity: 1, technician: currentUser?.name || "Técnico" })
       }));
     } else {
       item.qty += 1;
       state.history.unshift({
         at: new Date().toISOString(),
-        user: currentUser?.name || "Tecnico",
-        type: "Devolucao",
+        user: currentUser?.name || "Técnico",
+        type: "Devolução",
         qty: 1,
         itemCode: item.code,
         itemName: item.name,
@@ -876,7 +874,7 @@ async function handleReturn() {
   }
 
   const updatedItem = findItem(item.code);
-  result.innerHTML = `<strong>${updatedItem.name}</strong><br>Estoque updated para ${updatedItem.qty} unidade(s).`;
+  result.innerHTML = `<strong>${updatedItem.name}</strong><br>Estoque atualizado para ${updatedItem.qty} unidade(s).`;
   $("#return-code").value = "";
   renderAll();
 }
@@ -886,8 +884,8 @@ function renderReplenishStart() {
     <div class="status-screen replenish-home">
       <span class="status-signal"></span>
       <p class="eyebrow">Administrador</p>
-      <h2>Reposicao de estoque</h2>
-      <div class="result-box muted">Bipe o codigo do insumo e informe a quantidade recebida.</div>
+      <h2>Reposição de estoque</h2>
+      <div class="result-box muted">Bipe o código do insumo e informe a quantidade recebida.</div>
       <button id="open-replenish" class="primary-action wide">Repor insumos</button>
     </div>
   `;
@@ -902,7 +900,7 @@ function renderReplenishForm() {
     </div>
     <div class="form-grid">
       <label>
-        Codigo
+        Código
         <input id="replenish-code" placeholder="Ex: COD001">
       </label>
       <label>
@@ -924,7 +922,7 @@ function renderReplenishDone(item, before, qty) {
   $("#replenish-view .flow-card").innerHTML = `
     <div class="status-screen released">
       <span class="status-signal"></span>
-      <p class="eyebrow">Reposicao registrada</p>
+      <p class="eyebrow">Reposição registrada</p>
       <h2>Estoque atualizado</h2>
       <div class="result-box">
         <strong>${item.name}</strong><br>
@@ -941,7 +939,7 @@ async function handleReplenish() {
   const qty = Math.max(1, Number($("#replenish-qty").value || 1));
   const result = $("#replenish-result");
   if (!item) {
-    result.textContent = "Insumo nao encontrado.";
+    result.textContent = "Insumo não encontrado.";
     return;
   }
 
@@ -957,7 +955,7 @@ async function handleReplenish() {
       state.history.unshift({
         at: new Date().toISOString(),
         user: state.adminName,
-        type: "Reposicao",
+        type: "Reposição",
         qty,
         itemCode: item.code,
         itemName: item.name,
