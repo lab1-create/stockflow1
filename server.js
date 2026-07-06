@@ -13,10 +13,6 @@ const host = process.env.HOST || "0.0.0.0";
 const databaseUrl = process.env.DATABASE_URL;
 const databaseSsl = process.env.DATABASE_SSL === "true" || /sslmode=require/i.test(databaseUrl || "");
 const appAccessKey = process.env.APP_ACCESS_KEY || "";
-const accessCookieName = "stockflow_access";
-const accessCookieValue = appAccessKey
-  ? crypto.createHash("sha256").update(appAccessKey).digest("hex")
-  : "";
 
 const pool = new Pool({
   connectionString: databaseUrl,
@@ -24,7 +20,6 @@ const pool = new Pool({
 });
 
 const liveClients = new Set();
-const allowedUserRoles = new Set(["admin", "tecnico", "estoque"]);
 
 app.use(cors());
 app.use(express.json());
@@ -33,30 +28,16 @@ app.use(express.urlencoded({ extended: false }));
 function safeEquals(left, right) {
   const leftBuffer = Buffer.from(String(left || ""));
   const rightBuffer = Buffer.from(String(right || ""));
-
   if (leftBuffer.length !== rightBuffer.length) return false;
   return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-function parseCookies(header) {
-  const cookies = {};
-  if (!header) return cookies;
-  header.split(";").forEach((cookie) => {
-    const parts = cookie.split("=");
-    if (parts.length === 2) {
-      cookies[parts[0].trim()] = parts[1].trim();
-    }
-  });
-  return cookies;
-}
-
-// Inicialização e Criação de todas as tabelas necessárias no Banco de Dados
+// Inicialização segura e completa das tabelas
 async function initDatabase() {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    // 1. Tabela de usuários do app
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_users (
         name TEXT PRIMARY KEY,
@@ -66,14 +47,12 @@ async function initDatabase() {
       );
     `);
 
-    // 2. Tabela de destinos operacionais
     await client.query(`
       CREATE TABLE IF NOT EXISTS destinations (
         name TEXT PRIMARY KEY
       );
     `);
 
-    // 3. Tabela de itens/insumos no estoque
     await client.query(`
       CREATE TABLE IF NOT EXISTS items (
         code TEXT PRIMARY KEY,
@@ -86,7 +65,6 @@ async function initDatabase() {
       );
     `);
 
-    // 4. Tabela de solicitações pendentes (Usa SERIAL para bater com o ID numérico gerado)
     await client.query(`
       CREATE TABLE IF NOT EXISTS requests (
         id SERIAL PRIMARY KEY,
@@ -100,7 +78,6 @@ async function initDatabase() {
       );
     `);
 
-    // 5. Tabela de histórico de movimentações
     await client.query(`
       CREATE TABLE IF NOT EXISTS stock_history (
         id SERIAL PRIMARY KEY,
@@ -114,10 +91,10 @@ async function initDatabase() {
       );
     `);
 
-    // Remove o Gabriel para manter a lista limpa
+    // Remove usuários obsoletos
     await client.query("DELETE FROM app_users WHERE name = 'Gabriel'");
 
-    // Sincroniza a lista de técnicos originais fixos e PINs
+    // Carga de usuários iniciais
     const originalUsers = [
       { name: "Administrador", role: "admin", pin: "Out@adm" },
       { name: "Luiz", role: "tecnico", pin: "1111" },
@@ -146,10 +123,10 @@ async function initDatabase() {
     }
 
     await client.query("COMMIT");
-    console.log(">> Banco de dados sincronizado (Estruturas e tabelas verificadas!)");
+    console.log(">> Banco de dados sincronizado e pronto!");
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("Aviso ao rodar inicialização do banco:", err.message);
+    console.error("Erro na inicialização do banco:", err.message);
   } finally {
     client.release();
   }
@@ -196,7 +173,7 @@ async function getBootstrap() {
       `);
       usageKpis = kpisRes.rows;
     } catch (kpiError) {
-      console.log("Histórico ainda insuficiente para gerar KPIs.");
+      // Ignora erro se não houver dados suficientes para calcular o KPI
     }
 
     return {
@@ -218,7 +195,7 @@ async function moveStock({ code, userName, userRole, destinationName, type, quan
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const itemRes = await client.query("SELECT code, name, qty FROM items WHERE UPPER(code) = UPPER($1) FOR UPDATE", [code]);
+    const itemRes = await client.query("SELECT code, name, qty FROM items WHERE UPPER(code) = UPPER($1) FOR UPDATE", [code.trim()]);
     if (itemRes.rows.length === 0) throw new Error("Insumo não encontrado.");
 
     const item = itemRes.rows[0];
@@ -362,10 +339,10 @@ app.post("/api/movements/withdraw", async (req, res, next) => {
   }
 });
 
-// TOTALMENTE ADAPTADA PARA RECEBER OS PARÂMETROS DO SEU APP.JS (scannedCode)
+// MAPEAMENTO DO CORPO CORRIGIDO DE ACORDO COM O SEU APP.JS ORIGINAL ({ code, adminName })
 app.post("/api/requests/:id/approve", async (req, res, next) => {
   try {
-    const { scannedCode, adminName } = req.body;
+    const { code, adminName } = req.body;
     const requestId = req.params.id;
 
     const client = await pool.connect();
@@ -378,9 +355,9 @@ app.post("/api/requests/:id/approve", async (req, res, next) => {
 
       const request = reqRes.rows[0];
       
-      // Validação baseada no 'scannedCode' enviado pelo leitor no app.js
-      if (scannedCode && request.item_code.toUpperCase() !== scannedCode.trim().toUpperCase()) {
-        throw new Error(`Código escaneado (${scannedCode}) difere do solicitado (${request.item_code}).`);
+      // Sanitização de String robusta para evitar divergências com leitores físicos de marcas diferentes
+      if (code && request.item_code.trim().toUpperCase() !== code.trim().toUpperCase()) {
+        throw new Error(`Código escaneado (${code.trim().toUpperCase()}) difere do solicitado (${request.item_code.trim().toUpperCase()}).`);
       }
 
       const itemRes = await client.query("SELECT qty FROM items WHERE code = $1 FOR UPDATE", [request.item_code]);
@@ -415,7 +392,7 @@ app.post("/api/movements/return", async (req, res, next) => {
     const { code, quantity, technician } = req.body;
     const state = await moveStock({
       code,
-      userName: technician || "Técnico",
+      userName: technician || "Tecnico",
       userRole: "tecnico",
       destinationName: "Estoque",
       type: "return",
@@ -446,6 +423,7 @@ app.post("/api/movements/replenish", async (req, res, next) => {
   }
 });
 
+// Garante o fornecimento correto dos arquivos estáticos
 app.use(express.static(path.join(__dirname)));
 
 app.get("*", (_req, res) => {
