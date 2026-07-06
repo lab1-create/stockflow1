@@ -1,6 +1,8 @@
 const STORAGE_KEY = "stockflow-state-v2";
 const API_BASE = "/api";
 const LIVE_CHANNEL = "stockflow-live";
+
+// Mapeamento original de técnicos e suas respectivas bancadas
 const TECHNICIAN_DESTINATIONS = {
   Luiz: "Bancada 01",
   Bruno: "Bancada 02",
@@ -12,13 +14,13 @@ const TECHNICIAN_DESTINATIONS = {
 
 const seedState = {
   users: [
-    { name: "Administrador", role: "admin" },
-    { name: "Luiz", role: "tecnico" },
-    { name: "Bruno", role: "tecnico" },
-    { name: "Joao", role: "tecnico" },
-    { name: "Placo", role: "tecnico" },
-    { name: "kaique", role: "tecnico" },
-    { name: "Cauã", role: "tecnico" }
+    { name: "Administrador", role: "admin", pin: "1234" },
+    { name: "Luiz", role: "tecnico", pin: "1111" },
+    { name: "Bruno", role: "tecnico", pin: "2222" },
+    { name: "Joao", role: "tecnico", pin: "3333" },
+    { name: "Placo", role: "tecnico", pin: "4444" },
+    { name: "kaique", role: "tecnico", pin: "5555" },
+    { name: "Cauã", role: "tecnico", pin: "6666" }
   ],
   technicians: ["Luiz", "Bruno", "Joao", "Placo", "Kaique", "Cauã"],
   destinations: ["Bancada 01", "Bancada 02", "Bancada 03", "Bancada 04", "Bancada 05", "Bancada 06", "Teste"],
@@ -141,14 +143,12 @@ function applyRoleUi() {
     document.body.classList.add("is-admin");
     document.body.classList.remove("is-technician");
     $$(".admin-only").forEach(el => el.style.display = "");
-    if ($("#admin-user-panel")) $("#admin-user-panel").style.display = "block";
     $("#nav-dashboard").style.display = "";
     $("#nav-inventory").style.display = "";
     $("#nav-history").style.display = "";
   } else if (isEstoque()) {
     document.body.classList.remove("is-admin", "is-technician");
     $$(".admin-only").forEach(el => el.style.display = "none");
-    if ($("#admin-user-panel")) $("#admin-user-panel").style.display = "none";
     $("#nav-dashboard").style.display = "";
     $("#nav-inventory").style.display = "";
     $("#nav-history").style.display = "";
@@ -156,22 +156,34 @@ function applyRoleUi() {
     document.body.classList.remove("is-admin");
     document.body.classList.add("is-technician");
     $$(".admin-only").forEach(el => el.style.display = "none");
-    if ($("#admin-user-panel")) $("#admin-user-panel").style.display = "none";
     $("#nav-dashboard").style.display = "none";
     $("#nav-inventory").style.display = "none";
     $("#nav-history").style.display = "none";
   }
 }
 
+function renderLoginUsers() {
+  const select = $("#login-user");
+  if (!select) return;
+  select.innerHTML = "";
+  state.users.forEach(u => {
+    const opt = document.createElement("option");
+    opt.value = u.name;
+    opt.textContent = `${u.name} (${u.role})`;
+    select.appendChild(opt);
+  });
+}
+
 async function handleLogin(event) {
   event.preventDefault();
-  const usernameInput = $("#login-user").value.trim();
-  const passwordInput = $("#login-pin").value;
+  const usernameInput = $("#login-user").value;
+  const pinInput = $("#login-pin").value;
 
-  const user = state.users.find(u => u.name.toLowerCase() === usernameInput.toLowerCase());
+  const user = state.users.find(u => u.name === usernameInput);
 
-  if (!user) {
-    $("#login-error").textContent = "Usuário não encontrado.";
+  // Validação real e estrita do PIN correspondente ao usuário selecionado
+  if (!user || user.pin !== pinInput) {
+    $("#login-error").textContent = "PIN incorreto. Verifique seus dados.";
     return;
   }
 
@@ -194,9 +206,9 @@ function logout() {
   localStorage.removeItem("stockflow-session");
   document.body.classList.add("locked");
   $("#login-screen").style.display = "flex";
-  $("#login-user").value = "";
   $("#login-pin").value = "";
   $("#login-error").textContent = "";
+  renderLoginUsers();
 }
 
 function saveSession() {
@@ -498,10 +510,26 @@ function renderDestinations() {
   const grid = $("#destinations-grid");
   grid.innerHTML = "";
   
+  // Define a lista de bancadas priorizando a bancada pessoal configurada do técnico logado
+  let uniqueDestinations = [];
+  if (currentUser && isTecnico() && TECHNICIAN_DESTINATIONS[currentUser.name]) {
+    uniqueDestinations.push(TECHNICIAN_DESTINATIONS[currentUser.name]);
+  }
+  
   state.destinations.forEach(dest => {
+    if (!uniqueDestinations.includes(dest)) {
+      uniqueDestinations.push(dest);
+    }
+  });
+
+  uniqueDestinations.forEach(dest => {
     const btn = document.createElement("button");
     btn.className = "selection-card";
-    btn.innerHTML = `<h3>${dest}</h3><p class="eyebrow" style="margin-top:4px">Selecionar local</p>`;
+    
+    // Destaca de forma minimalista a bancada pertencente àquele técnico logado
+    const isPersonal = currentUser && isTecnico() && TECHNICIAN_DESTINATIONS[currentUser.name] === dest;
+    btn.innerHTML = `<h3>${dest} ${isPersonal ? "⭐" : ""}</h3><p class="eyebrow" style="margin-top:4px">${isPersonal ? "Sua bancada padrão" : "Selecionar local"}</p>`;
+    
     btn.addEventListener("click", () => {
       withdraw.destination = dest;
       withdraw.step = 2;
@@ -595,6 +623,19 @@ async function handleWithdrawScan(code) {
           })
         });
         replaceState(nextState);
+      } else {
+        // Fallback local simulado se API estiver off
+        const item = state.items.find(i => i.code === code);
+        state.requests.push({
+          id: Date.now(),
+          code: code,
+          itemName: item ? item.name : "Insumo Scaneado",
+          quantity: 1,
+          technicianName: currentUser.name,
+          destination: withdraw.destination,
+          timestamp: new Date().toLocaleString("pt-BR")
+        });
+        renderAll();
       }
       feedback.className = "feedback-card success";
       feedback.innerHTML = `<h3>Solicitado!</h3><p style="margin-top:4px">Pedido enviado para aprovacao do Administrador.</p>`;
@@ -689,7 +730,6 @@ function bindEvents() {
   $("#login-form").addEventListener("submit", handleLogin);
   $("#logout-button").addEventListener("click", logout);
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
-  $$("[data-view-jump]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewJump)));
   $("#global-search").addEventListener("input", renderAll);
   
   $("#withdraw-code").addEventListener("keydown", (event) => {
@@ -715,34 +755,6 @@ function bindEvents() {
   $("#item-form").addEventListener("submit", saveItem);
   $("#technician-filter").addEventListener("change", renderHistory);
 
-  $("#create-user-form")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const name = $("#new-user-name").value.trim();
-    const role = $("#new-user-role").value;
-    const messageEl = $("#create-user-message");
-
-    try {
-      if (usingApi) {
-        const nextState = await apiRequest("/users", {
-          method: "POST",
-          body: JSON.stringify({ name, role })
-        });
-        replaceState(nextState);
-      } else {
-        state.users.push({ name, role });
-        if (role === "tecnico") state.technicians.push(name);
-        saveState();
-        renderAll();
-      }
-      messageEl.style.color = "#39a96b";
-      messageEl.textContent = "Usuário criado com sucesso!";
-      $("#create-user-form").reset();
-    } catch (err) {
-      messageEl.style.color = "#ffb4a8";
-      messageEl.textContent = err.message || "Erro ao criar usuário.";
-    }
-  });
-
   document.addEventListener("click", () => {
     if (currentView === "withdraw" && withdraw.step === 2) setTimeout(() => $("#withdraw-code")?.focus(), 30);
     if (currentView === "return") setTimeout(() => $("#return-code")?.focus(), 30);
@@ -754,6 +766,7 @@ async function init() {
   await loadInitialState();
   setupLocalRealtime();
   restoreActiveRequest();
+  renderLoginUsers();
   bindEvents();
   if (!restoreSession()) {
     logout();
