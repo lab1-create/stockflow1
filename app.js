@@ -14,11 +14,11 @@ const titles = {
   dashboard: "Dashboard",
   produtos: "Produtos",
   entradas: "Entradas",
-  saidas: "Saídas",
-  historico: "Histórico",
-  relatorios: "Relatórios",
-  usuarios: "Usuários",
-  configuracoes: "Configurações"
+  saidas: "Saidas",
+  historico: "Historico",
+  relatorios: "Relatorios",
+  usuarios: "Usuarios",
+  configuracoes: "Configuracoes"
 };
 
 function isAdmin() {
@@ -30,40 +30,28 @@ function applyPermissions() {
   $$("[data-view='relatorios']").forEach((node) => node.hidden = !isAdmin());
   $$("[data-view='usuarios']").forEach((node) => node.hidden = !isAdmin());
   $$("[data-view='configuracoes']").forEach((node) => node.hidden = !isAdmin());
-  $("#session-label").textContent = state.user ? `${state.user.name} - ${isAdmin() ? "Administrador" : "Técnico"}` : "Sessão";
+  $("#session-label").textContent = state.user ? `${state.user.name} - ${isAdmin() ? "Administrador" : "Tecnico"}` : "Sessao";
 }
 
 async function loadBootstrap() {
-  try {
-    state.data = await apiRequest("/bootstrap");
-  } catch (error) {
-    toast(error.message, "danger");
-  }
+  state.data = await apiRequest("/bootstrap");
 }
 
 function filteredItems() {
   const query = normalize($("#global-search").value);
   if (!query) return state.data.items;
-  return state.data.items.filter((item) => 
-    [item.code, item.name, item.category, item.supplier, item.note].some((value) => 
-      normalize(value || "").includes(query)
-    )
-  );
+  return state.data.items.filter((item) => [item.code, item.name, item.category, item.supplier, item.note].some((value) => normalize(value).includes(query)));
 }
 
 function filteredHistory() {
   const query = normalize($("#global-search").value);
   if (!query) return state.data.history;
-  return state.data.history.filter((entry) => 
-    [entry.user, entry.type, entry.itemName, entry.itemCode, entry.destination].some((value) => 
-      normalize(value || "").includes(query)
-    )
-  );
+  return state.data.history.filter((entry) => [entry.user, entry.type, entry.itemName, entry.itemCode, entry.destination].some((value) => normalize(value).includes(query)));
 }
 
 function statusFor(item) {
-  if (Number(item.qty) <= Number(item.min)) return `<span class="pill danger">Crítico</span>`;
-  if (Number(item.qty) <= Number(item.min) + 2) return `<span class="pill warning">Atenção</span>`;
+  if (Number(item.qty) <= Number(item.min)) return `<span class="pill danger">Critico</span>`;
+  if (Number(item.qty) <= Number(item.min) + 2) return `<span class="pill warning">Atencao</span>`;
   return `<span class="pill">Normal</span>`;
 }
 
@@ -74,13 +62,13 @@ function productForm(item = {}) {
       <button type="button" class="icon-button" data-close>×</button>
     </div>
     <div class="form-grid">
-      <label>Código<input name="code" required value="${escapeHtml(item.code || '')}"></label>
-      <label>Nome<input name="name" required value="${escapeHtml(item.name || '')}"></label>
-      <label>Categoria<input name="category" required value="${escapeHtml(item.category || '')}"></label>
+      <label>Codigo<input name="code" required value="${escapeHtml(item.code)}"></label>
+      <label>Nome<input name="name" required value="${escapeHtml(item.name)}"></label>
+      <label>Categoria<input name="category" required value="${escapeHtml(item.category)}"></label>
       <label>Quantidade atual<input name="qty" type="number" min="0" required value="${item.qty ?? 0}"></label>
-      <label>Quantidade mínima<input name="min" type="number" min="0" required value="${item.min ?? 1}"></label>
-      <label>Fornecedor<input name="supplier" value="${escapeHtml(item.supplier || '')}"></label>
-      <label class="span-2">Observação<input name="note" value="${escapeHtml(item.note || '')}"></label>
+      <label>Quantidade minima<input name="min" type="number" min="0" required value="${item.min ?? 1}"></label>
+      <label>Fornecedor<input name="supplier" value="${escapeHtml(item.supplier)}"></label>
+      <label class="span-2">Observacao<input name="note" value="${escapeHtml(item.note)}"></label>
     </div>
     <button class="primary-action wide">Salvar produto</button>
   `;
@@ -88,7 +76,6 @@ function productForm(item = {}) {
 
 function renderProdutos() {
   const container = $("#produtos-view");
-  if (!container) return;
   const items = filteredItems();
   container.innerHTML = `
     <section class="panel">
@@ -97,7 +84,7 @@ function renderProdutos() {
         ${isAdmin() ? `<button id="new-product" class="primary-action">Novo</button>` : ""}
       </div>
       <div class="table" style="--cols: 6">
-        <div class="table-head"><span>Produto</span><span>Código</span><span>Categoria</span><span>Estoque</span><span>Status</span><span>Ações</span></div>
+        <div class="table-head"><span>Produto</span><span>Codigo</span><span>Categoria</span><span>Estoque</span><span>Status</span><span>Acoes</span></div>
         ${items.map((item) => `
           <div class="table-row">
             <strong>${escapeHtml(item.name)}</strong>
@@ -106,7 +93,7 @@ function renderProdutos() {
             <span>${item.qty}/${item.min}</span>
             ${statusFor(item)}
             <span class="actions">
-              <button class="ghost-action" data-withdraw="${item.code}">Saída</button>
+              <button class="ghost-action" data-withdraw="${item.code}">Saida</button>
               ${isAdmin() ? `<button class="ghost-action" data-edit="${item.code}">Editar</button>` : ""}
             </span>
           </div>
@@ -119,82 +106,65 @@ function renderProdutos() {
   container.querySelectorAll("[data-edit]").forEach((button) => button.addEventListener("click", () => openProduct(state.data.items.find((item) => item.code === button.dataset.edit))));
   container.querySelectorAll("[data-withdraw]").forEach((button) => button.addEventListener("click", () => {
     setView("saidas");
-    const inputCode = $("#withdraw-code");
-    if (inputCode) inputCode.value = button.dataset.withdraw;
+    $("#withdraw-code").value = button.dataset.withdraw;
   }));
 }
 
 function openProduct(item = null) {
   openModal(productForm(item || {}), async (form) => {
-    try {
-      setLoading(true);
-      await apiRequest("/items", { method: "POST", body: JSON.stringify(Object.fromEntries(form.entries())) });
-      await refresh();
-      toast("Produto salvo com sucesso.");
-    } catch (error) {
-      toast(error.message, "danger");
-    } finally {
-      setLoading(false);
-    }
+    await apiRequest("/items", { method: "POST", body: JSON.stringify(Object.fromEntries(form.entries())) });
+    await refresh();
+    toast("Produto saved.");
   });
 }
 
 function renderEntradas() {
-  const container = $("#entradas-view");
-  if (!container) return;
-  container.innerHTML = `
+  $("#entradas-view").innerHTML = `
     <section class="panel flow-card">
       <div class="panel-head"><h3>Entrada de estoque</h3></div>
       <div class="form-grid">
-        <label>Código<input id="replenish-code" placeholder="Ex: COD001"></label>
+        <label>Codigo<input id="replenish-code" placeholder="Ex: COD001"></label>
         <label>Quantidade<input id="replenish-qty" type="number" min="1" value="1"></label>
       </div>
       <button id="replenish-button" class="primary-action wide">Registrar entrada</button>
       <div id="replenish-result" class="result-box muted">Aguardando produto.</div>
     </section>
   `;
-  $("#replenish-button")?.addEventListener("click", handleReplenish);
+  $("#replenish-button").addEventListener("click", handleReplenish);
 }
 
 function renderSaidas() {
-  const container = $("#saidas-view");
-  if (!container) return;
-  
-  const techniciansList = state.data.technicians || [];
-  const destinationsList = state.data.destinations || [];
-
-  container.innerHTML = `
+  $("#saidas-view").innerHTML = `
     <section class="panel flow-card">
-      <div class="panel-head"><h3>Saída de estoque</h3><span class="muted">Técnico solicita, admin libera</span></div>
+      <div class="panel-head"><h3>Saida de estoque</h3><span class="muted">Tecnico solicita, admin libera</span></div>
       <div class="form-grid">
-        <label>Técnico
+        <label>Tecnico
           <select id="withdraw-technician">
-            ${techniciansList.map((name) => `<option value="${name}" ${state.user && name === state.user.name ? "selected" : ""}>${name}</option>`).join("")}
+            ${state.data.technicians.map((name) => `<option value="${name}" ${name === state.user.name ? "selected" : ""}>${name}</option>`).join("")}
           </select>
         </label>
         <label>Destino
-          <select id="withdraw-destination">${destinationsList.map((name) => `<option>${name}</option>`).join("")}</select>
+          <select id="withdraw-destination">${state.data.destinations.map((name) => `<option>${name}</option>`).join("")}</select>
         </label>
-        <label>Código<input id="withdraw-code" placeholder="Bipe ou digite"></label>
+        <label>Codigo<input id="withdraw-code" placeholder="Bipe ou digite"></label>
         <label>Quantidade<input id="withdraw-qty" type="number" min="1" value="1"></label>
       </div>
-      <button id="withdraw-button" class="primary-action wide">Solicitar saída</button>
+      <button id="withdraw-button" class="primary-action wide">Solicitar saida</button>
       <div id="withdraw-result" class="result-box muted">Aguardando leitura.</div>
     </section>
     ${isAdmin() ? renderPendingRequests() : ""}
   `;
-  $("#withdraw-button")?.addEventListener("click", handleWithdraw);
-  if (isAdmin()) bindPendingRequests();
+  $("#withdraw-button").addEventListener("click", handleWithdraw);
+  bindPendingRequests();
 }
 
 function renderPendingRequests() {
-  const requestsList = state.data.requests || [];
-  const pending = requestsList.filter((request) => request.status === "pending");
+  const pending = state.data.requests.filter((request) => request.status === "pending");
   return `
     <section class="panel" style="margin-top: 14px">
-      <div class="panel-head"><h3>Solicitações pendentes</h3><span class="pill warning">${pending.length}</span></div>
+      <div class="panel-head"><h3>Solicitacoes pendentes</h3><span class="pill warning">${pending.length}</span></div>
       <div class="table" style="--cols: 6">
-        <div class="table-head"><span>Técnico</span><span>Produto</span><span>Destino</span><span>Qtd</span><span>Código</span><span>Ações</span></div>
+        <div class="table-head"><span>Tecnico</span><span>Produto</span><span>Destino</span><span>Qtd</span><span>Codigo</span><span>Acoes</span></div>
         ${pending.map((request) => `
           <div class="table-row">
             <strong>${escapeHtml(request.technician)}</strong>
@@ -204,7 +174,7 @@ function renderPendingRequests() {
             <input data-scan="${request.id}" placeholder="${request.itemCode}">
             <button class="primary-action" data-approve="${request.id}">Liberar</button>
           </div>
-        `).join("") || `<div class="table-row"><span class="muted">Nenhuma solicitação pendente.</span></div>`}
+        `).join("") || `<div class="table-row"><span class="muted">Nenhuma solicitacao pendente.</span></div>`}
       </div>
     </section>
   `;
@@ -212,112 +182,75 @@ function renderPendingRequests() {
 
 function bindPendingRequests() {
   $$("[data-approve]").forEach((button) => button.addEventListener("click", async () => {
-    try {
-      setLoading(true);
-      const input = $(`[data-scan="${button.dataset.approve}"]`);
-      const scannedCode = input ? input.value : "";
-      await apiRequest(`/requests/${button.dataset.approve}/approve`, { method: "POST", body: JSON.stringify({ code: scannedCode }) });
-      await refresh();
-      toast("Saída liberada com sucesso.");
-    } catch (error) {
-      toast(error.message, "danger");
-    } finally {
-      setLoading(false);
-    }
+    const input = $(`[data-scan="${button.dataset.approve}"]`);
+    await apiRequest(`/requests/${button.dataset.approve}/approve`, { method: "POST", body: JSON.stringify({ code: input.value }) });
+    await refresh();
+    toast("Saida liberada.");
   }));
 }
 
 async function handleWithdraw() {
-  try {
-    setLoading(true);
-    await apiRequest("/movements/withdraw", {
-      method: "POST",
-      body: JSON.stringify({
-        code: $("#withdraw-code").value,
-        technician: $("#withdraw-technician").value,
-        destination: $("#withdraw-destination").value,
-        quantity: Number($("#withdraw-qty").value || 1)
-      })
-    });
-    await refresh();
-    const resultBox = $("#withdraw-result");
-    if (resultBox) resultBox.textContent = "Solicitação enviada para liberação.";
-    toast("Solicitação enviada com sucesso.");
-  } catch (error) {
-    toast(error.message, "danger");
-  } finally {
-    setLoading(false);
-  }
+  await apiRequest("/movements/withdraw", {
+    method: "POST",
+    body: JSON.stringify({
+      code: $("#withdraw-code").value,
+      technician: $("#withdraw-technician").value,
+      destination: $("#withdraw-destination").value,
+      quantity: Number($("#withdraw-qty").value || 1)
+    })
+  });
+  $("#withdraw-result").textContent = "Solicitacao enviada para liberacao.";
+  await refresh();
 }
 
 async function handleReplenish() {
-  try {
-    setLoading(true);
-    await apiRequest("/movements/replenish", {
-      method: "POST",
-      body: JSON.stringify({ code: $("#replenish-code").value, quantity: Number($("#replenish-qty").value || 1) })
-    });
-    await refresh();
-    const resultBox = $("#replenish-result");
-    if (resultBox) resultBox.textContent = "Entrada registrada com sucesso.";
-    toast("Estoque atualizado.");
-  } catch (error) {
-    toast(error.message, "danger");
-  } finally {
-    setLoading(false);
-  }
+  await apiRequest("/movements/replenish", {
+    method: "POST",
+    body: JSON.stringify({ code: $("#replenish-code").value, quantity: Number($("#replenish-qty").value || 1) })
+  });
+  $("#replenish-result").textContent = "Entrada registrada.";
+  await refresh();
+  toast("Estoque atualizado.");
 }
 
 function renderHistorico() {
-  const container = $("#historico-view");
-  if (!container) return;
   const rows = filteredHistory();
-  container.innerHTML = `
+  $("#historico-view").innerHTML = `
     <section class="panel">
-      <div class="panel-head"><h3>Histórico</h3><span class="muted">${rows.length} registros</span></div>
+      <div class="panel-head"><h3>Historico</h3><span class="muted">${rows.length} registros</span></div>
       <div class="table" style="--cols: 5">
-        <div class="table-head"><span>Produto</span><span>Usuário</span><span>Tipo</span><span>Destino</span><span>Data</span></div>
-        ${rows.map((entry) => `<div class="table-row"><strong>${escapeHtml(entry.itemName)}</strong><span>${escapeHtml(entry.user)}</span><span>${escapeHtml(entry.type)}</span><span>${escapeHtml(entry.destination || '-')}</span><span>${formatDate(entry.at)}</span></div>`).join("") || `<div class="table-row"><span class="muted">Sem movimentações.</span></div>`}
+        <div class="table-head"><span>Produto</span><span>Usuario</span><span>Tipo</span><span>Destino</span><span>Data</span></div>
+        ${rows.map((entry) => `<div class="table-row"><strong>${escapeHtml(entry.itemName)}</strong><span>${escapeHtml(entry.user)}</span><span>${escapeHtml(entry.type)}</span><span>${escapeHtml(entry.destination)}</span><span>${formatDate(entry.at)}</span></div>`).join("") || `<div class="table-row"><span class="muted">Sem movimentacoes.</span></div>`}
       </div>
     </section>
   `;
 }
 
 function renderRelatorios() {
-  const container = $("#relatorios-view");
-  if (container) container.innerHTML = renderDashboard(state.data);
+  $("#relatorios-view").innerHTML = renderDashboard(state.data);
 }
 
 function renderConfiguracoes() {
-  const container = $("#configuracoes-view");
-  if (container) {
-    container.innerHTML = `
-      <section class="panel">
-        <div class="panel-head"><h3>Configurações</h3></div>
-        <p class="muted">Módulo preparado para parâmetros de compras, fornecedores, inventário, QR Code e código de barras.</p>
-      </section>
-    `;
-  }
+  $("#configuracoes-view").innerHTML = `
+    <section class="panel">
+      <div class="panel-head"><h3>Configuracoes</h3></div>
+      <p class="muted">Modulo preparado para parametros de compras, fornecedores, inventario, QR Code e codigo de barras.</p>
+    </section>
+  `;
 }
 
 async function renderActiveView() {
-  $("#view-title").textContent = titles[state.view] || "Painel";
+  $("#view-title").textContent = titles[state.view];
   $$(".view").forEach((node) => node.classList.toggle("active", node.id === `${state.view}-view`));
   $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === state.view));
 
-  if (state.view === "dashboard") {
-    const dashView = $("#dashboard-view");
-    if (dashView) dashView.innerHTML = renderDashboard(state.data);
-  }
+  if (state.view === "dashboard") $("#dashboard-view").innerHTML = renderDashboard(state.data);
   if (state.view === "produtos") renderProdutos();
   if (state.view === "entradas") renderEntradas();
   if (state.view === "saidas") renderSaidas();
   if (state.view === "historico") renderHistorico();
   if (state.view === "relatorios") renderRelatorios();
-  if (state.view === "usuarios") {
-    const userView = $("#usuarios-view");
-    if (userView) await renderUsuarios(userView);
-  }
+  if (state.view === "usuarios") await renderUsuarios($("#usuarios-view"));
   if (state.view === "configuracoes") renderConfiguracoes();
 }
 
@@ -330,7 +263,7 @@ async function setView(view) {
   if (!isAdmin() && ["usuarios", "configuracoes", "relatorios"].includes(view)) view = "dashboard";
   state.view = view;
   await renderActiveView();
-  $("#sidebar")?.classList.remove("open");
+  $("#sidebar").classList.remove("open");
 }
 
 async function enterApp(user, initialState = null) {
@@ -342,31 +275,30 @@ async function enterApp(user, initialState = null) {
 }
 
 function bindShell() {
-  $("#login-form")?.addEventListener("submit", async (event) => {
+  $("#login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const errLabel = $("#login-error");
-    if (errLabel) errLabel.textContent = "";
+    $("#login-error").textContent = "";
     setLoading(true);
     try {
       const result = await login($("#login-email").value, $("#login-senha").value);
       await enterApp(result.user, result.state);
-      toast("Login realizado com sucesso.");
+      toast("Login realizado.");
     } catch (error) {
-      if (errLabel) errLabel.textContent = error.message;
+      $("#login-error").textContent = error.message;
     } finally {
       setLoading(false);
     }
   });
 
-  $("#logout-button")?.addEventListener("click", () => {
+  $("#logout-button").addEventListener("click", () => {
     logout();
     state.user = null;
     document.body.classList.add("locked");
   });
-  $("#toggle-sidebar")?.addEventListener("click", () => $("#sidebar").classList.toggle("collapsed"));
-  $("#mobile-menu")?.addEventListener("click", () => $("#sidebar").classList.toggle("open"));
+  $("#toggle-sidebar").addEventListener("click", () => $("#sidebar").classList.toggle("collapsed"));
+  $("#mobile-menu").addEventListener("click", () => $("#sidebar").classList.toggle("open"));
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
-  $("#global-search")?.addEventListener("input", () => renderActiveView());
+  $("#global-search").addEventListener("input", () => renderActiveView());
 }
 
 async function init() {
