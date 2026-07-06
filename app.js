@@ -730,19 +730,22 @@ function renderTechnicianFilter() {
   select.value = selected;
 }
 
+// Removida a renderização antiga que carregava no dropdown (<select>)
 function renderLoginUsers() {
-  const users = state.users?.length ? state.users : seedState.users;
-  $("#login-user").innerHTML = users
-    .map((user) => `<option value="${user.name}">${user.name} - ${user.role === "admin" ? "Administrador" : "Tecnico"}</option>`)
-    .join("");
+  // Nada a fazer aqui agora, pois usamos campo de texto livre.
 }
 
 async function handleLogin(event) {
   event.preventDefault();
-  const name = $("#login-user").value;
+  const name = $("#login-user").value.trim(); // Modificado para obter do input texto livre
   const pin = $("#login-pin").value.trim();
   const error = $("#login-error");
   error.textContent = "";
+
+  if (!name) {
+    error.textContent = "Por favor, digite o seu nome de usuário.";
+    return;
+  }
 
   try {
     if (usingApi) {
@@ -753,9 +756,11 @@ async function handleLogin(event) {
       replaceState(result.state);
       currentUser = result.user;
     } else {
-      const user = (state.users || seedState.users).find((entry) => entry.name === name);
+      const user = (state.users || seedState.users).find((entry) => normalize(entry.name) === normalize(name));
+      if (!user) throw new Error("Usuário não encontrado no sistema local.");
+      
       const expectedPin = user?.role === "admin" ? "0000" : "1111";
-      if (!user || pin !== expectedPin) throw new Error("Usuario ou PIN invalido.");
+      if (pin !== expectedPin) throw new Error("Senha / PIN incorreto.");
       currentUser = user;
     }
 
@@ -797,8 +802,9 @@ function logout() {
   refreshTimer = null;
   liveEvents = null;
   document.body.classList.add("locked");
-  renderLoginUsers();
-  $("#login-pin").focus();
+  $("#login-user").value = "";
+  $("#login-pin").value = "";
+  $("#login-user").focus();
 }
 
 async function refreshFromApi() {
@@ -980,6 +986,46 @@ function openItemDialog(item) {
   dialog.showModal();
 }
 
+// Funções para Controle do Modal do Usuário
+function openUserDialog() {
+  const dialog = $("#user-dialog");
+  $("#user-name").value = "";
+  $("#user-role").value = "tecnico";
+  $("#user-pin").value = "";
+  dialog.showModal();
+}
+
+async function saveUser(event) {
+  event.preventDefault();
+  const userPayload = {
+    name: $("#user-name").value.trim(),
+    role: $("#user-role").value,
+    pin: $("#user-pin").value.trim()
+  };
+
+  try {
+    if (usingApi) {
+      const result = await apiRequest("/usuarios", {
+        method: "POST",
+        body: JSON.stringify(userPayload)
+      });
+      replaceState(result);
+    } else {
+      const newUser = { name: userPayload.name, role: userPayload.role };
+      state.users = state.users || [];
+      state.users.push(newUser);
+      if (userPayload.role === "tecnico" && !state.technicians.includes(userPayload.name)) {
+        state.technicians.push(userPayload.name);
+      }
+      saveState();
+    }
+    $("#user-dialog").close();
+    renderAll();
+  } catch (error) {
+    alert("Erro ao cadastrar usuário: " + error.message);
+  }
+}
+
 async function saveItem(event) {
   event.preventDefault();
   const originalCode = $("#item-original-code").value;
@@ -1000,52 +1046,57 @@ async function saveItem(event) {
         body: JSON.stringify(item)
       }));
     } else {
-      const existingIndex = state.items.findIndex((entry) => entry.code === originalCode);
-      if (existingIndex >= 0) state.items[existingIndex] = item;
-      else state.items.push(item);
+      const list = state.items || [];
+      const idx = list.findIndex((i) => i.code.toUpperCase() === originalCode.toUpperCase());
+      if (idx > -1) {
+        list[idx] = item;
+      } else {
+        list.push(item);
+      }
       saveState();
     }
+    $("#item-dialog").close();
+    renderAll();
   } catch (error) {
     alert(error.message);
-    return;
   }
-
-  $("#item-dialog").close();
-  renderAll();
 }
 
-function bindEvents() {
+// Inicialização de Eventos Globais do Sistema
+document.addEventListener("DOMContentLoaded", async () => {
+  setupLocalRealtime();
+  await loadInitialState();
+
   $("#login-form").addEventListener("submit", handleLogin);
   $("#logout-button").addEventListener("click", logout);
-  $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
-  $$("[data-view-jump]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewJump)));
   $("#global-search").addEventListener("input", renderAll);
   $("#return-button").addEventListener("click", handleReturn);
-  $("#return-code").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") handleReturn();
+  $("#return-code").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleReturn();
   });
-  $("#replenish-button").addEventListener("click", handleReplenish);
-  $("#new-item-button").addEventListener("click", () => openItemDialog());
+
+  $("#new-item-button").addEventListener("click", () => openItemDialog(null));
   $("#close-dialog").addEventListener("click", () => $("#item-dialog").close());
   $("#item-form").addEventListener("submit", saveItem);
-  $("#technician-filter").addEventListener("change", renderHistory);
-  document.addEventListener("click", () => {
-    if (currentView === "withdraw" && withdraw.step === 2) setTimeout(() => $("#withdraw-code")?.focus(), 30);
-    if (currentView === "return") setTimeout(() => $("#return-code")?.focus(), 30);
+
+  // Vinculação dos novos botões e ações do Usuário
+  $("#new-user-button").addEventListener("click", openUserDialog);
+  $("#close-user-dialog").addEventListener("click", () => $("#user-dialog").close());
+  $("#user-form").addEventListener("submit", saveUser);
+
+  $("#technician-filter")?.addEventListener("change", renderAll);
+
+  $$(".nav-item").forEach((button) => {
+    button.addEventListener("click", () => setView(button.dataset.view));
   });
-}
 
-async function init() {
-  document.body.classList.add("locked");
-  await loadInitialState();
-  setupLocalRealtime();
-  restoreActiveRequest();
-  renderLoginUsers();
-  bindEvents();
+  document.body.addEventListener("click", (event) => {
+    const jump = event.target.closest("[data-view-jump]");
+    if (jump) setView(jump.dataset.viewJump);
+  });
+
   if (!restoreSession()) {
-    renderAll();
-    $("#login-pin").focus();
+    document.body.classList.add("locked");
+    $("#login-user").focus();
   }
-}
-
-init();
+});
