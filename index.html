@@ -1,195 +1,282 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>StockFlow</title>
-    <link rel="stylesheet" href="styles.css">
-  </head>
-  <body>
-    <section id="login-screen" class="login-screen" style="display: flex; align-items: center; justify-content: center; min-height: 100vh; width: 100vw; position: fixed; top: 0; left: 0; z-index: 9999; background: #070c12;">
-      <form id="login-form" class="login-card">
-        <div class="brand login-brand">
-          <div class="brand-mark">S</div>
-          <div>
-            <strong>StockFlow</strong>
-            <span>Acesso operacional</span>
-          </div>
-        </div>
-        <div class="flow-title">
-          <p class="eyebrow">Entrar</p>
-          <h2>Selecione seu usuario</h2>
-        </div>
-        <label>
-          Usuario
-          <select id="login-user"></select>
-        </label>
-        <label>
-          PIN
-          <input id="login-pin" type="password" inputmode="numeric" placeholder="0000" required>
-        </label>
-        <button class="primary-action wide">Entrar</button>
-        <p id="login-error" class="login-error" style="color: #ffb4a8; margin-top: 8px; font-size: 13px; text-align: center;"></p>
-      </form>
-    </section>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockFlow - Acesso Operacional</title>
+  <style>
+    :root {
+      --bg-color: #121214;
+      --card-bg: #1a1a1e;
+      --text-color: #ffffff;
+      --text-secondary: #a8a8b3;
+      --primary-color: #e51e3d;
+      --primary-hover: #c21330;
+      --input-bg: #202024;
+      --border-color: #29292e;
+    }
 
-    <div class="app-shell">
-      <aside class="sidebar" aria-label="Navegacao principal">
-        <div class="brand">
-          <div class="brand-mark">S</div>
-          <div>
-            <strong>StockFlow</strong>
-            <span>Controle de insumos</span>
-          </div>
-        </div>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
 
-        <nav class="nav-group">
-          <button class="nav-item active" data-view="dashboard" id="nav-dashboard">
-            <span class="nav-icon">📊</span> Dashboard
-          </button>
-          <button class="nav-item" data-view="inventory" id="nav-inventory">
-            <span class="nav-icon">📦</span> Inventario
-          </button>
-          <button class="nav-item" data-view="withdraw" id="nav-withdraw">
-            <span class="nav-icon">📤</span> Retirada
-          </button>
-          <button class="nav-item" data-view="return" id="nav-return">
-            <span class="nav-icon">📥</span> Devolucao
-          </button>
-          <button class="nav-item" data-view="history" id="nav-history">
-            <span class="nav-icon">📜</span> Historico
-          </button>
-        </nav>
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
 
-        <div class="sidebar-footer">
-          <div class="user-profile">
-            <div class="avatar" id="user-avatar">?</div>
-            <div class="user-info">
-              <strong id="user-name">Carregando...</strong>
-              <span id="user-role">---</span>
-            </div>
-          </div>
-          <button id="logout-button" class="logout-button" title="Sair do sistema">Sair</button>
-        </div>
-      </aside>
+    .login-container {
+      background-color: var(--card-bg);
+      padding: 2.5rem;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border-color);
+    }
 
-      <main class="main-content">
-        <header class="top-bar">
-          <div class="search-box">
-            <span class="search-icon">🔍</span>
-            <input type="search" id="global-search" placeholder="Buscar insumos por codigo, nome ou categoria...">
-          </div>
-          <div class="top-actions">
-            <button id="new-item-button" class="primary-action admin-only">+ Novo Insumo</button>
-          </div>
-        </header>
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 2rem;
+    }
 
-        <section id="dashboard-view" class="view active">
-          <div class="dashboard-grid">
-            <section class="panel admin-only" id="requests-panel">
-              <div class="panel-head">
-                <h2>Solicitacoes de Retirada</h2>
-                <span class="badge" id="requests-count">0</span>
-              </div>
-              <div id="requests-list" class="requests-list"></div>
-            </section>
+    .logo-box {
+      background-color: var(--primary-color);
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      font-size: 1.4rem;
+    }
 
-            <section class="panel">
-              <div class="panel-head">
-                <h2>Alertas de Estoque Critico</h2>
-              </div>
-              <div id="alerts-list" class="alerts-list"></div>
-            </section>
+    .header-text h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
 
-            <section class="panel span-2">
-              <div class="panel-head">
-                <h2>Movimentacoes Recentes</h2>
-              </div>
-              <div id="recent-table" class="table"></div>
-            </section>
-          </div>
-        </section>
+    .header-text p {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
 
-        <section id="inventory-view" class="view">
-          <section class="panel">
-            <div id="inventory-table" class="table"></div>
-          </section>
-        </section>
+    .title-section {
+      margin-bottom: 1.5rem;
+    }
 
-        <section id="withdraw-view" class="view">
-          <div class="flow-container">
-            <div id="withdraw-step-1" class="flow-card">
-              <div class="flow-title">
-                <p class="eyebrow">Passo 1 de 2</p>
-                <h2>Onde os insumos serão aplicados?</h2>
-              </div>
-              <div class="selection-grid" id="destinations-grid"></div>
-            </div>
+    .title-section p {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.3rem;
+    }
 
-            <div id="withdraw-step-2" class="flow-card" style="display: none;">
-              <div class="flow-title">
-                <p class="eyebrow" id="withdraw-step-2-eyebrow">Passo 2 de 2</p>
-                <h2>Bip ou digite o codigo do insumo</h2>
-              </div>
-              <div class="scanner-input-container">
-                <input id="withdraw-code" class="scanner-input" placeholder="Aguardando leitura..." autocomplete="off">
-                <div class="scanner-laser"></div>
-              </div>
-              <div id="withdraw-feedback" class="feedback-card" style="display: none;"></div>
-              <button id="withdraw-back" class="secondary-button" style="margin-top: 24px;">Voltar</button>
-            </div>
-          </div>
-        </section>
+    .title-section h2 {
+      font-size: 1.8rem;
+      font-weight: 700;
+    }
 
-        <section id="return-view" class="view">
-          <div class="flow-container">
-            <div class="flow-card">
-              <div class="flow-title">
-                <p class="eyebrow">Devolucao</p>
-                <h2>Bip ou digite o insumo a ser devolvido</h2>
-              </div>
-              <div class="scanner-input-container">
-                <input id="return-code" class="scanner-input" placeholder="Aguardando leitura..." autocomplete="off">
-                <div class="scanner-laser"></div>
-              </div>
-              <div id="return-feedback" class="feedback-card" style="display: none;"></div>
-            </div>
-          </div>
-        </section>
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
 
-        <section id="history-view" class="view">
-          <section class="panel">
-            <div class="panel-head">
-              <h2>Historico completo</h2>
-              <select id="technician-filter">
-                <option value="">Todos os tecnicos</option>
-              </select>
-            </div>
-            <div id="history-table" class="table"></div>
-          </section>
-        </section>
-      </main>
+    .form-group label {
+      display: block;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    select, input {
+      width: 100%;
+      padding: 0.85rem;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-color);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    select:focus, input:focus {
+      border-color: var(--primary-color);
+    }
+
+    select {
+      appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8a8b3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      background-size: 1em;
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 1rem;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      margin-top: 0.5rem;
+    }
+
+    .btn-submit:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .error-msg {
+      color: #ff3333;
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-container">
+    <div class="header-logo">
+      <div class="logo-box">s</div>
+      <div class="header-text">
+        <h1>StockFlow</h1>
+        <p>Acesso operacional</p>
+      </div>
     </div>
 
-    <dialog id="item-dialog">
-      <form method="dialog" id="item-form" class="dialog-body">
-        <div class="panel-head">
-          <h2 id="dialog-title">Novo Insumo</h2>
-          <button type="button" id="close-dialog" class="icon-button" aria-label="Fechar">x</button>
-        </div>
-        <input type="hidden" id="item-original-code">
-        <div class="form-grid">
-          <label>Codigo<input id="item-code" required></label>
-          <label>Nome<input id="item-name" required></label>
-          <label>Categoria<input id="item-category" required></label>
-          <label>Quantidade Atual<input id="item-qty" type="number" min="0" required></label>
-          <label>Quantidade Minima<input id="item-min" type="number" min="0" required></label>
-          <label>Fornecedor<input id="item-supplier"></label>
-          <label class="span-2">Observacao<input id="item-note"></label>
-        </div>
-        <button class="primary-action wide" value="confirm">Salvar Insumo</button>
-      </form>
-    </dialog>
-    <script src="app.js"></script>
-  </body>
+    <div class="title-section">
+      <p>Entrar</p>
+      <h2>Selecione seu usuário</h2>
+    </div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label for="user-select">Usuário</label>
+        <select id="user-select" required>
+          <option value="" disabled selected>Carregando usuários...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="pin-input">PIN</label>
+        <input type="password" id="pin-input" placeholder="0000" maxlength="10" required />
+      </div>
+
+      <div id="error-message" class="error-msg"></div>
+
+      <button type="submit" class="btn-submit">Entrar</button>
+    </form>
+  </div>
+
+  <script>
+    // Estado global do frontend
+    let appState = {
+      users: []
+    };
+
+    // 1. Busca os dados iniciais do servidor
+    async function initBootstrap() {
+      const selectElement = document.getElementById('user-select');
+      try {
+        // Rota relativa evita quebrar no Render procurando 'localhost'
+        const response = await fetch('/api/bootstrap');
+        if (!response.ok) throw new Error("Erro na resposta do servidor");
+        
+        const data = await response.json();
+        appState.users = data.users || [];
+        
+        renderUsers(appState.users);
+      } catch (error) {
+        console.warn("⚠️ Servidor ou banco offline. Carregando lista de contingência local no frontend.", error.message);
+        
+        // Plano B: Se a rede do Render/Banco falhar, renderiza localmente de forma garantida
+        const fallbackUsers = [
+          { name: "Administrador", role: "admin" },
+          { name: "Luiz", role: "tecnico" },
+          { name: "Bruno", role: "tecnico" },
+          { name: "Joao", role: "tecnico" },
+          { name: "Placo", role: "tecnico" },
+          { name: "Kaique", role: "tecnico" },
+          { name: "Cauã", role: "tecnico" }
+        ];
+        
+        appState.users = fallbackUsers;
+        renderUsers(fallbackUsers);
+      }
+    }
+
+    // 2. Renderiza as opções dentro do elemento HTML select
+    function renderUsers(usersList) {
+      const selectElement = document.getElementById('user-select');
+      if (!selectElement) return;
+
+      selectElement.innerHTML = '<option value="" disabled selected>Selecione seu usuário</option>';
+
+      if (usersList && usersList.length > 0) {
+        usersList.forEach(user => {
+          const option = document.createElement('option');
+          option.value = user.name;
+          option.textContent = user.name;
+          selectElement.appendChild(option);
+        });
+        console.log(`${usersList.length} usuários carregados no seletor.`);
+      } else {
+        selectElement.innerHTML = '<option value="" disabled selected>Nenhum usuário encontrado</option>';
+      }
+    }
+
+    // 3. Gerencia o envio do formulário de login
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const name = document.getElementById('user-select').value;
+      const pin = document.getElementById('pin-input').value;
+      const errorDiv = document.getElementById('error-message');
+      
+      errorDiv.style.display = 'none';
+
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, pin })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Falha ao efetuar login.");
+        }
+
+        console.log("Login efetuado com sucesso!", result);
+        alert(`Bem-vindo, ${result.user.name}!`);
+        
+        // Aqui você pode redirecionar para a dashboard do app, ex:
+        // window.location.href = "/dashboard.html";
+        
+      } catch (err) {
+        errorDiv.textContent = err.message;
+        errorDiv.style.display = 'block';
+      }
+    });
+
+    // Inicializa a carga assim que a página é lida
+    document.addEventListener('DOMContentLoaded', initBootstrap);
+  </script>
+</body>
 </html>
