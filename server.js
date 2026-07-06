@@ -11,7 +11,7 @@ const app = express();
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "0.0.0.0";
 const databaseUrl = process.env.DATABASE_URL;
-const databaseSsl = process.env.DATABASE_SSL === "true" || /sslmode=require/i.test(databaseUrl || \"\");
+const databaseSsl = process.env.DATABASE_SSL === "true" || /sslmode=require/i.test(databaseUrl || "");
 const appAccessKey = process.env.APP_ACCESS_KEY || "";
 const accessCookieName = "stockflow_access";
 const accessCookieValue = appAccessKey
