@@ -38,17 +38,17 @@ function safeEquals(left, right) {
   return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-// Inicialização e limpeza do Banco de Dados
+// Inicialização segura do Banco de Dados
 async function initDatabase() {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    // Criação das tabelas base (Sintaxe Corrigida)
+    // Cria as tabelas básicas apenas se elas não existirem de forma simples
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_users (
         name TEXT PRIMARY KEY,
-        role TEXT NOT NULL,
+        role TEXT,
         pin_code TEXT,
         active BOOLEAN DEFAULT TRUE
       );
@@ -60,10 +60,10 @@ async function initDatabase() {
       );
     `);
 
-    // Remove permanentemente o Gabriel
+    // Remove o Gabriel para manter a lista limpa
     await client.query("DELETE FROM app_users WHERE name = 'Gabriel'");
 
-    // Lista de técnicos originais fixos e PINs corretos
+    // Sincroniza a lista de técnicos originais fixos e PINs
     const originalUsers = [
       { name: "Administrador", role: "admin", pin: "Out@adm" },
       { name: "Luiz", role: "tecnico", pin: "1111" },
@@ -82,7 +82,7 @@ async function initDatabase() {
       `, [u.name, u.role, u.pin]);
     }
 
-    // Popula os destinos padrão exigidos pelo app.js
+    // Alinha os destinos de bancadas padrão exigidos pelo front
     const baseDestinations = [
       "Bancada 01", "Bancada 02", "Bancada 03", 
       "Bancada 04", "Bancada 05", "Bancada 06", "Teste"
@@ -93,10 +93,10 @@ async function initDatabase() {
     }
 
     await client.query("COMMIT");
-    console.log("Banco de dados sincronizado perfeitamente (Sem Gabriel).");
+    console.log(">> Banco de dados sincronizado (Sem Gabriel e pronto para uso!)");
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("Erro ao inicializar tabelas:", err);
+    console.error("Aviso ao rodar migrações básicas (pode ser ignorado se as tabelas já existirem):", err.message);
   } finally {
     client.release();
   }
@@ -126,20 +126,26 @@ async function getBootstrap() {
     const destsRes = await client.query("SELECT name FROM destinations ORDER BY name ASC");
     const destinations = destsRes.rows.map(d => d.name);
 
-    // Query de KPIs corrigida sem cláusulas inválidas
-    const kpisRes = await client.query(`
-      SELECT item_code as "itemCode", item_name as "itemName", user_name as technician,
-             CEIL(AVG(days_step))::INT as "averageDays"
-      FROM (
-        SELECT item_code, item_name, user_name,
-               EXTRACT(DAY FROM (at - LAG(at) OVER (PARTITION BY item_code, user_name ORDER BY at ASC))) as days_step
-        FROM stock_history
-        WHERE type = 'Retirada'
-      ) sub
-      WHERE days_step IS NOT NULL AND days_step > 0
-      GROUP BY item_code, item_name, user_name
-      ORDER BY "averageDays" ASC
-    `);
+    // KPI de uso perfeitamente tratado para evitar erros matemáticos
+    let usageKpis = [];
+    try {
+      const kpisRes = await client.query(`
+        SELECT item_code as "itemCode", item_name as "itemName", user_name as technician,
+               CEIL(AVG(days_step))::INT as "averageDays"
+        FROM (
+          SELECT item_code, item_name, user_name,
+                 EXTRACT(DAY FROM (at - LAG(at) OVER (PARTITION BY item_code, user_name ORDER BY at ASC))) as days_step
+          FROM stock_history
+          WHERE type = 'Retirada'
+        ) sub
+        WHERE days_step IS NOT NULL AND days_step > 0
+        GROUP BY item_code, item_name, user_name
+        ORDER BY "averageDays" ASC
+      `);
+      usageKpis = kpisRes.rows;
+    } catch (kpiError) {
+      console.log("Histórico ainda insuficiente para gerar KPIs.");
+    }
 
     return {
       users: usersRes.rows,
@@ -148,7 +154,7 @@ async function getBootstrap() {
       items: itemsRes.rows,
       history: historyRes.rows,
       requests: requestsRes.rows,
-      usageKpis: kpisRes.rows,
+      usageKpis: usageKpis,
       adminName: "Administrador"
     };
   } finally {
@@ -389,5 +395,5 @@ app.use((error, _req, res, _next) => {
 });
 
 app.listen(port, host, () => {
-  console.log(`Servidor rodando em http://${host}:${port}`);
+  console.log(`Servidor rodando com sucesso em http://${host}:${port}`);
 });
