@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <section id="login-screen" class="login-screen">
+    <section id="login-screen" class="login-screen" style="display: flex; align-items: center; justify-content: center; min-height: 100vh; width: 100vw; position: fixed; top: 0; left: 0; z-index: 9999; background: #070c12;">
       <form id="login-form" class="login-card">
         <div class="brand login-brand">
           <div class="brand-mark">S</div>
@@ -18,15 +18,15 @@
         </div>
         <div class="flow-title">
           <p class="eyebrow">Entrar</p>
-          <h2>Acesse sua conta</h2>
+          <h2>Selecione seu usuario</h2>
         </div>
         <label>
-          Usuário
-          <input id="login-user" type="text" placeholder="Digite seu usuário" required>
+          Usuario
+          <select id="login-user"></select>
         </label>
         <label>
-          Senha
-          <input id="login-pin" type="password" placeholder="Digite sua senha" required>
+          PIN
+          <input id="login-pin" type="password" inputmode="numeric" placeholder="0000" required>
         </label>
         <button class="primary-action wide">Entrar</button>
         <p id="login-error" class="login-error"></p>
@@ -92,30 +92,6 @@
                 <span class="badge" id="requests-count">0</span>
               </div>
               <div id="requests-list" class="requests-list"></div>
-            </section>
-
-            <section class="panel admin-only" id="admin-user-panel" style="display: none;">
-              <div class="panel-head">
-                <h2>Cadastrar Novo Usuário</h2>
-              </div>
-              <form id="create-user-form" class="dialog-body" style="padding: 0; margin-top: 16px; background: transparent; border: none; box-shadow: none;">
-                <div class="form-grid" style="grid-template-columns: 1fr; gap: 16px;">
-                  <label>
-                    Nome do Usuário
-                    <input id="new-user-name" type="text" required placeholder="Ex: João Silva">
-                  </label>
-                  <label>
-                    Cargo / Função
-                    <select id="new-user-role" required style="width: 100%; height: 42px; background: #0f1720; border: 1px solid #40566f; border-radius: 6px; color: #f8fafc; padding: 0 12px; font-size: 14px;">
-                      <option value="tecnico">Técnico</option>
-                      <option value="admin">Administrador</option>
-                      <option value="estoque">Estoque</option>
-                    </select>
-                  </label>
-                </div>
-                <button type="submit" class="primary-action" style="margin-top: 16px; width: 100%;">Salvar Usuário</button>
-                <p id="create-user-message" style="margin-top: 12px; font-size: 14px; text-align: center; font-weight: 500;"></p>
-              </form>
             </section>
 
             <section class="panel">
