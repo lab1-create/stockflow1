@@ -2,486 +2,91 @@ require("dotenv").config();
 
 const path = require("path");
 const os = require("os");
-const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 const { Pool } = require("pg");
+
+const AuthController = require("./controllers/AuthController");
+const UsuarioController = require("./controllers/UsuarioController");
+const ProdutoController = require("./controllers/ProdutoController");
+const EstoqueController = require("./controllers/EstoqueController");
+const AuthService = require("./services/AuthService");
+const UsuarioService = require("./services/UsuarioService");
+const ProdutoService = require("./services/ProdutoService");
+const EstoqueService = require("./services/EstoqueService");
+const RelatorioService = require("./services/RelatorioService");
+const RealtimeService = require("./services/RealtimeService");
+const createAuthRoutes = require("./routes/auth");
+const createUsuariosRoutes = require("./routes/usuarios");
+const createProdutosRoutes = require("./routes/produtos");
+const createEstoqueRoutes = require("./routes/estoque");
+const createRelatoriosRoutes = require("./routes/relatorios");
+const authMiddleware = require("./middleware/auth");
 
 const app = express();
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "0.0.0.0";
 const databaseUrl = process.env.DATABASE_URL;
 const databaseSsl = process.env.DATABASE_SSL === "true" || /sslmode=require/i.test(databaseUrl || "");
+const jwtSecret = process.env.JWT_SECRET || "stockflow-dev-secret-change-me";
 
-// CONFIGURAÇÃO DO POOL OTIMIZADA PARA EVITAR QUEDAS NO RENDER
 const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: databaseSsl ? { rejectUnauthorized: false } : undefined,
-  connectionTimeoutMillis: 10000, // Espera até 10 segundos antes de dar timeout de rede
-  idleTimeoutMillis: 30000,       // Fecha conexões inativas após 30 segundos
-  max: 10                         // Limite de conexões abertas ao mesmo tempo
+  ssl: databaseSsl ? { rejectUnauthorized: false } : undefined
 });
 
-const liveClients = new Set();
+const realtimeService = new RealtimeService();
+const relatorioService = new RelatorioService(pool);
+const usuarioService = new UsuarioService(pool);
+const produtoService = new ProdutoService(pool, relatorioService);
+const estoqueService = new EstoqueService(pool, relatorioService);
+const authService = new AuthService(pool, jwtSecret);
 
-app.use(cors());
-app.use(express.json());
+const authController = new AuthController(authService, relatorioService);
+const usuarioController = new UsuarioController(usuarioService);
+const produtoController = new ProdutoController(produtoService, realtimeService);
+const estoqueController = new EstoqueController(estoqueService, relatorioService, realtimeService);
+const requireAuth = authMiddleware(jwtSecret);
+
+app.disable("x-powered-by");
+app.use(cors({ origin: true, credentials: true }));
+app.use(cookieParser());
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
+app.use(express.static(path.join(__dirname, "public")));
 
-function safeEquals(left, right) {
-  const leftBuffer = Buffer.from(String(left || ""));
-  const rightBuffer = Buffer.from(String(right || ""));
-  if (leftBuffer.length !== rightBuffer.length) return false;
-  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-// Inicialização segura e completa de todas as estruturas do Banco de Dados
-async function initDatabase() {
-  let client;
+app.get("/api/health", async (_req, res, next) => {
   try {
-    client = await pool.connect();
-    await client.query("BEGIN");
-
-    // 1. Tabela de usuários do app
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS app_users (
-        name TEXT PRIMARY KEY,
-        role TEXT,
-        pin_code TEXT,
-        active BOOLEAN DEFAULT TRUE
-      );
-    `);
-
-    // 2. Tabela de destinos operacionais
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS destinations (
-        name TEXT PRIMARY KEY
-      );
-    `);
-
-    // 3. Tabela de itens/insumos no estoque
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS items (
-        code TEXT PRIMARY KEY,
-        name TEXT,
-        category TEXT,
-        qty INT DEFAULT 0,
-        min INT DEFAULT 0,
-        supplier TEXT,
-        note TEXT
-      );
-    `);
-
-    // 4. Tabela de solicitações pendentes
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS requests (
-        id SERIAL PRIMARY KEY,
-        at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        technician TEXT,
-        item_code TEXT,
-        item_name TEXT,
-        destination TEXT,
-        qty INT DEFAULT 1,
-        status TEXT DEFAULT 'pending'
-      );
-    `);
-
-    // 5. Tabela de histórico de movimentações
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS stock_history (
-        id SERIAL PRIMARY KEY,
-        at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        user_name TEXT,
-        type TEXT,
-        qty INT,
-        item_code TEXT,
-        item_name TEXT,
-        destination TEXT
-      );
-    `);
-
-    // Limpeza de usuários de teste obsoletos se necessário
-    await client.query("DELETE FROM app_users WHERE name = 'Gabriel'");
-
-    // Carga de usuários operacionais obrigatórios
-    const originalUsers = [
-      { name: "Administrador", role: "admin", pin: "Out@adm" },
-      { name: "Luiz", role: "tecnico", pin: "1111" },
-      { name: "Bruno", role: "tecnico", pin: "1111" },
-      { name: "Joao", role: "tecnico", pin: "1111" },
-      { name: "Placo", role: "tecnico", pin: "1111" },
-      { name: "Kaique", role: "tecnico", pin: "1111" },
-      { name: "Cauã", role: "tecnico", pin: "1111" }
-    ];
-
-    for (const u of originalUsers) {
-      await client.query(`
-        INSERT INTO app_users (name, role, pin_code, active)
-        VALUES ($1, $2, $3, TRUE)
-        ON CONFLICT (name) DO UPDATE SET role = EXCLUDED.role, pin_code = EXCLUDED.pin_code, active = TRUE
-      `, [u.name, u.role, u.pin]);
-    }
-
-    const baseDestinations = [
-      "Bancada 01", "Bancada 02", "Bancada 03", 
-      "Bancada 04", "Bancada 05", "Bancada 06", "Teste"
-    ];
-
-    for (const dest of baseDestinations) {
-      await client.query("INSERT INTO destinations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [dest]);
-    }
-
-    await client.query("COMMIT");
-    console.log(">> Banco de dados inicializado com sucesso!");
-  } catch (err) {
-    if (client) await client.query("ROLLBACK");
-    console.error("Erro na inicialização do banco (Servidor continuará rodando):", err.message);
-  } finally {
-    if (client) client.release();
-  }
-}
-
-// Chamar de forma assíncrona isolada para não derrubar a aplicação caso a rede falhe
-initDatabase().catch(err => console.error("Falha fatal na inicialização:", err));
-
-function broadcastState(state) {
-  const payload = `data: ${JSON.stringify(state)}\n\n`;
-  for (const res of liveClients) {
-    try {
-      res.write(payload);
-    } catch {
-      liveClients.delete(res);
-    }
-  }
-}
-
-async function getBootstrap() {
-  let client;
-  try {
-    client = await pool.connect();
-    const usersRes = await client.query("SELECT name, role, pin_code FROM app_users WHERE active = TRUE ORDER BY name ASC");
-    const itemsRes = await client.query("SELECT code, name, category, qty, min, supplier, note FROM items ORDER BY name ASC");
-    const historyRes = await client.query("SELECT at, user_name as user, type, qty, item_code as \"itemCode\", item_name as \"itemName\", destination FROM stock_history ORDER BY at DESC LIMIT 100");
-    const requestsRes = await client.query("SELECT id, at, technician, item_code as \"itemCode\", item_name as \"itemName\", destination, qty, status FROM requests WHERE status = 'pending' ORDER BY at DESC");
-
-    const destsRes = await client.query("SELECT name FROM destinations ORDER BY name ASC");
-    const destinations = destsRes.rows.map(d => d.name);
-
-    return {
-      users: usersRes.rows.map(u => ({ name: u.name, role: u.role, pin: u.pin_code || "1111" })),
-      technicians: usersRes.rows.filter(u => u.role === "tecnico").map(u => u.name),
-      destinations: destinations.length > 0 ? destinations : ["Bancada 01", "Bancada 02", "Bancada 03", "Bancada 04", "Bancada 05", "Bancada 06", "Teste"],
-      items: itemsRes.rows,
-      history: historyRes.rows,
-      requests: requestsRes.rows,
-      usageKpis: [],
-      adminName: "Administrador"
-    };
-  } catch (dbError) {
-    console.error("⚠️ Usando Fallback de Usuários locais devido a erro de rede do banco:", dbError.message);
-    
-    // Entrega imediata para o front-end mapear e exibir os usuários no select
-    const fallbackUsers = [
-      { name: "Administrador", role: "admin", pin: "Out@adm" },
-      { name: "Luiz", role: "tecnico", pin: "1111" },
-      { name: "Bruno", role: "tecnico", pin: "1111" },
-      { name: "Joao", role: "tecnico", pin: "1111" },
-      { name: "Placo", role: "tecnico", pin: "1111" },
-      { name: "Kaique", role: "tecnico", pin: "1111" },
-      { name: "Cauã", role: "tecnico", pin: "1111" }
-    ];
-
-    return {
-      users: fallbackUsers,
-      technicians: ["Luiz", "Bruno", "Joao", "Placo", "Kaique", "Cauã"],
-      destinations: ["Bancada 01", "Bancada 02", "Bancada 03", "Bancada 04", "Bancada 05", "Bancada 06", "Teste"],
-      items: [],
-      history: [],
-      requests: [],
-      usageKpis: [],
-      adminName: "Administrador"
-    };
-  } finally {
-    if (client) client.release();
-  }
-}
-
-async function moveStock({ code, userName, userRole, destinationName, type, quantity }) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const itemRes = await client.query("SELECT code, name, qty FROM items WHERE UPPER(code) = UPPER($1) FOR UPDATE", [code.trim()]);
-    if (itemRes.rows.length === 0) throw new Error("Insumo não encontrado.");
-
-    const item = itemRes.rows[0];
-    const qtyChange = Number(quantity || 1);
-    let nextQty = Number(item.qty);
-
-    if (type === "withdraw") {
-      if (userRole === "admin") {
-        nextQty -= qtyChange;
-        await client.query("UPDATE items SET qty = $1 WHERE code = $2", [nextQty, item.code]);
-        await client.query(`
-          INSERT INTO stock_history (at, user_name, type, qty, item_code, item_name, destination)
-          VALUES (CURRENT_TIMESTAMP, $1, 'Retirada', $2, $3, $4, $5)
-        `, [userName, qtyChange, item.code, item.name, destinationName]);
-      } else {
-        await client.query(`
-          INSERT INTO requests (at, technician, item_code, item_name, destination, qty, status)
-          VALUES (CURRENT_TIMESTAMP, $1, $2, $3, $4, $5, 'pending')
-        `, [userName, item.code, item.name, destinationName, qtyChange]);
-      }
-    } else if (type === "return") {
-      nextQty += qtyChange;
-      await client.query("UPDATE items SET qty = $1 WHERE code = $2", [nextQty, item.code]);
-      await client.query(`
-        INSERT INTO stock_history (at, user_name, type, qty, item_code, item_name, destination)
-        VALUES (CURRENT_TIMESTAMP, $1, 'Devolução', $2, $3, $4, 'Estoque')
-      `, [userName, qtyChange, item.code, item.name]);
-    } else if (type === "replenishment") {
-      nextQty += qtyChange;
-      await client.query("UPDATE items SET qty = $1 WHERE code = $2", [nextQty, item.code]);
-      await client.query(`
-        INSERT INTO stock_history (at, user_name, type, qty, item_code, item_name, destination)
-        VALUES (CURRENT_TIMESTAMP, 'Administrador', 'Reposição', $2, $3, $4, 'Estoque')
-      `, [userName, qtyChange, item.code, item.name]);
-    }
-
-    await client.query("COMMIT");
-    return await getBootstrap();
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-app.get("/api/bootstrap", async (_req, res, next) => {
-  try {
-    res.json(await getBootstrap());
+    await pool.query("SELECT 1");
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }
 });
 
-app.get("/api/events", (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders();
-
-  liveClients.add(res);
-  req.on("close", () => {
-    liveClients.delete(res);
-  });
-});
-
-app.post("/api/login", async (req, res, next) => {
-  try {
-    const { name, pin } = req.body;
-    let user = null;
-    let client;
-
-    try {
-      client = await pool.connect();
-      const userRes = await client.query("SELECT name, role, pin_code FROM app_users WHERE name = $1 AND active = TRUE", [name]);
-      if (userRes.rows.length > 0) user = userRes.rows[0];
-    } catch (err) {
-      console.log("Banco inacessível. Efetuando validação via contingência local.");
-      const localUsers = [
-        { name: "Administrador", role: "admin", pin_code: "Out@adm" },
-        { name: "Luiz", role: "tecnico", pin_code: "1111" },
-        { name: "Bruno", role: "tecnico", pin_code: "1111" },
-        { name: "Joao", role: "tecnico", pin_code: "1111" },
-        { name: "Placo", role: "tecnico", pin_code: "1111" },
-        { name: "Kaique", role: "tecnico", pin_code: "1111" },
-        { name: "Cauã", role: "tecnico", pin_code: "1111" }
-      ];
-      user = localUsers.find(u => u.name.toLowerCase() === String(name).toLowerCase());
-    } finally {
-      if (client) client.release();
-    }
-
-    if (!user) return res.status(401).json({ error: "Usuário não encontrado." });
-
-    const isDbPinMatch = user.pin_code && safeEquals(user.pin_code, pin);
-    const isFallbackAdmin = user.role === "admin" && safeEquals("Out@adm", pin);
-    const isFallbackTecnico = user.role === "tecnico" && (safeEquals("1111", pin) || safeEquals("Out2021adm", pin));
-
-    if (!isDbPinMatch && !isFallbackAdmin && !isFallbackTecnico) {
-      return res.status(401).json({ error: "PIN incorreto." });
-    }
-
-    res.json({
-      user: { name: user.name, role: user.role },
-      state: await getBootstrap()
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/items", async (req, res, next) => {
-  try {
-    const { code, name, category, qty, min, supplier, note } = req.body;
-    const client = await pool.connect();
-    try {
-      await client.query(`
-        INSERT INTO items (code, name, category, qty, min, supplier, note)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (code) DO UPDATE SET
-          name = EXCLUDED.name,
-          category = EXCLUDED.category,
-          qty = EXCLUDED.qty,
-          min = EXCLUDED.min,
-          supplier = EXCLUDED.supplier,
-          note = EXCLUDED.note
-      `, [code.trim().toUpperCase(), name, category, qty, min, supplier, note]);
-    } finally {
-      client.release();
-    }
-    const state = await getBootstrap();
-    broadcastState(state);
-    res.json(state);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.put("/api/items/:code", async (req, res, next) => {
-  try {
-    const originalCode = req.params.code;
-    const { code, name, category, qty, min, supplier, note } = req.body;
-    const client = await pool.connect();
-    try {
-      await client.query(`
-        UPDATE items SET
-          code = $1, name = $2, category = $3, qty = $4, min = $5, supplier = $6, note = $7
-        WHERE UPPER(code) = UPPER($8)
-      `, [code.trim().toUpperCase(), name, category, qty, min, supplier, note, originalCode.trim()]);
-    } finally {
-      client.release();
-    }
-    const state = await getBootstrap();
-    broadcastState(state);
-    res.json(state);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/movements/withdraw", async (req, res, next) => {
-  try {
-    const { code, technician, destination, quantity } = req.body;
-    const state = await moveStock({
-      code,
-      userName: technician,
-      userRole: "tecnico",
-      destinationName: destination,
-      type: "withdraw",
-      quantity
-    });
-    broadcastState(state);
-    res.json(state);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/requests/:id/approve", async (req, res, next) => {
-  try {
-    const { code, adminName } = req.body;
-    const requestId = req.params.id;
-
-    const client = await pool.connect();
-    let state;
-    try {
-      await client.query("BEGIN");
-      
-      const reqRes = await client.query("SELECT item_code, item_name, technician, destination, qty FROM requests WHERE id = $1 AND status = 'pending' FOR UPDATE", [requestId]);
-      if (reqRes.rows.length === 0) throw new Error("Solicitação pendente não encontrada.");
-
-      const request = reqRes.rows[0];
-      
-      if (code && request.item_code.trim().toUpperCase() !== code.trim().toUpperCase()) {
-        throw new Error(`Código escaneado (${code.trim().toUpperCase()}) difere do solicitado (${request.item_code.trim().toUpperCase()}).`);
-      }
-
-      const itemRes = await client.query("SELECT qty FROM items WHERE code = $1 FOR UPDATE", [request.item_code]);
-      if (itemRes.rows.length === 0 || Number(itemRes.rows[0].qty) < Number(request.qty)) {
-        throw new Error("Estoque insuficiente para aprovação.");
-      }
-
-      await client.query("UPDATE items SET qty = qty - $1 WHERE code = $2", [request.qty, request.item_code]);
-      await client.query("UPDATE requests SET status = 'approved' WHERE id = $1", [requestId]);
-      await client.query(`
-        INSERT INTO stock_history (at, user_name, type, qty, item_code, item_name, destination)
-        VALUES (CURRENT_TIMESTAMP, $1, 'Retirada', $2, $3, $4, $5)
-      `, [request.technician, request.qty, request.item_code, request.item_name, request.destination]);
-
-      await client.query("COMMIT");
-      state = await getBootstrap();
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
-    }
-    broadcastState(state);
-    res.json(state);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/movements/return", async (req, res, next) => {
-  try {
-    const { code, quantity, technician } = req.body;
-    const state = await moveStock({
-      code,
-      userName: technician || "Tecnico",
-      userRole: "tecnico",
-      destinationName: "Estoque",
-      type: "return",
-      quantity: quantity || 1
-    });
-    broadcastState(state);
-    res.json(state);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/movements/replenish", async (req, res, next) => {
-  try {
-    const { code, quantity } = req.body;
-    const state = await moveStock({
-      code,
-      userName: "Administrador",
-      userRole: "admin",
-      destinationName: "Estoque",
-      type: "replenishment",
-      quantity
-    });
-    broadcastState(state);
-    res.json(state);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.use(express.static(path.join(__dirname)));
+app.use("/api", createAuthRoutes(authController, requireAuth));
+app.use("/api", requireAuth);
+app.use("/api/usuarios", createUsuariosRoutes(usuarioController));
+app.use("/api/produtos", createProdutosRoutes(produtoController));
+app.use("/api/items", createProdutosRoutes(produtoController));
+app.use("/api", createEstoqueRoutes(estoqueController));
+app.use("/api/relatorios", createRelatoriosRoutes(relatorioService));
 
 app.get("*", (_req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 app.use((error, _req, res, _next) => {
-  console.error("Erro na requisição:", error);
-  res.status(500).json({ error: error.message || "Erro interno do servidor." });
+  console.error(error);
+  res.status(error.status || 500).json({
+    error: error.message || "Erro interno."
+  });
 });
 
 app.listen(port, host, () => {
-  console.log(`Servidor rodando com sucesso em http://${host}:${port}`);
+  const computerName = os.hostname();
+  console.log("StockFlow rodando.");
+  console.log(`Nesta maquina: http://localhost:${port}`);
+  console.log(`Na rede, sem IP: http://${computerName}:${port}`);
 });
