@@ -38,6 +38,18 @@ function safeEquals(left, right) {
   return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
+function parseCookies(header) {
+  const cookies = {};
+  if (!header) return cookies;
+  header.split(";").forEach((cookie) => {
+    const parts = cookie.split("=");
+    if (parts.length === 2) {
+      cookies[parts[0].trim()] = parts[1].trim();
+    }
+  });
+  return cookies;
+}
+
 // Inicialização segura do Banco de Dados
 async function initDatabase() {
   const client = await pool.connect();
@@ -96,7 +108,7 @@ async function initDatabase() {
     console.log(">> Banco de dados sincronizado (Sem Gabriel e pronto para uso!)");
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("Aviso ao rodar migrações básicas (pode ser ignorado se as tabelas já existirem):", err.message);
+    console.error("Aviso ao rodar migrações básicas:", err.message);
   } finally {
     client.release();
   }
@@ -310,23 +322,34 @@ app.post("/api/movements/withdraw", async (req, res, next) => {
   }
 });
 
+// ROTA CORRIGIDA: Valida se o código de barras escaneado pelo Administrador confere com o item solicitado
 app.post("/api/requests/:id/approve", async (req, res, next) => {
   try {
+    const { code, adminName } = req.body;
+    const requestId = req.params.id;
+
     const client = await pool.connect();
     let state;
     try {
       await client.query("BEGIN");
-      const reqRes = await client.query("SELECT item_code, item_name, technician, destination, qty FROM requests WHERE id = $1 AND status = 'pending' FOR UPDATE", [req.params.id]);
+      
+      const reqRes = await client.query("SELECT item_code, item_name, technician, destination, qty FROM requests WHERE id = $1 AND status = 'pending' FOR UPDATE", [requestId]);
       if (reqRes.rows.length === 0) throw new Error("Solicitação pendente não encontrada.");
 
       const request = reqRes.rows[0];
+      
+      // Validação obrigatória do leitor de código de barras
+      if (code && request.item_code.toUpperCase() !== code.trim().toUpperCase()) {
+        throw new Error(`Código escaneado (${code}) difere do solicitado (${request.item_code}).`);
+      }
+
       const itemRes = await client.query("SELECT qty FROM items WHERE code = $1 FOR UPDATE", [request.item_code]);
       if (itemRes.rows.length === 0 || Number(itemRes.rows[0].qty) < Number(request.qty)) {
-        throw new Error("Estoque insuficiente.");
+        throw new Error("Estoque insuficiente para aprovação.");
       }
 
       await client.query("UPDATE items SET qty = qty - $1 WHERE code = $2", [request.qty, request.item_code]);
-      await client.query("UPDATE requests SET status = 'approved' WHERE id = $1", [req.params.id]);
+      await client.query("UPDATE requests SET status = 'approved' WHERE id = $1", [requestId]);
       await client.query(`
         INSERT INTO stock_history (at, user_name, type, qty, item_code, item_name, destination)
         VALUES (CURRENT_TIMESTAMP, $1, 'Retirada', $2, $3, $4, $5)
@@ -383,6 +406,7 @@ app.post("/api/movements/replenish", async (req, res, next) => {
   }
 });
 
+// Arquivos Estáticos declarados ANTES da captura global asterisco (*)
 app.use(express.static(path.join(__dirname)));
 
 app.get("*", (_req, res) => {
