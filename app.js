@@ -2,28 +2,24 @@ const STORAGE_KEY = "stockflow-state-v2";
 const API_BASE = "/api";
 const LIVE_CHANNEL = "stockflow-live";
 
-// Mapeamento original de técnicos e suas respectivas bancadas
+// Mapeamento dinâmico de técnicos para as suas respetivas bancadas
 const TECHNICIAN_DESTINATIONS = {
   Luiz: "Bancada 01",
   Bruno: "Bancada 02",
   Joao: "Bancada 03",
-  Placo: "Bancada 04",
-  Kaique: "Bancada 05",
-  Cauã: "Bancada 06"
+  Gabriel: "Bancada 04"
 };
 
 const seedState = {
   users: [
-    { name: "Administrador", role: "admin", pin: "1234" },
+    { name: "Administrador", role: "admin", pin: "0000" },
     { name: "Luiz", role: "tecnico", pin: "1111" },
-    { name: "Bruno", role: "tecnico", pin: "2222" },
-    { name: "Joao", role: "tecnico", pin: "3333" },
-    { name: "Placo", role: "tecnico", pin: "4444" },
-    { name: "kaique", role: "tecnico", pin: "5555" },
-    { name: "Cauã", role: "tecnico", pin: "6666" }
+    { name: "Bruno", role: "tecnico", pin: "1111" },
+    { name: "Joao", role: "tecnico", pin: "1111" },
+    { name: "Gabriel", role: "tecnico", pin: "1111" }
   ],
-  technicians: ["Luiz", "Bruno", "Joao", "Placo", "Kaique", "Cauã"],
-  destinations: ["Bancada 01", "Bancada 02", "Bancada 03", "Bancada 04", "Bancada 05", "Bancada 06", "Teste"],
+  technicians: ["Luiz", "Bruno", "Joao", "Gabriel"],
+  destinations: ["Bancada 01", "Bancada 02", "Bancada 03", "Bancada 04", "Servico interno", "Estoque de testes", "Outro", "Estoque"],
   adminName: "Administrador",
   items: [],
   history: [],
@@ -69,9 +65,9 @@ async function loadInitialState() {
     const bootstrapData = await apiRequest("/bootstrap");
     replaceState(bootstrapData);
     usingApi = true;
-    console.log("StockFlow conectado ao servidor de banco de dados.");
+    console.log("StockFlow conectado ao servidor Postgres.");
   } catch (e) {
-    console.warn("Servidor indisponivel. Usando armazenamento local temporario.", e);
+    console.warn("Servidor offline. Usando armazenamento local temporario.", e);
     usingApi = false;
     const local = localStorage.getItem(STORAGE_KEY);
     if (local) {
@@ -98,7 +94,7 @@ function setupLocalRealtime() {
         replaceState(msg.data);
       }
     } catch (e) {
-      console.error("Erro ao processar atualizacao em tempo real:", e);
+      console.error("Erro na atualizacao realtime:", e);
     }
   };
   eventSource.onerror = () => {
@@ -181,8 +177,8 @@ async function handleLogin(event) {
 
   const user = state.users.find(u => u.name === usernameInput);
 
-  // Validação real e estrita do PIN correspondente ao usuário selecionado
-  if (!user || user.pin !== pinInput) {
+  // Validação real e segura! Compara estritamente o PIN digitado com o do banco
+  if (!user || String(user.pin) !== String(pinInput)) {
     $("#login-error").textContent = "PIN incorreto. Verifique seus dados.";
     return;
   }
@@ -251,67 +247,69 @@ function getFilteredItems() {
 
 function renderDashboard() {
   const alertsList = $("#alerts-list");
-  alertsList.innerHTML = "";
-  const criticalItems = state.items.filter(item => item.qty <= item.min);
-  
-  if (criticalItems.length === 0) {
-    alertsList.innerHTML = `<div class="empty-state">Nenhum insumo com estoque critico.</div>`;
-  } else {
-    criticalItems.forEach(item => {
-      const div = document.createElement("div");
-      div.className = "alert-item";
-      div.innerHTML = `
-        <div>
-          <strong>${item.name}</strong>
-          <span class="eyebrow" style="margin-top:2px">${item.code} - ${item.category}</span>
-        </div>
-        <div style="text-align: right">
-          <span class="stock-status critical">${item.qty} un</span>
-          <span class="eyebrow" style="margin-top:2px">Minimo: ${item.min}</span>
-        </div>
-      `;
-      alertsList.appendChild(div);
-    });
+  if (alertsList) {
+    alertsList.innerHTML = "";
+    const criticalItems = state.items.filter(item => item.qty <= item.min);
+    if (criticalItems.length === 0) {
+      alertsList.innerHTML = `<div class="empty-state">Nenhum insumo com estoque critico.</div>`;
+    } else {
+      criticalItems.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "alert-item";
+        div.innerHTML = `
+          <div>
+            <strong>${item.name}</strong>
+            <span class="eyebrow" style="margin-top:2px">${item.code} - ${item.category}</span>
+          </div>
+          <div style="text-align: right">
+            <span class="stock-status critical">${item.qty} un</span>
+            <span class="eyebrow" style="margin-top:2px">Minimo: ${item.min}</span>
+          </div>
+        `;
+        alertsList.appendChild(div);
+      });
+    }
   }
 
   const recentTable = $("#recent-table");
-  recentTable.innerHTML = "";
-  const recentMovements = state.history.slice(0, 5);
-
-  if (recentMovements.length === 0) {
-    recentTable.innerHTML = `<div class="empty-state">Nenhuma movimentacao recente.</div>`;
-  } else {
-    let html = `
-      <table>
-        <thead>
-          <tr>
-            <th>Insumo</th>
-            <th>Tipo</th>
-            <th>Qtd</th>
-            <th>Responsavel</th>
-            <th>Destino</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
-    recentMovements.forEach(m => {
-      let typeLabel = m.type;
-      if (m.type === "withdrawal") typeLabel = "Retirada";
-      if (m.type === "return") typeLabel = "Devolucao";
-      if (m.type === "replenishment") typeLabel = "Abastecimento";
-
-      html += `
-        <tr>
-          <td><strong>${m.itemName}</strong><br><span class="eyebrow">${m.code}</span></td>
-          <td><span class="stock-status ${m.type === "withdrawal" ? "critical" : "normal"}">${typeLabel}</span></td>
-          <td>${m.quantity}</td>
-          <td>${m.userName}</td>
-          <td>${m.destinationName}</td>
-        </tr>
+  if (recentTable) {
+    recentTable.innerHTML = "";
+    const recentMovements = state.history.slice(0, 5);
+    if (recentMovements.length === 0) {
+      recentTable.innerHTML = `<div class="empty-state">Nenhuma movimentacao recente.</div>`;
+    } else {
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Insumo</th>
+              <th>Tipo</th>
+              <th>Qtd</th>
+              <th>Responsavel</th>
+              <th>Destino</th>
+            </tr>
+          </thead>
+          <tbody>
       `;
-    });
-    html += `</tbody></table>`;
-    recentTable.innerHTML = html;
+      recentMovements.forEach(m => {
+        let typeLabel = m.type;
+        if (m.type === "withdrawal") typeLabel = "Retirada";
+        if (m.type === "return") typeLabel = "Devolucao";
+        if (m.type === "replenishment") typeLabel = "Abastecimento";
+
+        html += `
+          <tr>
+            <td><strong>${m.itemName}</strong><br><span class="eyebrow">${m.code}</span></td>
+            <td><span class="stock-status ${m.type === "withdrawal" ? "critical" : "normal"}">${typeLabel}</span></td>
+            <td>${m.quantity}</td>
+            <td>${m.userName}</td>
+            <td>${m.destinationName}</td>
+          </tr>
+        `;
+      });
+      html += `</tbody></table>`;
+      recentTable.innerHTML = html;
+    }
   }
 
   const reqCount = $("#requests-count");
@@ -366,6 +364,7 @@ async function rejectRequest(id) {
 
 function renderInventory() {
   const invTable = $("#inventory-table");
+  if (!invTable) return;
   invTable.innerHTML = "";
   const filtered = getFilteredItems();
 
@@ -424,30 +423,13 @@ function triggerReplenish(code) {
       method: "POST",
       body: JSON.stringify({ code, quantity: qty })
     }).then(replaceState).catch(err => alert(err.message));
-  } else {
-    const item = state.items.find(i => i.code === code);
-    if (item) {
-      item.qty += qty;
-      state.history.unshift({
-        id: Date.now(),
-        code,
-        itemName: item.name,
-        userName: currentUser ? currentUser.name : "Admin",
-        userRole: currentUser ? currentUser.role : "admin",
-        destinationName: "Estoque",
-        type: "replenishment",
-        quantity: qty,
-        timestamp: new Date().toLocaleString("pt-BR")
-      });
-      saveState();
-      renderAll();
-    }
   }
 }
 
 function openItemDialog(code = "") {
   const dialog = $("#item-dialog");
   const form = $("#item-form");
+  if (!dialog || !form) return;
   
   if (code) {
     const item = state.items.find(i => i.code === code);
@@ -490,15 +472,6 @@ async function saveItem(event) {
         body: JSON.stringify(payload)
       });
       replaceState(nextState);
-    } else {
-      if (originalCode) {
-        const idx = state.items.findIndex(i => i.code === originalCode);
-        if (idx !== -1) state.items[idx] = { code: payload.code, name: payload.name, category: payload.category, qty: payload.qty, min: payload.min, supplier: payload.supplier, note: payload.note };
-      } else {
-        state.items.push({ code: payload.code, name: payload.name, category: payload.category, qty: payload.qty, min: payload.min, supplier: payload.supplier, note: payload.note });
-      }
-      saveState();
-      renderAll();
     }
     $("#item-dialog").close();
   } catch (e) {
@@ -508,10 +481,11 @@ async function saveItem(event) {
 
 function renderDestinations() {
   const grid = $("#destinations-grid");
+  if (!grid) return;
   grid.innerHTML = "";
   
-  // Define a lista de bancadas priorizando a bancada pessoal configurada do técnico logado
   let uniqueDestinations = [];
+  // Prioriza a bancada padrão vinculada ao técnico logado
   if (currentUser && isTecnico() && TECHNICIAN_DESTINATIONS[currentUser.name]) {
     uniqueDestinations.push(TECHNICIAN_DESTINATIONS[currentUser.name]);
   }
@@ -526,7 +500,6 @@ function renderDestinations() {
     const btn = document.createElement("button");
     btn.className = "selection-card";
     
-    // Destaca de forma minimalista a bancada pertencente àquele técnico logado
     const isPersonal = currentUser && isTecnico() && TECHNICIAN_DESTINATIONS[currentUser.name] === dest;
     btn.innerHTML = `<h3>${dest} ${isPersonal ? "⭐" : ""}</h3><p class="eyebrow" style="margin-top:4px">${isPersonal ? "Sua bancada padrão" : "Selecionar local"}</p>`;
     
@@ -544,6 +517,7 @@ function renderDestinations() {
 
 function renderHistorySelectors() {
   const filter = $("#technician-filter");
+  if (!filter) return;
   const currentVal = filter.value;
   filter.innerHTML = `<option value="">Todos os tecnicos</option>`;
   state.technicians.forEach(t => {
@@ -557,6 +531,7 @@ function renderHistorySelectors() {
 
 function renderHistory() {
   const tableContainer = $("#history-table");
+  if (!tableContainer) return;
   tableContainer.innerHTML = "";
   const filterVal = $("#technician-filter").value;
   
@@ -623,19 +598,6 @@ async function handleWithdrawScan(code) {
           })
         });
         replaceState(nextState);
-      } else {
-        // Fallback local simulado se API estiver off
-        const item = state.items.find(i => i.code === code);
-        state.requests.push({
-          id: Date.now(),
-          code: code,
-          itemName: item ? item.name : "Insumo Scaneado",
-          quantity: 1,
-          technicianName: currentUser.name,
-          destination: withdraw.destination,
-          timestamp: new Date().toLocaleString("pt-BR")
-        });
-        renderAll();
       }
       feedback.className = "feedback-card success";
       feedback.innerHTML = `<h3>Solicitado!</h3><p style="margin-top:4px">Pedido enviado para aprovacao do Administrador.</p>`;
@@ -651,24 +613,6 @@ async function handleWithdrawScan(code) {
           })
         });
         replaceState(nextState);
-      } else {
-        const item = state.items.find(i => i.code === code);
-        if (!item) throw new Error("Insumo nao cadastrado no sistema.");
-        if (item.qty < 1) throw new Error("Estoque zerado para este insumo.");
-        item.qty -= 1;
-        state.history.unshift({
-          id: Date.now(),
-          code,
-          itemName: item.name,
-          userName: currentUser ? currentUser.name : "Operador",
-          userRole: currentUser ? currentUser.role : "admin",
-          destinationName: withdraw.destination,
-          type: "withdrawal",
-          quantity: 1,
-          timestamp: new Date().toLocaleString("pt-BR")
-        });
-        saveState();
-        renderAll();
       }
       feedback.className = "feedback-card success";
       feedback.innerHTML = `<h3>Retirado com sucesso!</h3><p style="margin-top:4px">1 unidade movimentada para ${withdraw.destination}.</p>`;
@@ -697,23 +641,6 @@ async function handleReturnScan(code) {
         })
       });
       replaceState(nextState);
-    } else {
-      const item = state.items.find(i => i.code === code);
-      if (!item) throw new Error("Insumo nao cadastrado no sistema.");
-      item.qty += 1;
-      state.history.unshift({
-        id: Date.now(),
-        code,
-        itemName: item.name,
-        userName: currentUser ? currentUser.name : "Tecnico",
-        userRole: currentUser ? currentUser.role : "tecnico",
-        destinationName: "Estoque",
-        type: "return",
-        quantity: 1,
-        timestamp: new Date().toLocaleString("pt-BR")
-      });
-      saveState();
-      renderAll();
     }
     feedback.className = "feedback-card success";
     feedback.innerHTML = `<h3>Devolvido!</h3><p style="margin-top:4px">1 unidade retornou ao estoque principal.</p>`;
