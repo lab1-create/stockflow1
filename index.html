@@ -16,7 +16,7 @@
           <div class="brand-mark">S</div>
           <div>
             <strong>StockFlow</strong>
-            <span>ERP de estoque técnico</span>
+            <span>ERP de estoque tecnico</span>
           </div>
         </div>
         <div>
@@ -27,46 +27,47 @@
         <label>Senha<input id="login-senha" type="password" autocomplete="current-password" required placeholder="Senha"></label>
         <button class="primary-action wide">Entrar</button>
         <p id="login-error" class="form-error"></p>
-        <p class="muted">Usuários migrados usam o email gerado e a senha igual ao PIN antigo.</p>
+        <p class="muted">Usuarios migrados usam o email gerado e a senha igual ao PIN antigo.</p>
       </form>
     </section>
 
     <div class="app-shell">
       <aside id="sidebar" class="sidebar">
-        <div class="sidebar-head">
-          <div class="brand">
-            <div class="brand-mark">S</div>
-            <div>
-              <strong>StockFlow</strong>
-              <span>Painel</span>
-            </div>
+        <div class="brand">
+          <div class="brand-mark">S</div>
+          <div class="brand-copy">
+            <strong>StockFlow</strong>
+            <span>ERP operacional</span>
           </div>
-          <button id="toggle-sidebar" class="icon-button">◂</button>
         </div>
-        <div class="nav">
-          <button class="nav-item active admin-only" data-view="dashboard">Dashboard</button>
+        <button id="toggle-sidebar" class="icon-button" title="Recolher menu">&#9776;</button>
+        <nav class="nav">
+          <button class="nav-item active" data-view="dashboard">Dashboard</button>
           <button class="nav-item" data-view="produtos">Produtos</button>
           <button class="nav-item" data-view="entradas">Entradas</button>
-          <button class="nav-item" data-view="saidas">Saídas</button>
-          <button class="nav-item admin-only" data-view="historico">Histórico</button>
-          <button class="nav-item admin-only" data-view="relatorios">Relatórios</button>
-          <button class="nav-item admin-only" data-view="usuarios">Usuários</button>
-          <button class="nav-item admin-only" data-view="configuracoes">Configurações</button>
+          <button class="nav-item" data-view="saidas">Saidas</button>
+          <button class="nav-item" data-view="historico">Historico</button>
+          <button class="nav-item" data-view="relatorios">Relatorios</button>
+        </nav>
+        <div class="nav-group admin-only">
+          <span>Administracao</span>
+          <button class="nav-item" data-view="usuarios">Usuarios</button>
+          <button class="nav-item" data-view="configuracoes">Configuracoes</button>
         </div>
         <div class="sidebar-footer">
-          <span id="session-label">Sessão</span>
+          <span id="session-label">Sessao</span>
           <button id="logout-button" class="ghost-action">Sair</button>
         </div>
       </aside>
 
       <main class="workspace">
         <header class="topbar">
-          <button id="mobile-menu" class="icon-button">☰</button>
+          <button id="mobile-menu" class="icon-button">&#9776;</button>
           <div>
             <p class="eyebrow">StockFlow</p>
             <h2 id="view-title">Dashboard</h2>
           </div>
-          <label class="search">Pesquisar<input id="global-search" type="search" placeholder="Produto, código, técnico..."></label>
+          <label class="search">Pesquisar<input id="global-search" type="search" placeholder="Produto, codigo, tecnico..."></label>
         </header>
 
         <section id="dashboard-view" class="view active"></section>
@@ -84,6 +85,8 @@
       <form id="modal-form" method="dialog" class="dialog-body"></form>
     </dialog>
     <div id="toast-stack" class="toast-stack"></div>
+    <div id="loading" class="loading" hidden>Carregando...</div>
+
     <script type="module" src="/js/app.js"></script>
   </body>
 </html>
