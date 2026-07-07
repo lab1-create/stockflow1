@@ -1,0 +1,205 @@
+📝 DADOS PARA SUPABASE - CHECKLIST FINAL
+═══════════════════════════════════════════════════════════════════════════════
+
+VOCÊ PRECISA ADICIONAR ESTES DADOS NO SUPABASE:
+
+═══════════════════════════════════════════════════════════════════════════════
+
+👥 TABELA: app_users (5 usuários)
+────────────────────────────────────────────────────────────────────────────
+
+1️⃣  Administrador
+    ├─ Name: Administrador
+    ├─ Role: admin
+    ├─ PIN: 0000
+    └─ Active: ✓
+
+2️⃣  Luiz (Técnico)
+    ├─ Name: Luiz
+    ├─ Role: tecnico
+    ├─ PIN: 1111
+    └─ Active: ✓
+
+3️⃣  Henrique (Técnico)
+    ├─ Name: Henrique
+    ├─ Role: tecnico
+    ├─ PIN: 1111
+    └─ Active: ✓
+
+4️⃣  Joao (Técnico)
+    ├─ Name: Joao
+    ├─ Role: tecnico
+    ├─ PIN: 1111
+    └─ Active: ✓
+
+5️⃣  Gabriel (Técnico)
+    ├─ Name: Gabriel
+    ├─ Role: tecnico
+    ├─ PIN: 1111
+    └─ Active: ✓
+
+
+🏢 TABELA: destinations (7 destinos)
+────────────────────────────────────────────────────────────────────────────
+
+1️⃣  Bancada 01
+2️⃣  Bancada 02
+3️⃣  Bancada 03
+4️⃣  Bancada 04
+5️⃣  Servico interno
+6️⃣  Estoque de testes
+7️⃣  Outro
+
+
+📦 TABELA: supplies (VAZIA no início)
+────────────────────────────────────────────────────────────────────────────
+
+Deixe vazia!
+
+Você adiciona seus produtos depois via:
+  ✓ Interface web do StockFlow
+  ✓ Ou manualmente pelo SQL Supabase
+  
+Exemplo de produto (para depois):
+  - Code: RESISTOR-1K
+  - Name: Resistor 1kΩ
+  - Category: Eletrônicos
+  - Current qty: 100
+  - Min qty: 20
+  - Supplier: Fornecedor A
+  - Note: Uso comum
+
+
+📊 TABELAS VAZIAS (Preenchidas automaticamente)
+────────────────────────────────────────────────────────────────────────────
+
+Deixe todas vazias:
+  ├─ stock_movements (histórico)
+  ├─ stock_requests (solicitações)
+  └─ usage_kpis (estatísticas)
+
+Essas tabelas preenchem automaticamente quando alguém usar o sistema.
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔧 COMO ADICIONAR NO SUPABASE (Mais Rápido)
+────────────────────────────────────────────────────────────────────────────
+
+1. Abrir: Supabase Dashboard
+
+2. Aba: "SQL Editor"
+
+3. New Query
+
+4. Copiar este SQL:
+
+───────────────────────────────────────────────────────────────────────────
+
+BEGIN;
+
+INSERT INTO app_users (name, role, pin_code, active)
+VALUES
+  ('Administrador', 'admin', '0000', true),
+  ('Luiz', 'tecnico', '1111', true),
+  ('Henrique', 'tecnico', '1111', true),
+  ('Joao', 'tecnico', '1111', true),
+  ('Gabriel', 'tecnico', '1111', true);
+
+INSERT INTO destinations (name, active)
+VALUES
+  ('Bancada 01', true),
+  ('Bancada 02', true),
+  ('Bancada 03', true),
+  ('Bancada 04', true),
+  ('Servico interno', true),
+  ('Estoque de testes', true),
+  ('Outro', true);
+
+COMMIT;
+
+───────────────────────────────────────────────────────────────────────────
+
+5. Colar no SQL Editor
+
+6. Clicar: "Run" (triângulo azul à direita)
+
+7. Aguardar resultado: "Query executed successfully"
+
+8. ✅ PRONTO! Dados adicionados!
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ VERIFICAÇÃO: Está tudo certo?
+────────────────────────────────────────────────────────────────────────────
+
+1. Supabase Dashboard
+
+2. Aba: "Table Editor"
+
+3. Clicar: "app_users"
+   ✓ Deve ter 5 linhas
+
+4. Clicar: "destinations"  
+   ✓ Deve ter 7 linhas
+
+5. Clicar: "supplies"
+   ✓ Pode estar vazio
+
+Se está assim:
+  ✅✅✅ PERFEITO! Dados corretos!
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🚀 PRÓXIMOS PASSOS
+────────────────────────────────────────────────────────────────────────────
+
+Depois de adicionar os dados:
+
+1. ✅ Dados adicionados no Supabase
+2. ⏳ Copiar DATABASE_URL do Supabase
+3. ⏳ Atualizar arquivo .env local
+4. ⏳ Testar localmente: npm start
+5. ⏳ Fazer login com Administrador / 0000
+6. ⏳ Fazer git push
+7. ⏳ Deploy em Render
+8. ⏳ Acessar online!
+
+Guias:
+  - SUPABASE-PASSO-A-PASSO.md (próximo passo)
+  - SUPABASE-DADOS-A-ADICIONAR.md (mais detalhes)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+❓ PERGUNTAS?
+─────────────────────────────────────────────────────────────────────────────
+
+P: Por que 5 usuários?
+R: São os padrão do projeto (1 admin + 4 técnicos). Você adiciona mais depois.
+
+P: Por que PIN 0000 e 1111?
+R: São valores padrão para teste. Trocar depois se for produção real.
+
+P: Posso usar outros nomes?
+R: Sim! Você pode mudar nomes, mas certifique-se que "Administrador" existe.
+
+P: Preciso adicionar produtos agora?
+R: Não! Deixe vazio. Você adiciona depois via interface web.
+
+P: E se errar?
+R: Sem problema! Você pode deletar a linha e adicionar novamente.
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎉 PRONTO PARA ADICIONAR OS DADOS?
+
+1. Copie o SQL acima
+2. Execute no Supabase
+3. Verifique se foi adicionado
+4. Próximo passo: SUPABASE-PASSO-A-PASSO.md
+
+═══════════════════════════════════════════════════════════════════════════════
