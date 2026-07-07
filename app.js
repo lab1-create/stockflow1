@@ -1,9 +1,3 @@
-const { createClient } = require('@supabase/supabase-js');
-
-// Cole suas chaves reais aqui dentro das aspas:
-const supabaseUrl = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxem51YXJjd2l3aW9kdGhka3N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzOTMwNDcsImV4cCI6MjA5ODk2OTA0N30.J2FAa-JcWJuLef6vwI7D3aGu8pwoo1VrKG_RTraHE3Q';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxem51YXJjd2l3aW9kdGhka3N2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzM5MzA0NywiZXhwIjoyMDk4OTY5MDQ3fQ.gu7xaCoVotk8kGpUPCR3Xrw2HPopw9d4OSfHn9dDXFk';
-const supabase = createClient(supabaseUrl, supabaseKey);
 const STORAGE_KEY = "stockflow-state-v2";
 const API_BASE = "/api";
 const LIVE_CHANNEL = "stockflow-live";
