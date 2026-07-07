@@ -1,4 +1,4 @@
-const API_BASE = "/api";
+const API_BASE = "https://stockflow1-ikm0.onrender.com/api";
 
 // Estado interno do App - Alinhado perfeitamente com os ID's do seu HTML
 let state = {
