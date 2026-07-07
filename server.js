@@ -2,17 +2,17 @@ require("dotenv").config();
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
-const { createClient } = require('@supabase/supabase-js');
+const { Pool } = require("pg");
 
 const app = express();
 const port = Number(process.env.PORT || 4173);
-const host = process.env.HOST || "0.0.0.0";
+const host = process.env.HOST || "localhost";
 const liveClients = new Set();
 
-// CONEXÃO OFICIAL COM O SEU SUPABASE
-const supabaseUrl = 'https://pqznuarcwiwiodthdksv.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxem51YXJjd2l3aW9kdGhka3N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzOTMwNDcsImV4cCI6MjA5ODk2OTA0N30.J2FAa-JcWJuLef6vwI7D3aGu8pwoo1VrKG_RTraHE3Q';
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Conexão com PostgreSQL via DATABASE_URL do Supabase
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
 
 app.use(cors());
 app.use(express.json());
@@ -21,27 +21,55 @@ app.use(express.static(path.join(__dirname)));
 
 // Função para buscar o estado atual direto das tabelas do Supabase
 async function fetchState() {
-    const { data: items } = await supabase.from('items').select('*').order('code', { ascending: true });
-    const { data: history } = await supabase.from('history').select('*').order('at', { ascending: false }).limit(100);
-    const { data: requests } = await supabase.from('requests').select('*').order('at', { ascending: false });
-    const { data: kpis } = await supabase.from('usage_kpis').select('*').order('item_code', { ascending: true });
+    try {
+        // Buscar usuários
+        const usersResult = await pool.query('SELECT id, name, role, pin_code FROM app_users WHERE active = true');
+        const users = usersResult.rows;
 
-    return {
-        items: items || [],
-        history: history || [],
-        requests: requests || [],
-        usageKpis: kpis || [],
-        users: [
-            { name: "Administrador", role: "admin" },
-            { name: "Luiz", role: "tecnico" },
-            { name: "Henrique", role: "tecnico" },
-            { name: "Joao", role: "tecnico" },
-            { name: "Gabriel", role: "tecnico" }
-        ],
-        technicians: ["Luiz", "Henrique", "Joao", "Gabriel"],
-        destinations: ["Bancada 01", "Bancada 02", "Bancada 03", "Bancada 04", "Servico interno", "Estoque de testes", "Outro"],
-        adminName: "Administrador"
-    };
+        // Buscar destinos
+        const destResult = await pool.query('SELECT id, name FROM destinations WHERE active = true');
+        const destinations = destResult.rows.map(d => d.name);
+
+        // Buscar insumos
+        const suppliesResult = await pool.query('SELECT id, code, name, category, current_quantity FROM supplies ORDER BY code ASC');
+        const supplies = suppliesResult.rows;
+
+        // Buscar movimentações (últimas 100)
+        const movResult = await pool.query(`
+            SELECT sm.id, sm.supply_id, sm.user_id, sm.destination_id, sm.movement_type, 
+                   sm.quantity, sm.note, sm.created_at,
+                   s.code, s.name as supply_name, u.name as user_name, d.name as dest_name
+            FROM stock_movements sm
+            LEFT JOIN supplies s ON sm.supply_id = s.id
+            LEFT JOIN app_users u ON sm.user_id = u.id
+            LEFT JOIN destinations d ON sm.destination_id = d.id
+            ORDER BY sm.created_at DESC LIMIT 100
+        `);
+        const movements = movResult.rows;
+
+        // Buscar solicitações
+        const reqResult = await pool.query(`
+            SELECT sr.id, sr.supply_id, sr.user_id, sr.destination_id, sr.quantity, sr.status, sr.requested_at,
+                   s.code, s.name as supply_name, u.name as user_name, d.name as dest_name
+            FROM stock_requests sr
+            LEFT JOIN supplies s ON sr.supply_id = s.id
+            LEFT JOIN app_users u ON sr.user_id = u.id
+            LEFT JOIN destinations d ON sr.destination_id = d.id
+            ORDER BY sr.requested_at DESC
+        `);
+        const requests = reqResult.rows;
+
+        return {
+            users: users,
+            destinations: destinations,
+            supplies: supplies,
+            movements: movements,
+            requests: requests
+        };
+    } catch (error) {
+        console.error('Erro ao buscar estado:', error);
+        return { users: [], destinations: [], supplies: [], movements: [], requests: [] };
+    }
 }
 
 function broadcastState(state) {
@@ -60,26 +88,35 @@ app.get("/api/bootstrap", async (req, res, next) => {
 });
 
 app.post("/api/login", async (req, res) => {
-    const { name, pin } = req.body;
-    const users = [
-        { name: "Administrador", role: "admin" },
-        { name: "Luiz", role: "tecnico" },
-        { name: "Henrique", role: "tecnico" },
-        { name: "Joao", role: "tecnico" },
-        { name: "Gabriel", role: "tecnico" }
-    ];
-
-    const user = users.find((u) => u.name.toLowerCase() === (name || "").trim().toLowerCase());
-    if (!user) return res.status(400).json({ error: "Usuário não encontrado." });
-
-    const expectedPin = user.role === "admin" ? "0000" : "1111";
-    if (pin !== expectedPin) return res.status(400).json({ error: "PIN incorreto." });
-
     try {
+        const { name, pin } = req.body;
+        
+        // Buscar usuário no banco de dados
+        const result = await pool.query(
+            'SELECT id, name, role, pin_code FROM app_users WHERE name = $1 AND active = true',
+            [name]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(400).json({ error: "Usuário não encontrado." });
+        }
+
+        const user = result.rows[0];
+        
+        // Verificar PIN
+        if (pin !== user.pin_code) {
+            return res.status(400).json({ error: "PIN incorreto." });
+        }
+
+        // Login bem-sucedido
         const state = await fetchState();
-        res.json({ user, state });
-    } catch {
-        res.json({ user, state: {} });
+        res.json({ 
+            user: { id: user.id, name: user.name, role: user.role }, 
+            state 
+        });
+    } catch (error) {
+        console.error('Erro no login:', error);
+        res.status(500).json({ error: "Erro ao processar login" });
     }
 });
 
@@ -98,19 +135,43 @@ app.get("/api/events", (req, res) => {
 
 app.post("/api/movements/withdraw", async (req, res, next) => {
     try {
-        const { code, technician, destination, quantity } = req.body;
+        const { code, user_id, destination_id, quantity } = req.body;
 
-        const { data: item } = await supabase.from('items').select('*').ilike('code', code).single();
-        if (!item) throw new Error("Insumo não encontrado.");
+        // Buscar insumo
+        const supplyResult = await pool.query(
+            'SELECT id, code, name, current_quantity FROM supplies WHERE code = $1',
+            [code]
+        );
 
-        await supabase.from('requests').insert([
-            { technician, item_code: item.code, item_name: item.name, destination_name: destination, qty: quantity, status: 'pending', at: new Date().toISOString() }
-        ]);
+        if (supplyResult.rows.length === 0) {
+            return res.status(400).json({ error: "Insumo não encontrado." });
+        }
+
+        const supply = supplyResult.rows[0];
+        
+        if (supply.current_quantity < quantity) {
+            return res.status(400).json({ error: "Quantidade insuficiente em estoque." });
+        }
+
+        // Criar movimentação de retirada
+        await pool.query(
+            `INSERT INTO stock_movements 
+            (supply_id, user_id, destination_id, movement_type, quantity, quantity_before, quantity_after, note)
+            VALUES ($1, $2, $3, 'withdrawal', $4, $5, $6, 'Retirada via interface')`,
+            [supply.id, user_id, destination_id, quantity, supply.current_quantity, supply.current_quantity - quantity]
+        );
+
+        // Atualizar quantidade
+        await pool.query(
+            'UPDATE supplies SET current_quantity = current_quantity - $1 WHERE id = $2',
+            [quantity, supply.id]
+        );
 
         const state = await fetchState();
         broadcastState(state);
         res.json(state);
     } catch (error) {
+        console.error('Erro em withdraw:', error);
         next(error);
     }
 });
@@ -118,30 +179,59 @@ app.post("/api/movements/withdraw", async (req, res, next) => {
 app.post("/api/requests/:id/approve", async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { data: request } = await supabase.from('requests').select('*').eq('id', id).single();
-        if (!request) throw new Error("Solicitação não encontrada.");
+        const { admin_id } = req.body;
+
+        // Buscar solicitação
+        const reqResult = await pool.query(
+            'SELECT * FROM stock_requests WHERE id = $1',
+            [id]
+        );
+
+        if (reqResult.rows.length === 0) {
+            return res.status(400).json({ error: "Solicitação não encontrada." });
+        }
+
+        const request = reqResult.rows[0];
 
         if (request.status !== "pending") {
-            res.json(await fetchState());
-            return;
+            const state = await fetchState();
+            return res.json(state);
         }
 
-        await supabase.from('requests').update({ status: 'approved' }).eq('id', id);
+        // Atualizar status da solicitação
+        await pool.query(
+            'UPDATE stock_requests SET status = $1, approved_at = NOW(), approved_by = $2 WHERE id = $3',
+            ['approved', admin_id, id]
+        );
 
-        const { data: item } = await supabase.from('items').select('*').eq('code', request.item_code).single();
-        if (item) {
-            const nextQty = Math.max(0, Number(item.qty) - Number(request.qty));
-            await supabase.from('items').update({ qty: nextQty }).eq('id', item.id);
+        // Executar movimentação
+        const supply = await pool.query(
+            'SELECT id, current_quantity FROM supplies WHERE id = $1',
+            [request.supply_id]
+        );
+
+        if (supply.rows.length > 0) {
+            const qty_before = supply.rows[0].current_quantity;
+            const qty_after = Math.max(0, qty_before - request.quantity);
+
+            await pool.query(
+                `INSERT INTO stock_movements 
+                (supply_id, user_id, destination_id, movement_type, quantity, quantity_before, quantity_after, note)
+                VALUES ($1, $2, $3, 'withdrawal', $4, $5, $6, 'Aprovação de solicitação')`,
+                [request.supply_id, request.user_id, request.destination_id, request.quantity, qty_before, qty_after]
+            );
+
+            await pool.query(
+                'UPDATE supplies SET current_quantity = $1 WHERE id = $2',
+                [qty_after, request.supply_id]
+            );
         }
-
-        await supabase.from('history').insert([
-            { user_name: request.technician, user_role: 'tecnico', type: 'withdrawal', item_code: request.item_code, item_name: request.item_name, destination_name: request.destination_name, qty: request.qty, at: new Date().toISOString() }
-        ]);
 
         const state = await fetchState();
         broadcastState(state);
         res.json(state);
     } catch (error) {
+        console.error('Erro em approve:', error);
         next(error);
     }
 });
@@ -155,6 +245,17 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: err.message || "Erro interno no servidor." });
 });
 
-app.listen(port, host, () => {
-    console.log(`Servidor rodando em http://${host}:${port}`);
+const server = app.listen(port, host, () => {
+    console.log(`✅ Servidor rodando em http://localhost:${port}`);
+    console.log(`📊 Conectado ao Supabase via DATABASE_URL`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+    console.log('\n⏹️  Encerrando servidor...');
+    server.close(async () => {
+        await pool.end();
+        console.log('✅ Conexão encerrada');
+        process.exit(0);
+    });
 });
