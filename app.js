@@ -1,77 +1,58 @@
-const STORAGE_KEY = "stockflow-state-v2";
 const API_BASE = "/api";
-const LIVE_CHANNEL = "stockflow-live";
 
-const seedState = {
+// Estado interno do App - Alinhado perfeitamente com os ID's do seu HTML
+let state = {
   users: [],
   technicians: [],
-  destinations: [],
-  adminName: "Administrador",
+  destinations: ["Bancada 01", "Bancada 02", "Bancada 03", "Laboratório"],
   items: [],
   history: [],
   requests: [],
   usageKpis: []
 };
 
-let state = structuredClone(seedState);
-let usingApi = true; // Força o uso da API em produção
 let currentUser = null;
 let currentView = "dashboard";
 let withdraw = { step: 0, technician: "", destination: "", item: null, qty: 1 };
-let activeRequest = null;
 let refreshTimer = null;
-let liveEvents = null;
 
+// Atalhos seletores do DOM
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
+// Gerenciador de requisições para a API do Render
 async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...options
   });
-
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Erro na API.");
+  if (!response.ok) throw new Error(data.error || "Erro na comunicação com o servidor.");
   return data;
 }
 
-async function loadInitialState() {
+// Inicializar dados do Supabase através do backend
+async function bootstrapApp() {
   try {
     const data = await apiRequest("/bootstrap");
-    replaceState(data);
-    usingApi = true;
+    state.items = data.items || [];
+    state.history = data.history || [];
+    state.requests = data.requests || [];
+    state.technicians = data.technicians || [];
+    state.usageKpis = data.usageKpis || [];
+    
+    renderAll();
   } catch (err) {
-    console.error("Erro ao carregar dados iniciais:", err);
-    usingApi = false;
+    console.error("Erro ao sincronizar com banco:", err);
   }
-}
-
-function replaceState(nextState) {
-  state = { ...structuredClone(seedState), ...nextState };
 }
 
 function isAdmin() {
   return currentUser?.role === "admin";
 }
 
-function allowedViews() {
-  if (isAdmin()) return ["dashboard", "withdraw", "return", "replenish", "items", "history"];
-  return ["withdraw", "return"];
-}
-
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
-}
-
-function findItem(code) {
-  return state.items.find((item) => normalize(item.code) === normalize(code));
-}
-
-function statusFor(item) {
-  if (item.qty <= item.min) return { label: "CRÍTICO", className: "critical" };
-  if (item.qty <= item.min + 2) return { label: "ATENÇÃO", className: "warning" };
-  return { label: "NORMAL", className: "" };
 }
 
 function formatDate(value) {
@@ -84,482 +65,347 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+// Filtros de busca integrados com a sua barra de pesquisa topbar
 function filteredItems() {
   const query = normalize($("#global-search")?.value || "");
   if (!query) return state.items;
-  return state.items.filter((item) => {
-    return [item.code, item.name, item.category, item.supplier, item.note].some((field) => normalize(field).includes(query));
-  });
+  return state.items.filter(item => 
+    [item.code, item.name, item.category, item.supplier].some(f => normalize(f).includes(query))
+  );
 }
 
 function filteredHistory() {
   const query = normalize($("#global-search")?.value || "");
   const technician = $("#technician-filter")?.value || "";
-  return state.history.filter((entry) => {
-    const matchesSearch = !query || [entry.user, entry.type, entry.itemName, entry.itemCode, entry.destination].some((field) => normalize(field).includes(query));
-    const matchesTechnician = !technician || entry.user === technician;
-    return matchesSearch && matchesTechnician;
+  return state.history.filter(entry => {
+    const matchesSearch = !query || [entry.user, entry.type, entry.itemName, entry.itemCode].some(f => normalize(f).includes(query));
+    const matchesTech = !technician || entry.user === technician;
+    return matchesSearch && matchesTech;
   });
 }
 
+// Alternador de Telas (Views) respeitando suas marcações CSS
 function setView(view) {
-  if (!allowedViews().includes(view)) view = allowedViews()[0];
   currentView = view;
-  $$(".view").forEach((node) => node.classList.toggle("active", node.id === `${view}-view`));
-  $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
+  $$(".view").forEach(node => node.classList.toggle("active", node.id === `${view}-view`));
+  $$(".nav-item").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
   
-  const titleNode = $("#view-title");
-  if (titleNode) {
-    titleNode.textContent = {
-      dashboard: "Dashboard",
-      withdraw: "Retirar Insumo",
-      return: "Devolver Insumo",
-      replenish: "Repor Estoque",
-      items: "Insumos",
-      history: "Histórico"
-    }[view];
-  }
+  const titleMap = {
+    dashboard: "Dashboard",
+    withdraw: "Retirar Insumo",
+    return: "Devolver Insumo",
+    replenish: "Repor Estoque",
+    items: "Insumos",
+    history: "Histórico Completo"
+  };
+  if ($("#view-title")) $("#view-title").textContent = titleMap[view] || "Dashboard";
 
   if (view === "withdraw") {
-    withdraw = {
-      step: isAdmin() ? 0 : 2,
-      technician: isAdmin() ? "" : currentUser.name,
-      destination: isAdmin() ? "" : (state.destinations[0] || "Bancada 01"),
-      item: null,
-      qty: 1
-    };
+    withdraw = { step: isAdmin() ? 0 : 2, technician: isAdmin() ? "" : currentUser.name, destination: state.destinations[0], item: null, qty: 1 };
     renderWithdraw();
   }
-
-  if (view === "return") setTimeout(() => $("#return-code")?.focus(), 50);
-  if (view === "replenish") renderReplenishStart();
-
   renderAll();
 }
 
-function applyRoleUi() {
-  const allowed = allowedViews();
-  $$(".nav-item").forEach((button) => {
-    button.hidden = !allowed.includes(button.dataset.view);
-  });
-  $$("[data-view-jump]").forEach((button) => {
-    button.hidden = !allowed.includes(button.dataset.viewJump);
-  });
-
-  const label = $("#session-label");
-  if (label) {
-    label.textContent = currentUser
-      ? `${currentUser.name} - ${isAdmin() ? "Administrador" : "Técnico"}`
-      : "Operação rápida ativa";
-  }
-}
-
-function applyLiveState(nextState) {
-  replaceState(nextState);
-  applyRoleUi();
-  renderAll();
-  showActiveRequestIfPending();
-}
-
-function showActiveRequestIfPending() {
-  if (!currentUser || isAdmin() || !activeRequest) return;
-  const pending = state.requests.find((r) => r.status === "pending" && r.technician === currentUser.name);
-  if (pending) {
-    showWaitingApprovalScreen({ name: pending.itemName });
-  } else if (activeRequest) {
-    // Se sumiu das pendências, significa que foi aprovado
-    activeRequest = null;
-    setView("withdraw");
-  }
-}
-
+// Renderização geral dos painéis e KPIs do seu Dashboard
 function renderAll() {
-  renderDashboard();
-  renderItems();
-  renderHistory();
+  const criticalItems = state.items.filter(i => Number(i.qty) <= Number(i.min));
+  
+  if ($("#metric-total-items")) $("#metric-total-items").textContent = state.items.length;
+  if ($("#metric-critical")) $("#metric-critical").textContent = criticalItems.length;
+  if ($("#metric-withdrawals")) $("#metric-withdrawals").textContent = state.history.filter(h => h.type === "Retirada").length;
+  if ($("#metric-stock")) $("#metric-stock").textContent = state.items.reduce((acc, i) => acc + Number(i.qty), 0);
+
+  // Lista de Itens Críticos
+  const critList = $("#critical-list");
+  if (critList) {
+    critList.innerHTML = criticalItems.length 
+      ? criticalItems.map(i => `<div class="compact-row"><span>${i.name}</span><strong>${i.qty}/${i.min} un</strong></div>`).join("")
+      : `<p class="muted">Nenhum item crítico.</p>`;
+  }
+
+  // Lista de solicitações em tempo real
+  const pendingRequests = state.requests.filter(r => r.status === "pending");
+  if ($("#pending-count")) $("#pending-count").textContent = `${pendingRequests.length} pendentes`;
+  
+  const reqList = $("#pending-requests");
+  if (reqList) {
+    reqList.innerHTML = pendingRequests.length
+      ? pendingRequests.map(r => `
+          <div class="request-card" style="padding:10px; border:1px solid #444; margin-bottom:8px; border-radius:4px;">
+            <p><strong>${r.technician}</strong> quer retirar ${r.qty}x ${r.itemName}</p>
+            <button class="primary-action" data-approve="${r.id}" style="margin-top:5px;">Liberar</button>
+          </div>
+        `).join("")
+      : `<p class="muted">Nenhuma solicitação pendente.</p>`;
+    
+    $$("[data-approve]").forEach(btn => btn.addEventListener("click", () => approveRequest(btn.dataset.approve)));
+  }
+
+  // Últimas movimentações
+  const recHist = $("#recent-history");
+  if (recHist) {
+    const data = filteredHistory().slice(0, 5);
+    recHist.innerHTML = data.length
+      ? `<div class="table-body">` + data.map(h => `<div class="table-row"><span>${h.itemName}</span><span>${h.user}</span><span>${h.type}</span><span>${formatDate(h.at)}</span></div>`).join("") + `</div>`
+      : `<p class="muted">Nenhum registro.</p>`;
+  }
+
+  renderItemsGrid();
+  renderHistoryTable();
   renderTechnicianFilter();
 }
 
-function renderDashboard() {
-  const stockTotal = state.items.reduce((sum, item) => sum + Number(item.qty), 0);
-  const critical = state.items.filter((item) => item.qty <= item.min);
-  const withdrawalsToday = state.history.filter((entry) => entry.type === "Retirada").length;
-
-  if ($("#metric-total-items")) $("#metric-total-items").textContent = state.items.length;
-  if ($("#metric-critical")) $("#metric-critical").textContent = critical.length;
-  if ($("#metric-withdrawals")) $("#metric-withdrawals").textContent = withdrawalsToday;
-  if ($("#metric-stock")) $("#metric-stock").textContent = stockTotal.toLocaleString("pt-BR");
-  
-  renderPendingRequests();
-
-  const critList = $("#critical-list");
-  if (critList) {
-    critList.innerHTML = critical.length
-      ? critical.map((item) => compactItemRow(item)).join("")
-      : `<p class="muted">Nenhum item crítico no momento.</p>`;
-  }
-
-  const recHist = $("#recent-history");
-  if (recHist) {
-    const history = filteredHistory().slice(0, 6);
-    recHist.innerHTML = history.length
-      ? history.map(historyRow).join("")
-      : `<p class="muted">Nenhuma movimentação encontrada.</p>`;
-  }
-}
-
-function renderPendingRequests() {
-  const pendingRequests = state.requests.filter((r) => r.status === "pending");
-  const countNode = $("#pending-count");
-  if (countNode) countNode.textContent = `${pendingRequests.length} pendente${pendingRequests.length === 1 ? "" : "s"}`;
-  
-  const reqList = $("#pending-requests");
-  if (!reqList) return;
-
-  reqList.innerHTML = pendingRequests.length
-    ? pendingRequests.map((request) => `
-        <article class="request-card">
-          <div>
-            <strong>${request.technician} solicitou ${request.itemName}</strong>
-            <span>${request.itemCode} - ${request.destination} - ${request.qty} un. - ${formatDate(request.at)}</span>
-          </div>
-          <div class="scan-row">
-            <input class="request-scan scan-input" data-request-code="${request.id}" placeholder="Bipe ${request.itemCode}">
-            <button class="primary-action" data-approve-request="${request.id}">Liberar</button>
-          </div>
-        </article>
-      `).join("")
-    : `<p class="muted">Nenhuma solicitação pendente agora.</p>`;
-
-  $$("[data-approve-request]").forEach((button) => {
-    button.addEventListener("click", () => approveRequest(button.dataset.approveRequest));
-  });
-  $$(".request-scan").forEach((input) => {
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") approveRequest(input.dataset.requestCode);
-    });
-  });
-}
-
-function compactItemRow(item) {
-  const status = statusFor(item);
-  return `
-    <div class="compact-row">
-      <strong>${item.name}</strong>
-      <span>${item.code}</span>
-      <span>${item.qty}/${item.min}</span>
-      <span class="pill ${status.className}">${status.label}</span>
+// Grid de Insumos da Tela de Insumos
+function renderItemsGrid() {
+  const grid = $("#items-grid");
+  if (!grid) return;
+  grid.innerHTML = filteredItems().map(i => `
+    <div class="item-card" style="padding:15px; border:1px solid #444; border-radius:4px; background:#1e1e1e;">
+      <h3>${i.name}</h3>
+      <p class="muted">Código: ${i.code} | Categoria: ${i.category}</p>
+      <p>Estoque: <strong>${i.qty}</strong> (Mínimo: ${i.min})</p>
+      <button class="ghost-action" data-edit-item="${i.code}" style="margin-top:8px;">Editar</button>
     </div>
-  `;
+  `).join("");
+
+  $$("[data-edit-item]").forEach(btn => btn.addEventListener("click", () => openItemDialog(btn.dataset.editItem)));
 }
 
-function historyRow(entry) {
-  return `
+// Tabela da Tela Histórico Completo
+function renderHistoryTable() {
+  const table = $("#history-table");
+  if (!table) return;
+  table.innerHTML = filteredHistory().map(h => `
     <div class="table-row">
-      <strong>${entry.itemName}</strong>
-      <span>${entry.user}</span>
-      <span>${entry.type}</span>
-      <span>${entry.qty} un. - ${formatDate(entry.at)}</span>
+      <span><strong>${h.itemName}</strong> (${h.itemCode})</span>
+      <span>Técnico: ${h.user}</span>
+      <span>${h.type} (${h.qty} un)</span>
+      <span class="muted">${formatDate(h.at)}</span>
     </div>
-  `;
+  `).join("");
 }
 
-function renderWithdraw() {
-  const stepper = $("#withdraw-stepper");
-  if (stepper) {
-    stepper.innerHTML = [0, 1, 2, 3].map((step) => `<span class="step ${step <= withdraw.step ? "done" : ""}"></span>`).join("");
-  }
+function renderTechnicianFilter() {
+  const select = $("#technician-filter");
+  if (!select || select.options.length > 1) return;
+  state.technicians.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t; opt.textContent = t;
+    select.appendChild(opt);
+  });
+}
 
+// Fluxo de Retirada Dinâmico dentro do seu contêiner original
+function renderWithdraw() {
   const content = $("#withdraw-content");
   if (!content) return;
 
   if (withdraw.step === 0) {
     content.innerHTML = `
-      <div class="flow-title">
-        <p class="eyebrow">Etapa 1</p>
-        <h2>Quem vai utilizar?</h2>
-      </div>
-      <div class="choice-grid">
-        ${state.technicians.map((name) => `<button class="choice" data-technician="${name}">${name}</button>`).join("")}
+      <h3>Quem vai retirar?</h3>
+      <div class="form-grid" style="margin-top:10px;">
+        ${state.technicians.map(t => `<button class="primary-action" data-select-tech="${t}">${t}</button>`).join("")}
       </div>
     `;
-    $$("[data-technician]").forEach((button) => {
-      button.addEventListener("click", () => {
-        withdraw.technician = button.dataset.technician;
-        withdraw.step = 2;
-        renderWithdraw();
-      });
-    });
+    $$("[data-select-tech]").forEach(b => b.addEventListener("click", () => { withdraw.technician = b.dataset.selectTech; withdraw.step = 2; renderWithdraw(); }));
     return;
   }
 
   if (withdraw.step === 2) {
     content.innerHTML = `
-      <div class="flow-title">
-        <p class="eyebrow">${withdraw.technician}</p>
-        <h2>Aguardando leitura do produto...</h2>
+      <h3>Bipe o Insumo</h3>
+      <div class="scan-row" style="margin-top:10px;">
+        <input id="withdraw-code-input" class="scan-input" placeholder="Código do insumo">
+        <button id="withdraw-find-btn" class="primary-action">Identificar</button>
       </div>
-      <div class="scan-row">
-        <input id="withdraw-code" class="scan-input" placeholder="Bipe ou digite o código">
-        <button id="scan-button" class="primary-action">Identificar</button>
-      </div>
-      <div class="result-box muted">Bipe ou digite o código do produto cadastrado.</div>
     `;
-    $("#scan-button").addEventListener("click", identifyWithdrawItem);
-    $("#withdraw-code").addEventListener("keydown", (event) => {
-      if (event.key === "Enter") identifyWithdrawItem();
-    });
-    setTimeout(() => $("#withdraw-code")?.focus(), 50);
+    const findItemAction = () => {
+      const item = state.items.find(i => normalize(i.code) === normalize($("#withdraw-code-input").value));
+      if (!item) return alert("Insumo não encontrado!");
+      withdraw.item = item; withdraw.step = 3; renderWithdraw();
+    };
+    $("#withdraw-find-btn").addEventListener("click", findItemAction);
+    $("#withdraw-code-input").addEventListener("keydown", (e) => { if (e.key === "Enter") findItemAction(); });
     return;
   }
 
   if (withdraw.step === 3) {
-    const item = withdraw.item;
-    const status = statusFor(item);
     content.innerHTML = `
-      <div class="flow-title">
-        <p class="eyebrow">Etapa Final</p>
-        <h2>Confirmar Solicitação?</h2>
-      </div>
-      <div class="confirm-box">
-        <div class="item-preview">
-          <strong>${item.name}</strong>
-          <span>Código ${item.code} - Estoque atual: ${item.qty}</span>
-          <span class="pill ${status.className}">${status.label}</span>
-        </div>
-        <label class="qty-row">
-          Quantidade
-          <input id="withdraw-qty" type="number" min="1" max="${item.qty}" value="${withdraw.qty}">
-        </label>
-        <label class="qty-row">
-          Destino/Bancada
-          <select id="withdraw-dest">
+      <h3>Confirmar Retirada de ${withdraw.item.name}</h3>
+      <div class="form-grid" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;">
+        <label>Quantidade <input id="withdraw-qty-input" type="number" min="1" value="1" max="${withdraw.item.qty}"></label>
+        <label>Destino 
+          <select id="withdraw-dest-input" style="width:100%; height:38px; background:#222; color:#fff; border-radius:4px; border:1px solid #444;">
             ${state.destinations.map(d => `<option value="${d}">${d}</option>`).join("")}
           </select>
         </label>
-        <button id="confirm-withdraw" class="primary-action wide" ${item.qty <= 0 ? "disabled" : ""}>Solicitar Liberação</button>
+        <button id="withdraw-submit-btn" class="primary-action wide">Solicitar Liberação</button>
       </div>
     `;
-    $("#confirm-withdraw").addEventListener("click", confirmWithdraw);
-  }
-}
-
-function identifyWithdrawItem() {
-  const item = findItem($("#withdraw-code").value);
-  if (!item) {
-    $(".result-box").textContent = "Insumo não encontrado.";
-    return;
-  }
-  withdraw.item = item;
-  withdraw.qty = 1;
-  withdraw.step = 3;
-  renderWithdraw();
-}
-
-async function confirmWithdraw() {
-  const qty = Math.max(1, Number($("#withdraw-qty").value || 1));
-  const destination = $("#withdraw-dest").value;
-  const item = withdraw.item;
-
-  try {
-    const nextState = await apiRequest("/movements/withdraw", {
-      method: "POST",
-      body: JSON.stringify({
-        code: item.code,
-        technician: withdraw.technician,
-        destination: destination,
-        quantity: qty
-      })
+    $("#withdraw-submit-btn").addEventListener("click", async () => {
+      try {
+        await apiRequest("/movements/withdraw", {
+          method: "POST",
+          body: JSON.stringify({
+            code: withdraw.item.code,
+            technician: withdraw.technician,
+            destination: $("#withdraw-dest-input").value,
+            quantity: Number($("#withdraw-qty-input").value)
+          })
+        });
+        alert("Solicitação enviada!");
+        setView("dashboard");
+        bootstrapApp();
+      } catch (e) { alert(e.message); }
     });
-    activeRequest = { technician: withdraw.technician, itemCode: item.code };
-    applyLiveState(nextState);
-  } catch (error) {
-    alert(error.message);
   }
 }
 
-async function approveRequest(requestId) {
-  const input = $(`[data-request-code="${requestId}"]`);
-  if (input && !input.value.trim()) {
-    input.focus();
-    return;
-  }
-  try {
-    const nextState = await apiRequest(`/requests/${requestId}/approve`, { method: "POST" });
-    applyLiveState(nextState);
-  } catch (error) {
-    alert(error.message);
-  }
-}
-
-function showWaitingApprovalScreen(item) {
-  const content = $("#withdraw-content");
-  if (content) {
-    content.innerHTML = `
-      <div class="status-screen waiting">
-        <span class="status-signal"></span>
-        <p class="eyebrow">Ação necessária</p>
-        <h2>Aguardando liberação do Administrador</h2>
-        <div class="result-box"><strong>${item.name}</strong></div>
-      </div>
-    `;
-  }
-}
-
-function renderItems() {
-  const grid = $("#items-grid");
-  if (!grid) return;
-
-  const items = filteredItems();
-  grid.innerHTML = items.length
-    ? items.map((item) => {
-        const status = statusFor(item);
-        return `
-          <article class="item-card">
-            <div class="panel-head">
-              <h3>${item.name}</h3>
-              <span class="pill ${status.className}">${status.label}</span>
-            </div>
-            <div class="item-meta">
-              <span>Código: ${item.code}</span>
-              <span>Categoria: ${item.category}</span>
-              <span>Estoque Atual: ${item.qty}</span>
-              <span>Mínimo: ${item.min}</span>
-            </div>
-          </article>
-        `;
-      }).join("")
-    : `<p class="muted">Nenhum insumo encontrado.</p>`;
-}
-
-function renderHistory() {
-  const table = $("#history-table");
-  if (table) {
-    table.innerHTML = filteredHistory().length
-      ? filteredHistory().map(historyRow).join("")
-      : `<p class="muted">Nenhuma movimentação encontrada.</p>`;
-  }
-}
-
-function renderTechnicianFilter() {
-  const select = $("#technician-filter");
-  if (!select) return;
-  const selected = select.value;
-  select.innerHTML = `<option value="">Todos os técnicos</option>${state.technicians.map((name) => `<option value="${name}">${name}</option>`).join("")}`;
-  select.value = selected;
-}
-
-async function handleLogin(event) {
-  event.preventDefault();
-  const name = $("#login-user").value.trim();
-  const pin = $("#login-pin").value.trim();
-  const error = $("#login-error");
-  if (error) error.textContent = "";
-
-  try {
-    const result = await apiRequest("/login", {
-      method: "POST",
-      body: JSON.stringify({ name, pin })
-    });
-    currentUser = result.user;
-    sessionStorage.setItem("stockflow-user", JSON.stringify(currentUser));
-    document.body.classList.remove("locked");
-    applyLiveState(result.state);
-    startRealtimeRefresh();
-    setView(isAdmin() ? "dashboard" : "withdraw");
-  } catch (loginError) {
-    if (error) error.textContent = loginError.message;
-  }
-}
-
+// Gerenciamento de Devolução e Reposição
 async function handleReturn() {
   const code = $("#return-code").value;
-  const result = $("#return-result");
   try {
-    const nextState = await apiRequest("/movements/return", {
+    await apiRequest("/movements/return", {
       method: "POST",
-      body: JSON.stringify({ code, quantity: 1, technician: currentUser.name })
+      body: JSON.stringify({ code, quantity: 1, technician: currentUser?.name || "Geral" })
     });
-    if (result) result.textContent = "Devolvido com sucesso!";
+    $("#return-result").textContent = "Devolvido com sucesso!";
     $("#return-code").value = "";
-    applyLiveState(nextState);
-  } catch (error) {
-    if (result) result.textContent = error.message;
-  }
-}
-
-function renderReplenishStart() {
-  const card = $("#replenish-view .flow-card");
-  if (card) {
-    card.innerHTML = `
-      <button id="open-replenish" class="primary-action wide">Iniciar Entrada de Insumos</button>
-      <div id="replenish-result" class="result-box muted"></div>
-    `;
-    $("#open-replenish").addEventListener("click", renderReplenishForm);
-  }
-}
-
-function renderReplenishForm() {
-  const card = $("#replenish-view .flow-card");
-  if (card) {
-    card.innerHTML = `
-      <input id="replenish-code" class="scan-input" placeholder="Código do Insumo">
-      <input id="replenish-qty" type="number" value="1" min="1" style="margin-top:10px;">
-      <button id="replenish-button" class="primary-action wide" style="margin-top:10px;">Salvar Entrada</button>
-    `;
-    $("#replenish-button").addEventListener("click", handleReplenish);
-  }
+    bootstrapApp();
+  } catch (e) { $("#return-result").textContent = e.message; }
 }
 
 async function handleReplenish() {
   const code = $("#replenish-code").value;
   const qty = Number($("#replenish-qty").value);
   try {
-    const nextState = await apiRequest("/movements/replenish", {
+    await apiRequest("/movements/replenish", {
       method: "POST",
       body: JSON.stringify({ code, quantity: qty })
     });
-    alert("Estoque reposto!");
-    setView("dashboard");
-    applyLiveState(nextState);
-  } catch (error) {
-    alert(error.message);
-  }
+    $("#replenish-result").textContent = "Estoque atualizado com sucesso!";
+    $("#replenish-code").value = "";
+    bootstrapApp();
+  } catch (e) { $("#replenish-result").textContent = e.message; }
 }
 
-async function refreshFromApi() {
-  if (!currentUser) return;
+async function approveRequest(id) {
   try {
-    const nextState = await apiRequest("/bootstrap");
-    applyLiveState(nextState);
-  } catch (e) {
-    console.error("Erro no polling:", e);
+    await apiRequest(`/requests/${id}/approve`, { method: "POST" });
+    bootstrapApp();
+  } catch (e) { alert(e.message); }
+}
+
+// Manipulação dos Modais (Dialogs) de Criação do Usuário e Insumos
+function openItemDialog(code = null) {
+  const dialog = $("#item-dialog");
+  const form = $("#item-form");
+  if (!dialog || !form) return;
+  
+  if (code) {
+    const item = state.items.find(i => i.code === code);
+    if (!item) return;
+    $("#dialog-title").textContent = "Editar Insumo";
+    $("#item-original-code").value = item.code;
+    $("#item-code").value = item.code;
+    $("#item-name").value = item.name;
+    $("#item-category").value = item.category;
+    $("#item-qty").value = item.qty;
+    $("#item-min").value = item.min;
+    $("#item-supplier").value = item.supplier || "";
+    $("#item-note").value = item.note || "";
+  } else {
+    $("#dialog-title").textContent = "Novo Insumo";
+    form.reset();
+    $("#item-original-code").value = "";
+  }
+  dialog.showModal();
+}
+
+// Evento de Login sintonizado com o banco Supabase
+async function handleLogin(e) {
+  e.preventDefault();
+  const name = $("#login-user").value;
+  const pin = $("#login-pin").value;
+  try {
+    const data = await apiRequest("/login", {
+      method: "POST",
+      body: JSON.stringify({ name, pin })
+    });
+    currentUser = data.user;
+    $("#session-label").textContent = `${currentUser.name} (${currentUser.role})`;
+    $("#login-screen").style.display = "none";
+    bootstrapApp();
+    refreshTimer = setInterval(bootstrapApp, 4000); // Polling em tempo real a cada 4 segundos
+  } catch (err) {
+    $("#login-error").textContent = err.message;
   }
 }
 
-function startRealtimeRefresh() {
-  if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(refreshFromApi, 3000); // Sincroniza a cada 3 segundos
-}
-
+// Configuração de Eventos Globais do seu HTML original
 document.addEventListener("DOMContentLoaded", () => {
   $("#login-form")?.addEventListener("submit", handleLogin);
+  $("#return-button")?.addEventListener("click", handleReturn);
   $("#return-code")?.addEventListener("keydown", (e) => { if (e.key === "Enter") handleReturn(); });
+  $("#replenish-button")?.addEventListener("click", handleReplenish);
   $("#global-search")?.addEventListener("input", renderAll);
   $("#technician-filter")?.addEventListener("change", renderAll);
-  
-  $$(".nav-item").forEach(item => {
-    item.addEventListener("click", () => setView(item.dataset.view));
+
+  // Navegação lateral dinâmica
+  $$(".nav-item").forEach(btn => {
+    btn.addEventListener("click", () => setView(btn.dataset.view));
   });
 
-  loadInitialState().then(() => {
-    const stored = sessionStorage.getItem("stockflow-user");
-    if (stored) {
-      currentUser = JSON.parse(stored);
-      document.body.classList.remove("locked");
-      applyRoleUi();
-      startRealtimeRefresh();
-      setView(isAdmin() ? "dashboard" : "withdraw");
-    }
+  // Jump-links internos do seu dashboard
+  $$("[data-view-jump]").forEach(btn => {
+    btn.addEventListener("click", () => setView(btn.dataset.viewJump));
+  });
+
+  // Gatilhos dos Modais originais
+  $("#new-item-button")?.addEventListener("click", () => openItemDialog());
+  $("#close-dialog")?.addEventListener("click", () => $("#item-dialog").close());
+  $("#new-user-button")?.addEventListener("click", () => $("#user-dialog").showModal());
+  $("#close-user-dialog")?.addEventListener("click", () => $("#user-dialog").close());
+
+  // Gravação de novo insumo via modal dialog
+  $("#item-form")?.addEventListener("submit", async (e) => {
+    const origCode = $("#item-original-code").value;
+    const body = {
+      code: $("#item-code").value,
+      name: $("#item-name").value,
+      category: $("#item-category").value,
+      qty: Number($("#item-qty").value),
+      min: Number($("#item-min").value),
+      supplier: $("#item-supplier").value,
+      note: $("#item-note").value
+    };
+    try {
+      const url = origCode ? `/items/${origCode}` : "/items";
+      await apiRequest(url, { method: origCode ? "PUT" : "POST", body: JSON.stringify(body) });
+      bootstrapApp();
+    } catch (err) { alert(err.message); }
+  });
+
+  // Gravação de novo usuário via modal dialog
+  $("#user-form")?.addEventListener("submit", async (e) => {
+    const body = {
+      name: $("#user-name").value,
+      role: $("#user-role").value,
+      pin: $("#user-pin").value
+    };
+    try {
+      await apiRequest("/users", { method: "POST", body: JSON.stringify(body) });
+      alert("Usuário adicionado!");
+      bootstrapApp();
+    } catch (err) { alert(err.message); }
+  });
+
+  $("#logout-button")?.addEventListener("click", () => {
+    clearInterval(refreshTimer);
+    currentUser = null;
+    $("#login-form").reset();
+    $("#login-error").textContent = "";
+    $("#login-screen").style.display = "flex";
   });
 });
