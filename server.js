@@ -6,7 +6,7 @@ const { Pool } = require("pg");
 
 const app = express();
 const port = Number(process.env.PORT || 4173);
-const host = process.env.HOST || "localhost";
+const host = process.env.HOST || "0.0.0.0";
 const liveClients = new Set();
 
 // Conexão com PostgreSQL via DATABASE_URL do Supabase
@@ -246,7 +246,7 @@ app.use((err, req, res, next) => {
 });
 
 const server = app.listen(port, host, () => {
-    console.log(`✅ Servidor rodando em http://localhost:${port}`);
+    console.log(`✅ Servidor rodando em http://0.0.0.0:${port}`);
     console.log(`📊 Conectado ao Supabase via DATABASE_URL`);
 });
 
