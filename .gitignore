@@ -18,6 +18,34 @@ rad.json
 *.g.xlf
 #License-files
 *.bclicense
+
+### StockFlow ###
+# Variáveis de ambiente (contém senhas e credenciais)
+.env
+.env.local
+.env.*.local
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Logs
+logs/
+*.log
+
+# Docker
+stockflow_pgdata/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
 *.flf
 #Test results file
 TestResults.xml

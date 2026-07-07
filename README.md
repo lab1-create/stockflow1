@@ -2,6 +2,19 @@
 
 Sistema de controle de insumos para assistencia tecnica.
 
+## 🚀 Guia Rápido de Setup
+
+**Para compartilhar com outros usuários?** Consulte o guia completo:
+
+📖 **[SETUP-LOCAL.md](SETUP-LOCAL.md)** - Instruções detalhadas para desenvolvimento local
+
+Escolha uma opção:
+- **Docker Compose** (Recomendado - funciona em qualquer SO)
+- **Node.js Local** (Precisa de PostgreSQL instalado)
+- **Supabase Cloud** (Banco na nuvem)
+
+---
+
 ## O jeito certo para acessar a qualquer hora
 
 Para abrir o StockFlow no navegador a qualquer hora, sem rodar PowerShell, sem clicar em arquivo local e sem depender do computador da loja ligado, publique o app na nuvem.

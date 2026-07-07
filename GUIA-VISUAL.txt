@@ -1,0 +1,164 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                         🎉 STOCKFLOW - GUIA VISUAL                              ║
+║                   Para Compartilhar e Usar o Projeto                            ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 📥 VOCÊ RECEBEU O STOCKFLOW - O QUE FAZER?                                     │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────┐
+    │  PASSO 1: Verificar Pré-requisitos      │
+    └─────────────────────────────────────────┘
+              ↓
+    ┌─────────────────────────────────────────┐
+    │  □ Docker Desktop instalado?            │
+    │    (https://www.docker.com)             │
+    └─────────────────────────────────────────┘
+              ↓
+    ┌─────────────────────────────────────────┐
+    │  PASSO 2: Iniciar o Projeto             │
+    └─────────────────────────────────────────┘
+              ↓
+         ╔════════════════════╗
+         ║   WINDOWS?         ║
+         ╚════════════════════╝
+          ╱          ╲
+        SIM           NÃO
+        │             │
+        ↓             ↓
+    ┌──────────┐   ┌──────────┐
+    │ Execute: │   │ Execute: │
+    │ Duplo    │   │ bash     │
+    │ clique   │   │ startup  │
+    │ em       │   │ .sh      │
+    │STARTUP   │   └──────────┘
+    │.bat      │
+    └──────────┘
+        │
+        ↓ (Espere 2-3 minutos)
+    ┌─────────────────────────────────────────┐
+    │  PASSO 3: Acessar no Navegador          │
+    └─────────────────────────────────────────┘
+        │
+        ↓
+    ┌─────────────────────────────────────────┐
+    │  Abra: http://localhost:4173            │
+    └─────────────────────────────────────────┘
+        │
+        ↓
+    ┌─────────────────────────────────────────┐
+    │  PASSO 4: Fazer Login                   │
+    └─────────────────────────────────────────┘
+        │
+        ↓
+        ┌──────────────────────────────────┐
+        │ Administrador?   OU   Técnico?   │
+        ├──────────────────────────────────┤
+        │ Usuário: Administrador           │
+        │ PIN: 0000                        │
+        └──────────────────────────────────┘
+              OU
+        ┌──────────────────────────────────┐
+        │ Usuário: Luiz/Henrique/Joao/...  │
+        │ PIN: 1111                        │
+        └──────────────────────────────────┘
+        │
+        ↓
+    ┌─────────────────────────────────────────┐
+    │  ✅ PRONTO! Usar o StockFlow            │
+    └─────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 🆘 ALGO NÃO FUNCIONOU?                                                         │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────┐
+    │ 1️⃣  Erro ao executar STARTUP.bat?      │
+    │     → Verificar se Docker está ligado  │
+    │     → Executar como Administrador       │
+    └─────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────┐
+    │ 2️⃣  Não consegue acessar localhost:4173?
+    │     → Esperar mais 2-3 minutos         │
+    │     → Verificar se porta 4173 está ok  │
+    └─────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────┐
+    │ 3️⃣  Login não funciona?                │
+    │     → Verificar PIN digitado corretamente
+    │     → Usar exatamente: 0000 (admin)    │
+    │     → Usar exatamente: 1111 (técnico)  │
+    └─────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────┐
+    │ 4️⃣  Ainda não funciona?                │
+    │     → Abrir arquivo: SETUP-LOCAL.md    │
+    │     → Ler seção: Troubleshooting       │
+    │     → Executar comandos recomendados   │
+    └─────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 📚 ARQUIVOS DE REFERÊNCIA                                                      │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+    📖 SETUP-LOCAL.md ..................... Guia completo de configuração
+    🔐 COMPARTILHAMENTO.md ............... Como compartilhar com segurança
+    ✅ CHECKLIST.txt ..................... Verificação antes de usar
+    📊 STATUS.md ......................... O que foi feito neste projeto
+    📁 ESTRUTURA.txt ..................... Mapa visual dos arquivos
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 🎯 CHECKLIST RÁPIDO                                                            │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+    Antes de Começar:
+    ☐ Docker Desktop instalado
+    ☐ Projeto baixado/descompactado
+
+    Durante a Execução:
+    ☐ Duplo-clique em STARTUP.bat (Windows)
+    ☐ Ou: bash startup.sh (Linux/Mac)
+    ☐ Esperar até: "Servidor rodando..."
+    ☐ Sem mensagens de erro
+
+    Acessar:
+    ☐ Abrir: http://localhost:4173
+    ☐ Página carrega normalmente
+    ☐ Consegue ver tela de login
+
+    Login:
+    ☐ Digitar usuário correto
+    ☐ Digitar PIN correto
+    ☐ Conseguir acessar dashboard
+
+    ✅ Tudo Certo? Sucesso! 🎉
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 📞 SUPORTE                                                                     │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+    Para Problemas Comuns:
+    1. Consulte: SETUP-LOCAL.md (Seção Troubleshooting)
+    2. Verifique: CHECKLIST.txt
+    3. Leia: COMPARTILHAMENTO.md
+
+    Para Dúvidas:
+    → Contate o desenvolvedor
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 🚀 PRÓXIMOS PASSOS                                                             │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+    1. Explorar o Dashboard
+    2. Fazer Login com diferentes usuários
+    3. Testar Retirada de Insumo
+    4. Testar Devolução
+    5. Verificar Histórico
+
+    Tudo funcionando? ✅ Parabéns!
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                        APROVEITE O STOCKFLOW! 🎉                               ║
+╚════════════════════════════════════════════════════════════════════════════════╝
