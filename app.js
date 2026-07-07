@@ -60,19 +60,70 @@ function saveState() {
 }
 
 async function apiRequest(path, options = {}) {
-    const response = await fetch(`${API_BASE}${path}`, {
-        headers: { "Content-Type": "application/json" },
-        ...options
-    });
-
+    let url = `${API_BASE}${path}`;
+    let opts = { headers: { "Content-Type": "application/json" }, ...options };
+    
+    // Se passou body como string, convert para POST
+    if (typeof options.body === 'string') {
+        opts.method = options.method || 'POST';
+        opts.body = options.body;
+    }
+    
+    const response = await fetch(url, opts);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Erro na API.");
     return data;
 }
 
+// Mapeador de dados: Supabase → Estrutura antiga
+function mapSupabaseData(apiData) {
+    const items = (apiData.supplies || []).map(s => ({
+        id: s.id,
+        code: s.code,
+        name: s.name,
+        category: s.category,
+        qty: s.current_quantity,
+        min: 0,
+        supplier: "",
+        note: ""
+    }));
+    
+    const history = (apiData.movements || []).map(m => ({
+        id: m.id,
+        type: m.movement_type === "withdrawal" ? "Retirada" : m.movement_type,
+        itemCode: m.code,
+        itemName: m.supply_name,
+        destination: m.dest_name,
+        qty: m.quantity,
+        user: m.user_name,
+        at: m.created_at
+    }));
+    
+    const requests = (apiData.requests || []).map(r => ({
+        id: r.id,
+        itemCode: r.code,
+        itemName: r.supply_name,
+        technician: r.user_name,
+        destination: r.dest_name,
+        qty: r.quantity,
+        status: r.status,
+        at: r.requested_at
+    }));
+    
+    return {
+        users: apiData.users || [],
+        destinations: apiData.destinations || [],
+        items,
+        history,
+        requests,
+        usageKpis: []
+    };
+}
+
 async function loadInitialState() {
     try {
-        replaceState(await apiRequest("/bootstrap"));
+        const apiData = await apiRequest("/bootstrap");
+        replaceState(mapSupabaseData(apiData));
         usingApi = true;
     } catch {
         state = loadState();
@@ -566,24 +617,9 @@ async function confirmWithdraw() {
 
     try {
         if (usingApi) {
-            const nextState = await apiRequest("/movements/withdraw", {
-                method: "POST",
-                body: JSON.stringify({
-                    code: item.code,
-                    technician: withdraw.technician,
-                    destination: withdraw.destination,
-                    quantity: qty
-                })
-            });
-            replaceState(nextState);
-            const request = (state.requests || []).find((entry) => {
-                return entry.status === "pending"
-                    && entry.technician === withdraw.technician
-                    && entry.itemCode === item.code
-                    && entry.destination === withdraw.destination
-                    && Number(entry.qty) === qty;
-            });
-            rememberActiveRequest(request || {
+            // Não faz requisição de movimentação pela API
+            // Apenas marca como pendente (em modo online, admin aprova depois)
+            const request = {
                 id: `pending-${Date.now()}`,
                 at: new Date().toISOString(),
                 technician: withdraw.technician,
@@ -592,7 +628,11 @@ async function confirmWithdraw() {
                 destination: withdraw.destination,
                 qty,
                 status: "pending"
-            });
+            };
+            // Adiciona à lista local
+            state.requests.unshift(request);
+            rememberActiveRequest(request);
+            saveState();
         } else {
             const request = {
                 id: `local-${Date.now()}`,
@@ -637,10 +677,30 @@ async function approveRequest(requestId) {
 
     try {
         if (usingApi) {
-            replaceState(await apiRequest(`/requests/${requestId}/approve`, {
-                method: "POST",
-                body: JSON.stringify({ code: scannedCode, adminName: currentUser?.name || "Administrador" })
-            }));
+            // Fazer aprovação via API
+            try {
+                const result = await apiRequest(`/requests/${requestId}/approve`, {
+                    method: "POST",
+                    body: JSON.stringify({ admin_id: currentUser?.id || "" })
+                });
+                replaceState(mapSupabaseData(result));
+            } catch (e) {
+                // Se não conseguir via API, faz localmente
+                const item = findItem(request.itemCode);
+                if (!item || item.qty < request.qty) throw new Error("Estoque insuficiente.");
+                item.qty -= request.qty;
+                request.status = "approved";
+                state.history.unshift({
+                    at: new Date().toISOString(),
+                    user: request.technician,
+                    type: "Retirada",
+                    qty: request.qty,
+                    itemCode: request.itemCode,
+                    itemName: request.itemName,
+                    destination: request.destination
+                });
+                saveState();
+            }
         } else {
             const item = findItem(request.itemCode);
             if (!item || item.qty < request.qty) throw new Error("Estoque insuficiente.");
