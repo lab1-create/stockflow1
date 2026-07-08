@@ -1,26 +1,329 @@
-/* Centraliza a tela de login */
-#login-view {
-    display: flex !important;
+/* =========================================
+   Reset e Configurações Básicas
+========================================= */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: #f4f6f8;
+    color: #333;
+}
+
+/* =========================================
+   Tela de Login
+========================================= */
+#login-screen {
+    display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
     width: 100%;
+    background-color: #222;
 }
 
-/* Centraliza os formulários (Insumos, Usuários, Repor) */
-.view.active {
-    display: flex !important;
+.login-card {
+    background: #fff;
+    padding: 2.5rem;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 400px;
+    display: flex;
     flex-direction: column;
+    gap: 1.5rem;
+}
+
+.login-brand {
+    display: flex;
     align-items: center;
+    gap: 10px;
+}
+
+.brand-mark {
+    background-color: #e53935; /* Detalhe em Vermelho */
+    color: white;
+    width: 40px;
+    height: 40px;
+    display: flex;
     justify-content: center;
-    min-height: 80vh;
+    align-items: center;
+    font-weight: bold;
+    font-size: 1.5rem;
+    border-radius: 4px;
+}
+
+.login-error {
+    color: #e53935;
+    font-size: 0.9rem;
+    text-align: center;
+    min-height: 20px;
+}
+
+/* =========================================
+   Estrutura Principal (App Shell)
+========================================= */
+.app-shell {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Menu Lateral */
+.sidebar {
+    width: 260px;
+    background-color: #1a1a1a;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+}
+
+.sidebar .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 2rem;
+}
+
+.sidebar .brand span {
+    display: block;
+    font-size: 0.8rem;
+    color: #aaa;
+}
+
+.nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.nav-item {
+    background: transparent;
+    color: #ccc;
+    border: none;
+    padding: 0.8rem 1rem;
+    text-align: left;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.nav-item:hover {
+    background: #333;
+    color: white;
+}
+
+.nav-item.active {
+    background-color: #e53935; /* Detalhe em Vermelho */
+    color: white;
+    font-weight: bold;
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid #333;
+    font-size: 0.85rem;
+}
+
+.status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background-color: #4caf50;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+/* Área de Trabalho (Workspace) */
+.workspace {
+    flex: 1;
+    background-color: #f4f6f8;
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    background: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.search input {
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 250px;
+    margin-left: 10px;
+}
+
+/* =========================================
+   Controle de Views (Ocultar/Mostrar telas)
+========================================= */
+.view {
+    display: none;
+}
+
+.view.active {
+    display: block;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================================
+   Dashboard e Métricas
+========================================= */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.metric {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    border-left: 4px solid #555;
+    display: flex;
+    flex-direction: column;
+}
+
+.metric strong {
+    font-size: 2rem;
+    margin-top: 10px;
+    color: #111;
+}
+
+.metric.danger {
+    border-left-color: #e53935; /* Vermelho para Críticos */
+}
+
+.metric.success {
+    border-left-color: #4caf50;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 1.5rem;
+}
+
+.panel {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+/* =========================================
+   Formulários, Inputs e Botões
+========================================= */
+label {
+    display: flex;
+    flex-direction: column;
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    color: #444;
+}
+
+input {
+    padding: 0.75rem;
+    margin-top: 0.4rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+input:focus {
+    border-color: #e53935;
+    outline: none;
+}
+
+.primary-action {
+    background-color: #e53935; /* Botões principais em Vermelho */
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1rem;
+    transition: background 0.2s;
+}
+
+.primary-action:hover {
+    background-color: #c62828;
+}
+
+.primary-action.wide {
     width: 100%;
 }
 
-/* Evita que os formulários fiquem gigantes e descentralizados */
-.form-container, .card, #login-view form {
+.ghost-action {
+    background: transparent;
+    color: #666;
+    border: 1px solid #ccc;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.ghost-action:hover {
+    background: #eee;
+}
+
+/* =========================================
+   Modais (Dialogs)
+========================================= */
+dialog {
+    margin: auto;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    padding: 2rem;
     width: 100%;
-    max-width: 450px;
-    margin: 0 auto;
+    max-width: 500px;
+}
+
+dialog::backdrop {
+    background: rgba(0,0,0,0.6);
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-grid label.span-2 {
+    grid-column: span 2;
 }

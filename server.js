@@ -6,7 +6,7 @@ const { Pool } = require("pg");
 
 const app = express();
 const port = Number(process.env.PORT || 4173);
-const host = "0.0.0.0"; 
+const host = "0.0.0.0";
 const liveClients = new Set();
 
 // CORREÇÃO CRÍTICA DO IPV6 (Supabase / Render):
@@ -103,9 +103,10 @@ app.get("/api/bootstrap", async (req, res, next) => {
 app.post("/api/login", async (req, res) => {
     try {
         const { name, pin } = req.body;
-        
+
+        // CORREÇÃO 1: ILIKE em vez de = (ignora maiúsculas/minúsculas)
         const result = await pool.query(
-            'SELECT id, name, role, pin_code FROM app_users WHERE name = $1 AND active = true',
+            'SELECT id, name, role, pin_code FROM app_users WHERE name ILIKE $1 AND active = true',
             [name]
         );
 
@@ -114,18 +115,20 @@ app.post("/api/login", async (req, res) => {
         }
 
         const user = result.rows[0];
-        if (pin !== user.pin_code) {
+
+        // CORREÇÃO 2: Conversão de tipos com String()
+        if (String(pin) !== String(user.pin_code)) {
             return res.status(400).json({ error: "PIN incorreto." });
         }
 
         const state = await fetchState();
-        res.json({ 
-            user: { id: user.id, name: user.name, role: user.role }, 
-            state 
+        res.json({
+            user: { id: user.id, name: user.name, role: user.role },
+            state
         });
     } catch (error) {
         console.error('Erro ao processar login:', error);
-        res.status(500).json({ error: "Erro interno ao processar login" });
+        res.status(500).json({ error: "Erro interno no servidor. Verifique o terminal." });
     }
 });
 
@@ -169,17 +172,17 @@ app.post("/api/movements/withdraw", async (req, res, next) => {
     try {
         const { code, user_id, destination_id, quantity } = req.body;
         const supplyResult = await pool.query('SELECT id, current_quantity FROM supplies WHERE code = $1', [code]);
-        
+
         if (supplyResult.rows.length === 0) {
             return res.status(400).json({ error: "Insumo não encontrado." });
         }
-        
+
         const supply = supplyResult.rows[0];
         await pool.query(
             'UPDATE supplies SET current_quantity = current_quantity - $1 WHERE id = $2',
             [quantity, supply.id]
         );
-        
+
         const state = await fetchState();
         broadcastState(state);
         res.json(state);

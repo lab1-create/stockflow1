@@ -4,7 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>StockFlow</title>
-    <link rel="stylesheet" href="style.css">
+    <!-- CORRIGIDO: Agora apontando para styles.css (com S) para trazer seu visual vermelho de volta -->
+    <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <section id="login-screen" class="login-screen">
@@ -13,7 +14,7 @@
           <div class="brand-mark">S</div>
           <div>
             <strong>StockFlow</strong>
-            <span>Acesso operacional</span>
+            <span>Acesso operational</span>
           </div>
         </div>
         <div class="flow-title">
@@ -250,6 +251,8 @@
       </form>
     </dialog>
 
+    <!-- CORRIGIDO: Adicionado ambos os scripts necessários para o login e dashboard funcionarem em sincronia -->
     <script src="app.js"></script>
+    <script src="dashboard.js"></script>
   </body>
 </html>
