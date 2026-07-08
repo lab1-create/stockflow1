@@ -104,8 +104,9 @@ app.post("/api/login", async (req, res) => {
     try {
         const { name, pin } = req.body;
         
+        // CORREÇÃO 1: ILIKE em vez de = (ignora maiúsculas/minúsculas)
         const result = await pool.query(
-            'SELECT id, name, role, pin_code FROM app_users WHERE name = $1 AND active = true',
+            'SELECT id, name, role, pin_code FROM app_users WHERE name ILIKE $1 AND active = true',
             [name]
         );
 
@@ -114,7 +115,9 @@ app.post("/api/login", async (req, res) => {
         }
 
         const user = result.rows[0];
-        if (pin !== user.pin_code) {
+        
+        // CORREÇÃO 2: Conversão de tipos com String()
+        if (String(pin) !== String(user.pin_code)) {
             return res.status(400).json({ error: "PIN incorreto." });
         }
 
@@ -125,7 +128,7 @@ app.post("/api/login", async (req, res) => {
         });
     } catch (error) {
         console.error('Erro ao processar login:', error);
-        res.status(500).json({ error: "Erro interno ao processar login" });
+        res.status(500).json({ error: "Erro interno no servidor. Verifique o terminal." });
     }
 });
 
