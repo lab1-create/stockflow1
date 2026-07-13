@@ -186,17 +186,30 @@ app.put("/api/supplies/:code", async (req, res, next) => {
 
 app.post("/api/movements/withdraw", async (req, res, next) => {
     try {
-        const { code, user_id, destination_id, quantity } = req.body;
-        const supplyResult = await pool.query('SELECT id, current_quantity FROM supplies WHERE code = $1', [code]);
+        // A tela envia "technician" e "destination" em vez de IDs
+        const { code, technician, destination, quantity } = req.body;
+        
+        // 1. Achar o Insumo
+        const supplyResult = await pool.query('SELECT id FROM supplies WHERE code = $1', [code]);
+        if (supplyResult.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
+        const supplyId = supplyResult.rows[0].id;
 
-        if (supplyResult.rows.length === 0) {
-            return res.status(400).json({ error: "Insumo não encontrado." });
+        // 2. Achar o Usuário (Técnico)
+        const userResult = await pool.query('SELECT id FROM app_users WHERE name = $1', [technician]);
+        if (userResult.rows.length === 0) return res.status(400).json({ error: "Usuário não encontrado." });
+        const userId = userResult.rows[0].id;
+
+        // 3. Achar o Destino (Opcional - vamos tentar achar o ID, se não achar fica nulo)
+        let destId = null;
+        if (destination) {
+            const destResult = await pool.query('SELECT id FROM destinations WHERE name = $1', [destination]);
+            if (destResult.rows.length > 0) destId = destResult.rows[0].id;
         }
 
-        const supply = supplyResult.rows[0];
+        // 4. Criar a Solicitação Pendente
         await pool.query(
-            'UPDATE supplies SET current_quantity = current_quantity - $1 WHERE id = $2',
-            [quantity, supply.id]
+            'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status) VALUES ($1, $2, $3, $4, $5)',
+            [supplyId, userId, destId, Number(quantity) || 1, 'pending']
         );
 
         const state = await fetchState();
