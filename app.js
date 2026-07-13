@@ -113,6 +113,9 @@ function filteredHistory() {
 
 // Alternador de Telas (Views) respeitando suas marcações CSS
 function setView(view) {
+    if (!isAdmin() && ["dashboard", "replenish", "items"].includes(view)) {
+        view = "withdraw";
+    }
     currentView = view;
     $$(".view").forEach(node => node.classList.toggle("active", node.id === `${view}-view`));
     $$(".nav-item").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
@@ -363,6 +366,10 @@ async function handleLogin(e) {
         currentUser = data.user;
         $("#session-label").textContent = `${currentUser.name} (${currentUser.role})`;
         $("#login-screen").style.display = "none";
+        
+        $$("[data-admin-only]").forEach(el => el.style.display = isAdmin() ? "" : "none");
+        setView(isAdmin() ? "dashboard" : "withdraw");
+        
         bootstrapApp();
         refreshTimer = setInterval(bootstrapApp, 4000); // Polling em tempo real a cada 4 segundos
     } catch (err) {
