@@ -34,10 +34,38 @@ async function apiRequest(path, options = {}) {
 async function bootstrapApp() {
     try {
         const data = await apiRequest("/bootstrap");
-        state.items = data.items || [];
-        state.history = data.history || [];
+        
+        // Mapeando "supplies" do banco para "items" que o frontend espera
+        state.items = (data.supplies || []).map(s => ({
+            ...s,
+            qty: s.current_quantity || 0,
+            min: s.min_quantity || 0,
+            supplier: s.supplier || "",
+            note: s.note || ""
+        }));
+
+        // Mapeando "movements" do banco para "history" que o frontend espera
+        state.history = (data.movements || []).map(m => ({
+            id: m.id,
+            user: m.user_name || "Sistema",
+            type: m.movement_type === 'out' ? 'Retirada' : (m.movement_type === 'in' ? 'Reposição' : 'Devolução'),
+            itemCode: m.code,
+            itemName: m.supply_name,
+            qty: m.quantity,
+            destination: m.dest_name || "-",
+            timestamp: m.created_at,
+            note: m.note || ""
+        }));
+
         state.requests = data.requests || [];
-        state.technicians = data.technicians || [];
+        
+        // Mapeando "users" para a lista de nomes dos "technicians"
+        state.technicians = (data.users || []).map(u => u.name);
+        
+        if (data.destinations && data.destinations.length > 0) {
+            state.destinations = data.destinations;
+        }
+
         state.usageKpis = data.usageKpis || [];
 
         renderAll();
