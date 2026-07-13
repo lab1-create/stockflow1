@@ -397,6 +397,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Gravação de novo insumo via modal dialog
     $("#item-form")?.addEventListener("submit", async (e) => {
+        e.preventDefault(); // IMPORTANTE para evitar que a página recarregue
         const origCode = $("#item-original-code").value;
         const body = {
             code: $("#item-code").value,
@@ -408,8 +409,9 @@ document.addEventListener("DOMContentLoaded", () => {
             note: $("#item-note").value
         };
         try {
-            const url = origCode ? `/items/${origCode}` : "/items";
+            const url = origCode ? `/supplies/${origCode}` : "/supplies";
             await apiRequest(url, { method: origCode ? "PUT" : "POST", body: JSON.stringify(body) });
+            $("#item-dialog").close();
             bootstrapApp();
         } catch (err) { alert(err.message); }
     });

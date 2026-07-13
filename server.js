@@ -166,6 +166,24 @@ app.post("/api/supplies", async (req, res, next) => {
     }
 });
 
+app.put("/api/supplies/:code", async (req, res, next) => {
+    try {
+        const { code } = req.params;
+        const { name, category, qty } = req.body;
+        
+        await pool.query(
+            'UPDATE supplies SET name = $1, category = $2, current_quantity = $3 WHERE code = $4',
+            [name, category, Number(qty || 0), code]
+        );
+        
+        const state = await fetchState();
+        broadcastState(state);
+        res.json(state);
+    } catch (error) {
+        next(error);
+    }
+});
+
 app.post("/api/movements/withdraw", async (req, res, next) => {
     try {
         const { code, user_id, destination_id, quantity } = req.body;
