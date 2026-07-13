@@ -207,6 +207,61 @@ app.post("/api/movements/withdraw", async (req, res, next) => {
     }
 });
 
+app.post("/api/movements/return", async (req, res, next) => {
+    try {
+        const { code, quantity } = req.body;
+        const supplyResult = await pool.query('SELECT id FROM supplies WHERE code = $1', [code]);
+        if (supplyResult.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
+        
+        await pool.query(
+            'UPDATE supplies SET current_quantity = current_quantity + $1 WHERE id = $2',
+            [Number(quantity) || 0, supplyResult.rows[0].id]
+        );
+        
+        const state = await fetchState();
+        broadcastState(state);
+        res.json(state);
+    } catch (error) { next(error); }
+});
+
+app.post("/api/movements/replenish", async (req, res, next) => {
+    try {
+        const { code, quantity } = req.body;
+        const supplyResult = await pool.query('SELECT id FROM supplies WHERE code = $1', [code]);
+        if (supplyResult.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
+        
+        await pool.query(
+            'UPDATE supplies SET current_quantity = current_quantity + $1 WHERE id = $2',
+            [Number(quantity) || 0, supplyResult.rows[0].id]
+        );
+        
+        const state = await fetchState();
+        broadcastState(state);
+        res.json(state);
+    } catch (error) { next(error); }
+});
+
+app.post("/api/requests/:id/approve", async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const requestResult = await pool.query(
+            "UPDATE stock_requests SET status = 'approved', approved_at = now() WHERE id = $1 RETURNING supply_id, quantity",
+            [id]
+        );
+        if (requestResult.rows.length > 0) {
+            const { supply_id, quantity } = requestResult.rows[0];
+            await pool.query(
+                'UPDATE supplies SET current_quantity = current_quantity - $1 WHERE id = $2',
+                [quantity, supply_id]
+            );
+        }
+        
+        const state = await fetchState();
+        broadcastState(state);
+        res.json(state);
+    } catch (error) { next(error); }
+});
+
 app.get("/api/events", (req, res) => {
     res.writeHead(200, {
         "Content-Type": "text/event-stream",
