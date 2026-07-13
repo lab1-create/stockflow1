@@ -280,7 +280,7 @@ app.post("/api/requests/:id/approve", async (req, res, next) => {
     try {
         const { id } = req.params;
         const requestResult = await pool.query(
-            "UPDATE stock_requests SET status = 'approved', approved_at = now() WHERE id = $1 RETURNING supply_id, quantity, user_id, destination_id",
+            "UPDATE stock_requests SET status = 'approved', approved_at = now() WHERE id = $1 AND status = 'pending' RETURNING supply_id, quantity, user_id, destination_id",
             [id]
         );
         if (requestResult.rows.length > 0) {

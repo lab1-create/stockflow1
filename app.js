@@ -177,7 +177,7 @@ function renderAll() {
         `).join("")
             : `<p class="muted">Nenhuma solicitação pendente.</p>`;
 
-        $$("[data-approve]").forEach(btn => btn.addEventListener("click", () => approveRequest(btn.dataset.approve)));
+        $$("[data-approve]").forEach(btn => btn.addEventListener("click", () => approveRequest(btn.dataset.approve, btn)));
     }
 
     // Últimas movimentações
@@ -328,11 +328,15 @@ async function handleReplenish() {
     } catch (e) { $("#replenish-result").textContent = e.message; }
 }
 
-async function approveRequest(id) {
+async function approveRequest(id, btn) {
+    if (btn) btn.disabled = true;
     try {
         await apiRequest(`/requests/${id}/approve`, { method: "POST" });
         bootstrapApp();
-    } catch (e) { alert(e.message); }
+    } catch (e) { 
+        alert(e.message);
+        if (btn) btn.disabled = false;
+    }
 }
 
 // Manipulação dos Modais (Dialogs) de Criação do Usuário e Insumos
