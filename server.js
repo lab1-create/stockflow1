@@ -150,13 +150,13 @@ app.post("/api/users", async (req, res, next) => {
 
 app.post("/api/supplies", async (req, res, next) => {
     try {
-        const { code, name, category, qty } = req.body;
+        const { code, name, category, qty, min, supplier, note } = req.body;
         if (!code || !name || !category) {
             return res.status(400).json({ error: "Campos obrigatórios ausentes." });
         }
         await pool.query(
-            'INSERT INTO supplies (code, name, category, current_quantity, active) VALUES ($1, $2, $3, $4, true)',
-            [code, name, category, Number(qty || 0)]
+            'INSERT INTO supplies (code, name, category, current_quantity, minimum_quantity, supplier, note) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [code, name, category, Number(qty || 0), Number(min || 0), supplier || null, note || null]
         );
         const state = await fetchState();
         broadcastState(state);
@@ -169,11 +169,11 @@ app.post("/api/supplies", async (req, res, next) => {
 app.put("/api/supplies/:code", async (req, res, next) => {
     try {
         const { code } = req.params;
-        const { name, category, qty } = req.body;
+        const { name, category, qty, min, supplier, note } = req.body;
         
         await pool.query(
-            'UPDATE supplies SET name = $1, category = $2, current_quantity = $3 WHERE code = $4',
-            [name, category, Number(qty || 0), code]
+            'UPDATE supplies SET name = $1, category = $2, current_quantity = $3, minimum_quantity = $4, supplier = $5, note = $6 WHERE code = $7',
+            [name, category, Number(qty || 0), Number(min || 0), supplier || null, note || null, code]
         );
         
         const state = await fetchState();
