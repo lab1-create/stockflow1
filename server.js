@@ -126,7 +126,7 @@ app.post("/api/login", async (req, res) => {
         });
     } catch (error) {
         console.error('Erro ao processar login:', error);
-        res.status(500).json({ error: "Erro interno no servidor. Verifique o terminal." });
+        res.status(500).json({ error: "Erro interno: " + (error.message || "Verifique o terminal.") });
     }
 });
 
@@ -209,7 +209,7 @@ app.get("*", (req, res) => {
 
 app.use((err, req, res, next) => {
     console.error("❌ Erro capturado pelo middleware:", err);
-    res.status(500).json({ error: err.message || "Erro interno no servidor." });
+    res.status(500).json({ error: "Erro interno: " + (err.message || "Verifique o terminal.") });
 });
 
 const server = app.listen(port, host, () => {
