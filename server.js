@@ -222,15 +222,29 @@ app.post("/api/movements/withdraw", async (req, res, next) => {
 
 app.post("/api/movements/return", async (req, res, next) => {
     try {
-        const { code, quantity } = req.body;
-        const supplyResult = await pool.query('SELECT id FROM supplies WHERE code = $1', [code]);
+        const { code, quantity, technician } = req.body;
+        const supplyResult = await pool.query('SELECT id, current_quantity FROM supplies WHERE code = $1', [code]);
         if (supplyResult.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
         
+        const qBefore = supplyResult.rows[0].current_quantity;
+        const qAfter = qBefore + (Number(quantity) || 0);
+
+        let userId = null;
+        if (technician) {
+            const userResult = await pool.query('SELECT id FROM app_users WHERE name = $1', [technician]);
+            if (userResult.rows.length > 0) userId = userResult.rows[0].id;
+        }
+
         await pool.query(
-            'UPDATE supplies SET current_quantity = current_quantity + $1 WHERE id = $2',
-            [Number(quantity) || 0, supplyResult.rows[0].id]
+            'UPDATE supplies SET current_quantity = $1 WHERE id = $2',
+            [qAfter, supplyResult.rows[0].id]
         );
         
+        await pool.query(
+            'INSERT INTO stock_movements (supply_id, user_id, movement_type, quantity, quantity_before, quantity_after) VALUES ($1, $2, $3, $4, $5, $6)',
+            [supplyResult.rows[0].id, userId, 'return', Number(quantity) || 0, qBefore, qAfter]
+        );
+
         const state = await fetchState();
         broadcastState(state);
         res.json(state);
@@ -240,12 +254,20 @@ app.post("/api/movements/return", async (req, res, next) => {
 app.post("/api/movements/replenish", async (req, res, next) => {
     try {
         const { code, quantity } = req.body;
-        const supplyResult = await pool.query('SELECT id FROM supplies WHERE code = $1', [code]);
+        const supplyResult = await pool.query('SELECT id, current_quantity FROM supplies WHERE code = $1', [code]);
         if (supplyResult.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
         
+        const qBefore = supplyResult.rows[0].current_quantity;
+        const qAfter = qBefore + (Number(quantity) || 0);
+
         await pool.query(
-            'UPDATE supplies SET current_quantity = current_quantity + $1 WHERE id = $2',
-            [Number(quantity) || 0, supplyResult.rows[0].id]
+            'UPDATE supplies SET current_quantity = $1 WHERE id = $2',
+            [qAfter, supplyResult.rows[0].id]
+        );
+
+        await pool.query(
+            'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after) VALUES ($1, $2, $3, $4, $5)',
+            [supplyResult.rows[0].id, 'replenishment', Number(quantity) || 0, qBefore, qAfter]
         );
         
         const state = await fetchState();
@@ -258,15 +280,27 @@ app.post("/api/requests/:id/approve", async (req, res, next) => {
     try {
         const { id } = req.params;
         const requestResult = await pool.query(
-            "UPDATE stock_requests SET status = 'approved', approved_at = now() WHERE id = $1 RETURNING supply_id, quantity",
+            "UPDATE stock_requests SET status = 'approved', approved_at = now() WHERE id = $1 RETURNING supply_id, quantity, user_id, destination_id",
             [id]
         );
         if (requestResult.rows.length > 0) {
-            const { supply_id, quantity } = requestResult.rows[0];
-            await pool.query(
-                'UPDATE supplies SET current_quantity = current_quantity - $1 WHERE id = $2',
-                [quantity, supply_id]
-            );
+            const { supply_id, quantity, user_id, destination_id } = requestResult.rows[0];
+            
+            const supplyResult = await pool.query('SELECT current_quantity FROM supplies WHERE id = $1', [supply_id]);
+            if (supplyResult.rows.length > 0) {
+                const qBefore = supplyResult.rows[0].current_quantity;
+                const qAfter = qBefore - quantity;
+
+                await pool.query(
+                    'UPDATE supplies SET current_quantity = $1 WHERE id = $2',
+                    [qAfter, supply_id]
+                );
+
+                await pool.query(
+                    'INSERT INTO stock_movements (supply_id, user_id, destination_id, movement_type, quantity, quantity_before, quantity_after) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                    [supply_id, user_id, destination_id, 'withdrawal', quantity, qBefore, qAfter]
+                );
+            }
         }
         
         const state = await fetchState();

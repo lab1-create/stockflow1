@@ -110,7 +110,8 @@ function filteredItems() {
 
 function filteredHistory() {
     const query = normalize($("#global-search")?.value || "");
-    const technician = $("#technician-filter")?.value || "";
+    const technician = isAdmin() ? ($("#technician-filter")?.value || "") : currentUser.name;
+    
     return state.history.filter(entry => {
         const matchesSearch = !query || [entry.user, entry.type, entry.itemName, entry.itemCode].some(f => normalize(f).includes(query));
         const matchesTech = !technician || entry.user === technician;
