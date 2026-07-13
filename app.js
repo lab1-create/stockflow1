@@ -57,7 +57,14 @@ async function bootstrapApp() {
             note: m.note || ""
         }));
 
-        state.requests = data.requests || [];
+        // Mapeando "requests" para o formato esperado pelo frontend
+        state.requests = (data.requests || []).map(r => ({
+            id: r.id,
+            technician: r.user_name || "Desconhecido",
+            qty: r.quantity || 1,
+            itemName: r.supply_name || "Insumo Desconhecido",
+            status: r.status
+        }));
         
         // Mapeando "users" para a lista de nomes dos "technicians"
         state.technicians = (data.users || []).map(u => u.name);
