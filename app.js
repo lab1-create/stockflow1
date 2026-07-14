@@ -150,6 +150,7 @@ function setView(view) {
 
 // Renderização geral dos painéis e KPIs do seu Dashboard
 function renderAll() {
+    renderSearchResults();
     const criticalItems = state.items.filter(i => Number(i.qty) <= Number(i.min));
 
     if ($("#metric-total-items")) $("#metric-total-items").textContent = state.items.length;
@@ -495,4 +496,65 @@ document.addEventListener("DOMContentLoaded", () => {
         $("#login-error").textContent = "";
         $("#login-screen").style.display = "flex";
     });
+
+    // Fechar resultados de busca ao clicar fora
+    document.addEventListener("click", (e) => {
+        if (!e.target.closest(".search")) {
+            const resultsDiv = $("#search-results");
+            if (resultsDiv) resultsDiv.style.display = "none";
+        }
+    });
 });
+
+// Renderização dos Resultados de Pesquisa Global
+function renderSearchResults() {
+    const input = $("#global-search");
+    const resultsDiv = $("#search-results");
+    
+    if (!input || !resultsDiv) return;
+    
+    const query = normalize(input.value);
+
+    if (!query) {
+        resultsDiv.style.display = "none";
+        return;
+    }
+
+    const matchingItems = state.items.filter(i => 
+        normalize(i.name).includes(query) || 
+        normalize(i.code).includes(query)
+    );
+
+    if (matchingItems.length === 0) {
+        resultsDiv.innerHTML = "<div style='padding: 0.5rem 1rem; color: #666;'>Nenhum insumo encontrado.</div>";
+    } else {
+        resultsDiv.innerHTML = matchingItems.map(i => `
+            <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.2s;" 
+                 onclick="copySearchCode('${i.code}')"
+                 onmouseover="this.style.background='#f9f9f9'"
+                 onmouseout="this.style.background='transparent'"
+                 title="Clique para copiar o código">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong style="color: #333;">${i.name}</strong>
+                    <span style="font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; color: #555;">${i.code}</span>
+                </div>
+                <div style="margin-top: 4px; font-size: 0.85em; color: #666; display: flex; gap: 10px;">
+                    <span>Estoque: <strong style="color: ${Number(i.qty) <= Number(i.min) ? '#e53935' : '#2e7d32'};">${i.qty}</strong></span>
+                    <span>Mín: ${i.min}</span>
+                </div>
+            </div>
+        `).join("");
+    }
+    resultsDiv.style.display = "block";
+}
+
+function copySearchCode(code) {
+    navigator.clipboard.writeText(code).then(() => {
+        const resultsDiv = $("#search-results");
+        if (resultsDiv) resultsDiv.style.display = "none";
+        alert("Código " + code + " copiado para a área de transferência!");
+    }).catch(err => {
+        alert("Erro ao copiar o código: " + err);
+    });
+}
+

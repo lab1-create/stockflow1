@@ -68,9 +68,10 @@
             <p class="eyebrow">Assistencia tecnica</p>
             <h1 id="view-title">Dashboard</h1>
           </div>
-          <label class="search">
+          <label class="search" style="position: relative;">
             <span>Pesquisar</span>
-            <input id="global-search" type="search" placeholder="Digite: iphone 11, TAG, Luiz...">
+            <input id="global-search" type="search" placeholder="Digite: iphone 11, TAG, Luiz..." autocomplete="off">
+            <div id="search-results" style="display: none; position: absolute; top: 100%; right: 0; width: 350px; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 400px; overflow-y: auto; z-index: 1000; text-align: left; padding: 0.5rem 0;"></div>
           </label>
         </header>
 
