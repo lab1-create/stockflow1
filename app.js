@@ -318,16 +318,26 @@ function renderWithdraw() {
     }
 }
 
-// Gerenciamento de Devolução e Reposição
-async function handleReturn() {
-    const code = $("#return-code").value;
+// Ação de Devolução
+$("#return-button")?.addEventListener("click", () => returnItem());
+async function returnItem() {
+    const codeInput = $("#return-code");
+    const qtyInput = $("#return-quantity");
+    if (!codeInput || !codeInput.value) return;
+
     try {
-        await apiRequest("/movements/return", {
-            method: "POST",
-            body: JSON.stringify({ code, quantity: 1, technician: currentUser?.name || "Geral" })
-        });
-        $("#return-result").textContent = "Devolvido com sucesso!";
-        $("#return-code").value = "";
+        const payload = { code: normalize(codeInput.value), quantity: parseInt(qtyInput?.value || "1", 10) };
+        if (isAdmin()) {
+            const tech = prompt("Nome do Técnico devolvendo:");
+            if (tech) payload.technician = tech;
+        } else {
+            payload.technician = currentUser.name;
+        }
+
+        await apiRequest("/movements/return", { method: "POST", body: payload });
+        $("#return-result").textContent = "Item devolvido com sucesso!";
+        codeInput.value = "";
+        if (qtyInput) qtyInput.value = "1";
         bootstrapApp();
     } catch (e) { $("#return-result").textContent = e.message; }
 }
