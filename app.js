@@ -111,11 +111,14 @@ function filteredItems() {
 function filteredHistory() {
     const query = normalize($("#global-search")?.value || "");
     const technician = isAdmin() ? ($("#technician-filter")?.value || "") : currentUser.name;
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
     return state.history.filter(entry => {
         const matchesSearch = !query || [entry.user, entry.type, entry.itemName, entry.itemCode].some(f => normalize(f).includes(query));
         const matchesTech = !technician || entry.user === technician;
-        return matchesSearch && matchesTech;
+        const matchesDate = isAdmin() || new Date(entry.at) >= sevenDaysAgo;
+        return matchesSearch && matchesTech && matchesDate;
     });
 }
 

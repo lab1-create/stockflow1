@@ -235,6 +235,21 @@ app.post("/api/movements/return", async (req, res, next) => {
             if (userResult.rows.length > 0) userId = userResult.rows[0].id;
         }
 
+        if (userId) {
+            const heldResult = await pool.query(`
+                SELECT 
+                  COALESCE(SUM(CASE WHEN movement_type = 'withdrawal' THEN quantity ELSE 0 END), 0) -
+                  COALESCE(SUM(CASE WHEN movement_type = 'return' THEN quantity ELSE 0 END), 0) as items_held
+                FROM stock_movements
+                WHERE user_id = $1 AND supply_id = $2
+            `, [userId, supplyResult.rows[0].id]);
+            
+            const itemsHeld = Number(heldResult.rows[0].items_held) || 0;
+            if (itemsHeld < (Number(quantity) || 0)) {
+                return res.status(400).json({ error: `Você possui apenas ${itemsHeld} unidade(s) deste item em mãos para devolver.` });
+            }
+        }
+
         await pool.query(
             'UPDATE supplies SET current_quantity = $1 WHERE id = $2',
             [qAfter, supplyResult.rows[0].id]
