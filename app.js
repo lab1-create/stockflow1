@@ -326,7 +326,15 @@ async function returnItem() {
     if (!codeInput || !codeInput.value) return;
 
     try {
-        const payload = { code: normalize(codeInput.value), quantity: parseInt(qtyInput?.value || "1", 10) };
+        const inputCode = normalize(codeInput.value);
+        const item = state.items.find(i => normalize(i.code) === inputCode);
+        
+        if (!item) {
+            $("#return-result").textContent = "Insumo não encontrado no sistema.";
+            return;
+        }
+
+        const payload = { code: item.code, quantity: parseInt(qtyInput?.value || "1", 10) };
         if (isAdmin()) {
             const tech = prompt("Nome do Técnico devolvendo:");
             if (tech) payload.technician = tech;
