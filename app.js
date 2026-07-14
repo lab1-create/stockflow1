@@ -180,6 +180,21 @@ function renderAll() {
         $$("[data-approve]").forEach(btn => btn.addEventListener("click", () => approveRequest(btn.dataset.approve, btn)));
     }
 
+    const myReqList = $("#my-pending-requests");
+    if (myReqList) {
+        const myRequests = pendingRequests.filter(r => r.technician === currentUser?.name);
+        myReqList.innerHTML = myRequests.length
+            ? myRequests.map(r => `
+          <div class="request-card" style="padding:10px; border:1px solid #444; margin-bottom:8px; border-radius:4px; display: flex; justify-content: space-between; align-items: center;">
+            <p style="margin: 0;">Aguardando <strong>${r.qty}x ${r.itemName}</strong>...</p>
+            <button class="danger-action" data-cancel="${r.id}" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px; border: 1px solid #ff4444; background: transparent; color: #ff4444; cursor: pointer;">Cancelar</button>
+          </div>
+        `).join("")
+            : `<p class="muted">Você não tem solicitações em andamento.</p>`;
+
+        $$("[data-cancel]").forEach(btn => btn.addEventListener("click", () => cancelRequest(btn.dataset.cancel, btn)));
+    }
+
     // Últimas movimentações
     const recHist = $("#recent-history");
     if (recHist) {
@@ -334,6 +349,17 @@ async function approveRequest(id, btn) {
         await apiRequest(`/requests/${id}/approve`, { method: "POST" });
         bootstrapApp();
     } catch (e) { 
+        alert(e.message);
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function cancelRequest(id, btn) {
+    if (btn) btn.disabled = true;
+    try {
+        await apiRequest(`/requests/${id}/cancel`, { method: "DELETE" });
+        bootstrapApp();
+    } catch (e) {
         alert(e.message);
         if (btn) btn.disabled = false;
     }

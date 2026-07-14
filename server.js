@@ -309,6 +309,23 @@ app.post("/api/requests/:id/approve", async (req, res, next) => {
     } catch (error) { next(error); }
 });
 
+app.delete("/api/requests/:id/cancel", async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(
+            "DELETE FROM stock_requests WHERE id = $1 AND status = 'pending' RETURNING id",
+            [id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(400).json({ error: "Solicitação não encontrada ou já foi processada." });
+        }
+        
+        const state = await fetchState();
+        broadcastState(state);
+        res.json(state);
+    } catch (error) { next(error); }
+});
+
 app.get("/api/events", (req, res) => {
     res.writeHead(200, {
         "Content-Type": "text/event-stream",
