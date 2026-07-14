@@ -320,7 +320,6 @@ function renderWithdraw() {
 }
 
 // Ação de Devolução
-$("#return-button")?.addEventListener("click", () => returnItem());
 async function returnItem() {
     const codeInput = $("#return-code");
     const qtyInput = $("#return-quantity");
@@ -432,8 +431,8 @@ async function handleLogin(e) {
 // Configuração de Eventos Globais do seu HTML original
 document.addEventListener("DOMContentLoaded", () => {
     $("#login-form")?.addEventListener("submit", handleLogin);
-    $("#return-button")?.addEventListener("click", handleReturn);
-    $("#return-code")?.addEventListener("keydown", (e) => { if (e.key === "Enter") handleReturn(); });
+    $("#return-button")?.addEventListener("click", returnItem);
+    $("#return-code")?.addEventListener("keydown", (e) => { if (e.key === "Enter") returnItem(); });
     $("#replenish-button")?.addEventListener("click", handleReplenish);
     $("#global-search")?.addEventListener("input", renderAll);
     $("#technician-filter")?.addEventListener("change", renderAll);
