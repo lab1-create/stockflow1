@@ -334,7 +334,7 @@ async function returnItem() {
             payload.technician = currentUser.name;
         }
 
-        await apiRequest("/movements/return", { method: "POST", body: payload });
+        await apiRequest("/movements/return", { method: "POST", body: JSON.stringify(payload) });
         $("#return-result").textContent = "Item devolvido com sucesso!";
         codeInput.value = "";
         if (qtyInput) qtyInput.value = "1";
