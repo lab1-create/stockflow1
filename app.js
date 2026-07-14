@@ -48,12 +48,12 @@ async function bootstrapApp() {
         state.history = (data.movements || []).map(m => ({
             id: m.id,
             user: m.user_name || "Sistema",
-            type: m.movement_type === 'out' ? 'Retirada' : (m.movement_type === 'in' ? 'Reposição' : 'Devolução'),
+            type: m.movement_type === 'withdrawal' ? 'Retirada' : (m.movement_type === 'replenishment' ? 'Reposição' : 'Devolução'),
             itemCode: m.code,
             itemName: m.supply_name,
             qty: m.quantity,
             destination: m.dest_name || "-",
-            timestamp: m.created_at,
+            at: m.created_at,
             note: m.note || ""
         }));
 
