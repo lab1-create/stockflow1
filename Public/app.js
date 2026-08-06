@@ -1,7 +1,10 @@
-const API_BASE = "/api";
-// Estado interno do App - Alinhado perfeitamente com os ID's do seu HTML
+const supabaseUrl = 'https://inmyfrdeiqbzcavijnkg.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlubXlmcmRlaXFiemNhdmlqbmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0MzYxNzUsImV4cCI6MjA5OTAxMjE3NX0.vpJ2tUNO843mnfUh_N5aP_fFymX89s-9guczjzaBXbo';
+const db = window.supabase.createClient(supabaseUrl, supabaseKey);
+
 let state = {
     users: [],
+    pendingUsers: [],
     technicians: [],
     destinations: ["Bancada 01", "Bancada 02", "Bancada 03", "Laboratório"],
     items: [],
@@ -12,68 +15,88 @@ let state = {
 
 let currentUser = null;
 let currentView = "dashboard";
-let withdraw = { step: 0, technician: "", destination: "", item: null, qty: 1 };
+let withdraw = { step: 0, technician: "", isManual: false, destination: "", item: null, qty: 1 };
 let refreshTimer = null;
+let countItem = null;
+let currentHistoryTab = 'withdrawals';
 
-// Atalhos seletores do DOM
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
-// Gerenciador de requisições para a API do Render
-async function apiRequest(path, options = {}) {
-    const response = await fetch(`${API_BASE}${path}`, {
-        headers: { "Content-Type": "application/json" },
-        ...options
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Erro na comunicação com o servidor.");
-    return data;
-}
-
-// Inicializar dados do Supabase através do backend
 async function bootstrapApp() {
     try {
-        const data = await apiRequest("/bootstrap");
-        
-        // Mapeando "supplies" do banco para "items" que o frontend espera
-        state.items = (data.supplies || []).map(s => ({
+        const [{data: users}, {data: pendingUsrs}, {data: destinations}, {data: supplies}, {data: movements}, {data: requests}] = await Promise.all([
+            db.from('app_users').select('*').eq('active', true).order('name'),
+            db.from('app_users').select('*').eq('active', false).order('created_at'),
+            db.from('destinations').select('id, name').eq('active', true),
+            db.from('supplies').select('*').order('code'),
+            db.from('stock_movements').select('*, supplies(code, name), app_users(name, sector), destinations(name)').order('created_at', { ascending: false }).limit(200),
+            db.from('stock_requests').select('*, supplies(code, name), app_users!stock_requests_user_id_fkey(name, sector), destinations(name)').order('requested_at', { ascending: false })
+        ]);
+
+        state.items = (supplies || []).map(s => ({
             ...s,
             qty: s.current_quantity || 0,
-            min: s.min_quantity || 0,
+            min: s.minimum_quantity || 0,
             supplier: s.supplier || "",
-            note: s.note || ""
+            note: s.note || "",
+            link: s.link || "",
+            unit_price: s.unit_price || 0,
+            isShared: s.is_shared || false
         }));
 
-        // Mapeando "movements" do banco para "history" que o frontend espera
-        state.history = (data.movements || []).map(m => ({
-            id: m.id,
-            user: m.user_name || "Sistema",
-            type: m.movement_type === 'withdrawal' ? 'Retirada' : (m.movement_type === 'replenishment' ? 'Reposição' : 'Devolução'),
-            itemCode: m.code,
-            itemName: m.supply_name,
-            qty: m.quantity,
-            destination: m.dest_name || "-",
-            at: m.created_at,
-            note: m.note || ""
-        }));
+        state.history = (movements || []).map(m => {
+            let typeDesc = 'Desconhecido';
+            if (m.note === "Cadastro inicial") typeDesc = "Cadastro";
+            else if (m.movement_type === 'withdrawal') typeDesc = 'Retirada';
+            else if (m.movement_type === 'replenishment') typeDesc = 'Reposição';
+            else if (m.movement_type === 'return') typeDesc = 'Devolução';
+            else if (m.movement_type === 'adjustment') typeDesc = 'Ajuste/Contagem';
 
-        // Mapeando "requests" para o formato esperado pelo frontend
-        state.requests = (data.requests || []).map(r => ({
-            id: r.id,
-            technician: r.user_name || "Desconhecido",
-            qty: r.quantity || 1,
-            itemName: r.supply_name || "Insumo Desconhecido",
-            status: r.status
+            let uName = m.app_users?.name || "Sistema";
+            if (m.note && m.note.startsWith("Para:")) uName = `${uName} (${m.note})`;
+
+            return {
+                id: m.id,
+                user: uName,
+                userSector: m.app_users?.sector || "",
+                type: typeDesc,
+                itemCode: m.supplies?.code || "-",
+                itemName: m.supplies?.name || "Desconhecido",
+                qty: m.quantity,
+                qtyBefore: m.quantity_before,
+                qtyAfter: m.quantity_after,
+                destination: m.destinations?.name || "-",
+                at: m.created_at,
+                note: m.note || ""
+            };
+        });
+
+        state.requests = (requests || []).map(r => {
+            let techName = r.app_users?.name || "Desconhecido";
+            if (r.note && r.note.startsWith("Para:")) techName = `${techName} (${r.note})`;
+            return {
+                id: r.id,
+                technician: techName,
+                technicianSector: r.app_users?.sector || "",
+                qty: r.quantity || 1,
+                itemCode: r.supplies?.code || "-",
+                itemName: r.supplies?.name || "Insumo Desconhecido",
+                status: r.status,
+                note: r.note || ""
+            };
+        });
+        
+        state.technicians = (users || []).map(u => ({ 
+            name: u.name, 
+            sector: u.sector || "",
+            defaultDest: destinations?.find(d => d.id === u.default_destination_id)?.name || "Laboratório"
         }));
+        state.pendingUsers = pendingUsrs || [];
         
-        // Mapeando "users" para a lista de nomes dos "technicians"
-        state.technicians = (data.users || []).map(u => u.name);
-        
-        if (data.destinations && data.destinations.length > 0) {
-            state.destinations = data.destinations;
+        if (destinations && destinations.length > 0) {
+            state.destinations = destinations.map(d => d.name);
         }
-
-        state.usageKpis = data.usageKpis || [];
 
         renderAll();
     } catch (err) {
@@ -81,34 +104,20 @@ async function bootstrapApp() {
     }
 }
 
-function isAdmin() {
-    return currentUser?.role === "admin";
-}
-
-function normalize(value) {
-    return String(value || "").trim().toLowerCase();
-}
-
+function isAdmin() { return currentUser?.role === "admin"; }
+function normalize(value) { return String(value || "").trim().toLowerCase(); }
 function formatDate(value) {
     if (!value) return "";
-    return new Intl.DateTimeFormat("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit"
-    }).format(new Date(value));
+    return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
-// Filtros de busca integrados com a sua barra de pesquisa topbar
 function filteredItems() {
     const query = normalize($("#global-search")?.value || "");
     if (!query) return state.items;
-    return state.items.filter(item =>
-        [item.code, item.name, item.category, item.supplier].some(f => normalize(f).includes(query))
-    );
+    return state.items.filter(item => [item.code, item.name, item.category, item.supplier].some(f => normalize(f).includes(query)));
 }
 
-function filteredHistory() {
+function filteredHistory(forTable = false) {
     const query = normalize($("#global-search")?.value || "");
     const technician = isAdmin() ? ($("#technician-filter")?.value || "") : currentUser.name;
     const sevenDaysAgo = new Date();
@@ -116,77 +125,150 @@ function filteredHistory() {
     
     return state.history.filter(entry => {
         const matchesSearch = !query || [entry.user, entry.type, entry.itemName, entry.itemCode].some(f => normalize(f).includes(query));
-        const matchesTech = !technician || entry.user === technician;
+        const matchesTech = !technician || entry.user.includes(technician);
         const matchesDate = isAdmin() || new Date(entry.at) >= sevenDaysAgo;
-        return matchesSearch && matchesTech && matchesDate;
+        
+        let matchesTab = true;
+        if (forTable) {
+            if (currentHistoryTab === 'withdrawals') {
+                matchesTab = entry.type === 'Retirada' || entry.type === 'Devolução';
+            } else {
+                matchesTab = entry.type !== 'Retirada' && entry.type !== 'Devolução';
+            }
+        }
+        
+        return matchesSearch && matchesTech && matchesDate && matchesTab;
     });
 }
 
-// Alternador de Telas (Views) respeitando suas marcações CSS
 function setView(view) {
-    if (!isAdmin() && ["dashboard", "replenish", "items"].includes(view)) {
+    if (!isAdmin() && ["dashboard", "replenish", "count", "items"].includes(view)) {
         view = "withdraw";
     }
     currentView = view;
     $$(".view").forEach(node => node.classList.toggle("active", node.id === `${view}-view`));
     $$(".nav-item").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
 
-    const titleMap = {
-        dashboard: "Dashboard",
-        withdraw: "Retirar Insumo",
-        return: "Devolver Insumo",
-        replenish: "Repor Estoque",
-        items: "Insumos",
-        history: "Histórico Completo"
-    };
+    const titleMap = { dashboard: "Painel Administrativo", withdraw: "Retirar Insumo", return: "Devolver Insumo", replenish: "Entrada (Reposição)", count: "Contagem / Auditoria", items: "Insumos", history: "Auditoria Completa" };
     if ($("#view-title")) $("#view-title").textContent = titleMap[view] || "Dashboard";
 
     if (view === "withdraw") {
-        withdraw = { step: isAdmin() ? 0 : 2, technician: isAdmin() ? "" : currentUser.name, destination: state.destinations[0], item: null, qty: 1 };
+        withdraw = { step: isAdmin() ? 0 : 2, technician: isAdmin() ? "" : currentUser.name, isManual: false, destination: state.destinations[0], item: null, qty: 1 };
         renderWithdraw();
     }
     renderAll();
 }
 
-// Renderização geral dos painéis e KPIs do seu Dashboard
+function exportCSV(filename, headers, rows) {
+    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+
+function handleExportCritical() {
+    const criticalItems = state.items.filter(i => Number(i.qty) <= 1);
+    const headers = ["LISTA DE INSUMOS", "QUANTIDADE", "LINK", "VALOR UN.", "TOTAL"];
+    const rows = criticalItems.map(i => {
+        const valUn = i.unit_price ? Number(i.unit_price).toFixed(2).replace('.', ',') : "0,00";
+        // Exportando vazio na quantidade para preenchimento manual, e uma fórmula simples para o Excel (ex: =B2*D2)
+        // Mas como a fórmula varia por idioma (C2*D2) e csv escapa coisas, melhor deixar o TOTAL em branco ou sem fórmula complexa.
+        return [`"${i.name}"`, "", `"${i.link}"`, `"R$ ${valUn}"`, ""];
+    });
+    exportCSV(`pedido_insumos_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
+}
+
+function handleExportHistory() {
+    const headers = ["Data", "Tipo", "Operador", "Setor", "Codigo", "Insumo", "Qtd", "Antes", "Depois", "Destino", "Obs"];
+    const rows = state.history.map(h => [
+        `"${formatDate(h.at)}"`,
+        h.type,
+        `"${h.user}"`,
+        `"${h.userSector}"`,
+        h.itemCode,
+        `"${h.itemName}"`,
+        h.qty,
+        h.qtyBefore,
+        h.qtyAfter,
+        `"${h.destination}"`,
+        `"${h.note}"`
+    ]);
+    exportCSV(`auditoria_estoque_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
+}
+
 function renderAll() {
     renderSearchResults();
-    const criticalItems = state.items.filter(i => Number(i.qty) <= Number(i.min));
+    // NOVA REGRA: <= 1
+    const criticalItems = state.items.filter(i => Number(i.qty) <= 1);
 
     if ($("#metric-total-items")) $("#metric-total-items").textContent = state.items.length;
     if ($("#metric-critical")) $("#metric-critical").textContent = criticalItems.length;
     if ($("#metric-withdrawals")) $("#metric-withdrawals").textContent = state.history.filter(h => h.type === "Retirada").length;
     if ($("#metric-stock")) $("#metric-stock").textContent = state.items.reduce((acc, i) => acc + Number(i.qty), 0);
 
-    // Lista de Itens Críticos
     const critList = $("#critical-list");
     if (critList) {
         critList.innerHTML = criticalItems.length
-            ? criticalItems.map(i => `<div class="compact-row"><span>${i.name}</span><strong>${i.qty}/${i.min} un</strong></div>`).join("")
-            : `<p class="muted">Nenhum item crítico.</p>`;
+            ? criticalItems.map(i => `<div class="compact-row"><span>${i.name}</span><strong style="color:#ff2a55;">${i.qty} un</strong></div>`).join("")
+            : `<p class="muted">Estoque sob controle.</p>`;
     }
 
-    // Lista de solicitações em tempo real
     const pendingRequests = state.requests.filter(r => r.status === "pending");
     if ($("#pending-count")) $("#pending-count").textContent = `${pendingRequests.length} pendentes`;
 
     const reqList = $("#pending-requests");
     if (reqList) {
         reqList.innerHTML = pendingRequests.length
-            ? pendingRequests.map(r => `
+            ? pendingRequests.map(r => {
+                let warningHtml = "";
+                const item = state.items.find(i => i.code === r.itemCode);
+                
+                if (item && item.isShared && r.technicianSector) {
+                    const thirtyDaysAgo = new Date();
+                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                    
+                    const recentWithdrawal = state.history.find(h => 
+                        h.type === "Retirada" && 
+                        h.itemCode === r.itemCode && 
+                        h.userSector === r.technicianSector &&
+                        new Date(h.at) >= thirtyDaysAgo
+                    );
+                    
+                    if (recentWithdrawal) {
+                        warningHtml = `<div style="background:#ff444422; border:1px solid #ff4444; color:#ff6b6b; padding:8px; border-radius:4px; margin:8px 0; font-size:0.85rem;">
+                            ⚠️ <strong>Atenção:</strong> ${recentWithdrawal.user} (${recentWithdrawal.userSector}) já retirou este insumo em ${formatDate(recentWithdrawal.at)}.
+                        </div>`;
+                    }
+                }
+                
+                return `
           <div class="request-card" style="padding:10px; border:1px solid #444; margin-bottom:8px; border-radius:4px;">
-            <p><strong>${r.technician}</strong> quer retirar ${r.qty}x ${r.itemName}</p>
-            <button class="primary-action" data-approve="${r.id}" style="margin-top:5px;">Liberar</button>
+            <p><strong>${r.technician} ${r.technicianSector ? `(${r.technicianSector})` : ''}</strong> solicitou ${r.qty}x ${r.itemName}</p>
+            ${warningHtml}
+            <div style="display:flex; gap:8px;">
+                <button class="primary-action" data-approve="${r.id}" style="margin-top:5px; flex:1;">Liberar</button>
+                <button class="danger-action" data-reject="${r.id}" style="margin-top:5px; flex:1; border:1px solid #ff4444; background:transparent; color:#ff4444; border-radius:4px; cursor:pointer;">Rejeitar</button>
+            </div>
           </div>
-        `).join("")
+        `}).join("")
             : `<p class="muted">Nenhuma solicitação pendente.</p>`;
-
+            
         $$("[data-approve]").forEach(btn => btn.addEventListener("click", () => approveRequest(btn.dataset.approve, btn)));
+        $$("[data-reject]").forEach(btn => btn.addEventListener("click", () => cancelRequest(btn.dataset.reject, btn)));
     }
 
     const myReqList = $("#my-pending-requests");
     if (myReqList) {
-        const myRequests = pendingRequests.filter(r => r.technician === currentUser?.name);
+        // Includes manual outputs created by this user
+        const myRequests = pendingRequests.filter(r => r.technician.includes(currentUser?.name) || (r.note && r.note.includes(currentUser?.name)));
         myReqList.innerHTML = myRequests.length
             ? myRequests.map(r => `
           <div class="request-card" style="padding:10px; border:1px solid #444; margin-bottom:8px; border-radius:4px; display: flex; justify-content: space-between; align-items: center;">
@@ -195,17 +277,28 @@ function renderAll() {
           </div>
         `).join("")
             : `<p class="muted">Você não tem solicitações em andamento.</p>`;
-
         $$("[data-cancel]").forEach(btn => btn.addEventListener("click", () => cancelRequest(btn.dataset.cancel, btn)));
     }
 
-    // Últimas movimentações
     const recHist = $("#recent-history");
     if (recHist) {
         const data = filteredHistory().slice(0, 5);
         recHist.innerHTML = data.length
-            ? `<div class="table-body">` + data.map(h => `<div class="table-row"><span>${h.itemName}</span><span>${h.user}</span><span>${h.type}</span><span>${formatDate(h.at)}</span></div>`).join("") + `</div>`
+            ? `<div class="table-body">` + data.map(h => `<div class="table-row"><span>${h.itemName}</span><span>${h.user} ${h.userSector ? `(${h.userSector})` : ''}${h.destination && h.destination !== "-" ? `<br><small style="color:#999;">🪑 ${h.destination}</small>` : ''}</span><span>${h.type}</span><span>${formatDate(h.at)}</span></div>`).join("") + `</div>`
             : `<p class="muted">Nenhum registro.</p>`;
+    }
+    
+    const pendUsersList = $("#pending-users");
+    if (pendUsersList) {
+        if ($("#pending-users-count")) $("#pending-users-count").textContent = `${state.pendingUsers.length} pendentes`;
+        pendUsersList.innerHTML = state.pendingUsers.length
+            ? state.pendingUsers.map(u => `
+                <div class="compact-row" style="padding: 8px; border:1px solid #444; border-radius:4px; margin-bottom: 5px;">
+                  <span><strong>${u.name}</strong> (${u.sector})</span>
+                  <button class="primary-action" onclick="approveUser('${u.id}')" style="padding:4px 8px; font-size:0.8rem;">Aprovar</button>
+                </div>
+            `).join("")
+            : `<p class="muted">Nenhum novo cadastro.</p>`;
     }
 
     renderItemsGrid();
@@ -213,30 +306,36 @@ function renderAll() {
     renderTechnicianFilter();
 }
 
-// Grid de Insumos da Tela de Insumos
+async function approveUser(id) {
+    try {
+        await db.from('app_users').update({ active: true }).eq('id', id);
+        bootstrapApp();
+    } catch(e) { alert("Erro ao aprovar: " + e.message); }
+}
+
 function renderItemsGrid() {
     const grid = $("#items-grid");
     if (!grid) return;
     grid.innerHTML = filteredItems().map(i => `
     <div class="item-card" style="padding:15px; border:1px solid #444; border-radius:4px; background:#1e1e1e;">
-      <h3>${i.name}</h3>
+      <h3>${i.name} ${i.isShared ? '<span style="font-size:0.7rem; background:#444; padding:2px 6px; border-radius:10px; margin-left:6px;">Uso Conjunto</span>' : ''}</h3>
       <p class="muted">Código: ${i.code} | Categoria: ${i.category}</p>
-      <p>Estoque: <strong>${i.qty}</strong> (Mínimo: ${i.min})</p>
-      <button class="ghost-action" data-edit-item="${i.code}" style="margin-top:8px;">Editar</button>
+      <p>Estoque: <strong style="color: ${i.qty <= 1 ? '#ff2a55' : 'inherit'}">${i.qty}</strong></p>
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <button class="ghost-action" data-edit-item="${i.code}">Editar</button>
+      </div>
     </div>
   `).join("");
-
     $$("[data-edit-item]").forEach(btn => btn.addEventListener("click", () => openItemDialog(btn.dataset.editItem)));
 }
 
-// Tabela da Tela Histórico Completo
 function renderHistoryTable() {
     const table = $("#history-table");
     if (!table) return;
-    table.innerHTML = filteredHistory().map(h => `
+    table.innerHTML = filteredHistory(true).map(h => `
     <div class="table-row">
       <span><strong>${h.itemName}</strong> (${h.itemCode})</span>
-      <span>Técnico: ${h.user}</span>
+      <span>Técnico: ${h.user} ${h.userSector ? `(${h.userSector})` : ''}${h.destination && h.destination !== "-" ? `<br><small style="color:#aaa;">🪑 Destino: ${h.destination}</small>` : ''}</span>
       <span>${h.type} (${h.qty} un)</span>
       <span class="muted">${formatDate(h.at)}</span>
     </div>
@@ -248,35 +347,60 @@ function renderTechnicianFilter() {
     if (!select || select.options.length > 1) return;
     state.technicians.forEach(t => {
         const opt = document.createElement("option");
-        opt.value = t; opt.textContent = t;
+        opt.value = t.name; opt.textContent = t.name;
         select.appendChild(opt);
     });
 }
 
-// Fluxo de Retirada Dinâmico dentro do seu contêiner original
+window.selectItemForWithdraw = (code) => {
+    const item = state.items.find(i => i.code === code);
+    if (!item) return;
+    withdraw.item = item;
+    withdraw.step = 3;
+    renderWithdraw();
+};
+
 function renderWithdraw() {
     const content = $("#withdraw-content");
     if (!content) return;
 
     if (withdraw.step === 0) {
         content.innerHTML = `
-      <h3>Quem vai retirar?</h3>
-      <div class="form-grid" style="margin-top:10px;">
-        ${state.technicians.map(t => `<button class="primary-action" data-select-tech="${t}">${t}</button>`).join("")}
-      </div>
-    `;
-        $$("[data-select-tech]").forEach(b => b.addEventListener("click", () => { withdraw.technician = b.dataset.selectTech; withdraw.step = 2; renderWithdraw(); }));
+            <h3>Quem vai retirar?</h3>
+            <div class="form-grid" style="margin-top:10px;">
+                ${state.technicians.map(t => `<button class="primary-action" data-select-tech="${t.name}">${t.name} ${t.sector ? `(${t.sector})` : ''}</button>`).join("")}
+            </div>
+            <div style="margin-top: 20px; text-align: center; border-top: 1px solid #444; padding-top: 15px;">
+                <p class="muted" style="margin-bottom: 10px; font-size: 0.9rem;">Retirada para não cadastrados ou visitantes:</p>
+                <button class="ghost-action wide" id="btn-manual-out" style="border: 1px dashed #666;">Saída Manual / Sem Login</button>
+            </div>
+        `;
+        $$("[data-select-tech]").forEach(b => b.addEventListener("click", () => { withdraw.technician = b.dataset.selectTech; withdraw.isManual = false; withdraw.step = 2; renderWithdraw(); }));
+        $("#btn-manual-out")?.addEventListener("click", () => {
+            const name = prompt("Digite o nome de quem está retirando (ou destino da saída manual):");
+            if(name && name.trim()) {
+                withdraw.technician = name.trim();
+                withdraw.isManual = true;
+                withdraw.step = 2;
+                renderWithdraw();
+            }
+        });
         return;
     }
 
     if (withdraw.step === 2) {
         content.innerHTML = `
-      <h3>Bipe o Insumo</h3>
-      <div class="scan-row" style="margin-top:10px;">
-        <input id="withdraw-code-input" class="scan-input" placeholder="Código do insumo">
-        <button id="withdraw-find-btn" class="primary-action">Identificar</button>
-      </div>
-    `;
+            <h3>Bipe o Insumo</h3>
+            <p class="muted">Técnico: ${withdraw.technician}</p>
+            <div class="scan-row" style="margin-top:10px;">
+                <input id="withdraw-code-input" class="scan-input" placeholder="Código do insumo">
+                <button id="withdraw-find-btn" class="primary-action">Identificar</button>
+            </div>
+            <div style="margin-top: 15px; border-top: 1px solid #333; padding-top: 15px; text-align: center;">
+                <p class="muted" style="margin-bottom: 10px; font-size: 0.9rem;">Não sabe o código do produto?</p>
+                <button id="btn-request-name" class="ghost-action wide" style="border: 1px dashed #666; color: white;">SOLICITAR INSUMO</button>
+            </div>
+        `;
         const findItemAction = () => {
             const item = state.items.find(i => normalize(i.code) === normalize($("#withdraw-code-input").value));
             if (!item) return alert("Insumo não encontrado!");
@@ -284,69 +408,121 @@ function renderWithdraw() {
         };
         $("#withdraw-find-btn").addEventListener("click", findItemAction);
         $("#withdraw-code-input").addEventListener("keydown", (e) => { if (e.key === "Enter") findItemAction(); });
+        $("#btn-request-name").addEventListener("click", () => {
+            withdraw.step = "request_by_name";
+            renderWithdraw();
+        });
+        return;
+    }
+
+    if (withdraw.step === "request_by_name") {
+        content.innerHTML = `
+            <h3>Solicitar Insumo</h3>
+            <p class="muted">Técnico: ${withdraw.technician}</p>
+            <div style="margin-top:10px;">
+                <label style="display: block; text-align: left;">Digite o nome do produto:
+                    <input id="request-name-input" class="scan-input" placeholder="Ex: Tela iPhone..." autocomplete="off" style="width: 100%; margin-top: 5px;">
+                </label>
+            </div>
+            <div id="request-name-results" style="margin-top: 10px; max-height: 200px; overflow-y: auto; text-align: left;"></div>
+            <button class="ghost-action" style="margin-top: 15px;" onclick="withdraw.step=2; renderWithdraw();">Voltar</button>
+        `;
+
+        const input = $("#request-name-input");
+        const results = $("#request-name-results");
+        
+        input.focus();
+        input.addEventListener("input", () => {
+            const query = normalize(input.value);
+            if (!query) {
+                results.innerHTML = "";
+                return;
+            }
+            const matchingItems = state.items.filter(i => normalize(i.name).includes(query) || normalize(i.code).includes(query));
+            if (matchingItems.length === 0) {
+                results.innerHTML = "<p class='muted' style='padding: 10px;'>Nenhum produto encontrado.</p>";
+            } else {
+                results.innerHTML = matchingItems.map(i => `
+                    <div style="padding: 10px; border-bottom: 1px solid #444; cursor: pointer; transition: background 0.2s;"
+                         onclick="selectItemForWithdraw('${i.code}')"
+                         onmouseover="this.style.background='#222'"
+                         onmouseout="this.style.background='transparent'">
+                         <strong style="color: white;">${i.name}</strong> <span class="muted" style="font-size: 0.8rem;">(${i.code})</span>
+                         <br><small style="color: ${Number(i.qty) > 0 ? '#2e7d32' : '#e53935'}">Estoque: ${i.qty}</small>
+                    </div>
+                `).join("");
+            }
+        });
         return;
     }
 
     if (withdraw.step === 3) {
-        content.innerHTML = `
-      <h3>Confirmar Retirada de ${withdraw.item.name}</h3>
-      <div class="form-grid" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;">
-        <label>Quantidade <input id="withdraw-qty-input" type="number" min="1" value="1" max="${withdraw.item.qty}"></label>
-        <label>Destino 
-          <select id="withdraw-dest-input" style="width:100%; height:38px; background:#222; color:#fff; border-radius:4px; border:1px solid #444;">
-            ${state.destinations.map(d => `<option value="${d}">${d}</option>`).join("")}
-          </select>
-        </label>
-        <button id="withdraw-submit-btn" class="primary-action wide">Solicitar Liberação</button>
-      </div>
-    `;
+        const techInfo = state.technicians.find(t => t.name === withdraw.technician);
+        const destName = withdraw.isManual ? "Laboratório" : (techInfo?.defaultDest || "Laboratório");
+
+        content.innerHTML = `<h3>Confirmar Retirada de ${withdraw.item.name}</h3><div class="form-grid" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;"><label>Quantidade <input id="withdraw-qty-input" type="number" min="1" value="1" max="${withdraw.item.qty}"></label><div style="padding:10px; border:1px solid #444; border-radius:4px; background:#222;"><p style="margin:0; font-size:0.9rem;" class="muted">Destino Fixo</p><p style="margin:0; font-weight:bold;">🪑 ${destName}</p></div><input type="hidden" id="withdraw-dest-input" value="${destName}"><button id="withdraw-submit-btn" class="primary-action wide">Solicitar Liberação</button></div>`;
         $("#withdraw-submit-btn").addEventListener("click", async () => {
             try {
-                await apiRequest("/movements/withdraw", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        code: withdraw.item.code,
-                        technician: withdraw.technician,
-                        destination: $("#withdraw-dest-input").value,
-                        quantity: Number($("#withdraw-qty-input").value)
-                    })
-                });
-                alert("Solicitação enviada!");
-                setView("dashboard");
-                bootstrapApp();
+                let userId = null;
+                let requestNote = null;
+
+                if (withdraw.isManual) {
+                    userId = currentUser.id; // Vincula ao admin/operador que fez
+                    requestNote = `Para: ${withdraw.technician}`;
+                } else {
+                    const { data: users } = await db.from('app_users').select('id').eq('name', withdraw.technician);
+                    if (!users || users.length === 0) throw new Error("Usuário não encontrado.");
+                    userId = users[0].id;
+                }
+                
+                let destId = null;
+                const destName = $("#withdraw-dest-input").value;
+                if (destName) {
+                    const { data: dests } = await db.from('destinations').select('id').eq('name', destName);
+                    if (dests && dests.length > 0) destId = dests[0].id;
+                }
+
+                await db.from('stock_requests').insert({ supply_id: withdraw.item.id, user_id: userId, destination_id: destId, quantity: Number($("#withdraw-qty-input").value) || 1, status: 'pending', note: requestNote });
+                alert("Solicitação enviada!"); setView("dashboard"); bootstrapApp();
             } catch (e) { alert(e.message); }
         });
     }
 }
 
-// Ação de Devolução
 async function returnItem() {
     const codeInput = $("#return-code");
     const qtyInput = $("#return-quantity");
     if (!codeInput || !codeInput.value) return;
 
     try {
-        const inputCode = normalize(codeInput.value);
-        const item = state.items.find(i => normalize(i.code) === inputCode);
-        
-        if (!item) {
-            $("#return-result").textContent = "Insumo não encontrado no sistema.";
-            return;
-        }
+        const item = state.items.find(i => normalize(i.code) === normalize(codeInput.value));
+        if (!item) throw new Error("Insumo não encontrado no sistema.");
 
-        const payload = { code: item.code, quantity: parseInt(qtyInput?.value || "1", 10) };
+        const quantity = parseInt(qtyInput?.value || "1", 10);
+        let techName = currentUser.name;
+
         if (isAdmin()) {
             const tech = prompt("Nome do Técnico devolvendo:");
-            if (tech) payload.technician = tech;
-        } else {
-            payload.technician = currentUser.name;
+            if (tech) techName = tech; else return;
         }
 
-        await apiRequest("/movements/return", { method: "POST", body: JSON.stringify(payload) });
-        $("#return-result").textContent = "Item devolvido com sucesso!";
-        codeInput.value = "";
-        if (qtyInput) qtyInput.value = "1";
-        bootstrapApp();
+        const { data: users } = await db.from('app_users').select('id').eq('name', techName);
+        if (!users || users.length === 0) throw new Error("Usuário não encontrado.");
+
+        const { data: heldMovements } = await db.from('stock_movements').select('movement_type, quantity').eq('user_id', users[0].id).eq('supply_id', item.id);
+        let itemsHeld = 0;
+        if (heldMovements) heldMovements.forEach(m => {
+            if (m.movement_type === 'withdrawal') itemsHeld += m.quantity;
+            if (m.movement_type === 'return') itemsHeld -= m.quantity;
+        });
+
+        if (itemsHeld < quantity) throw new Error(`Você possui apenas ${itemsHeld} unidade(s) deste item em mãos para devolver.`);
+
+        const qAfter = item.qty + quantity;
+        await db.from('supplies').update({ current_quantity: qAfter }).eq('id', item.id);
+        await db.from('stock_movements').insert({ supply_id: item.id, user_id: users[0].id, movement_type: 'return', quantity: quantity, quantity_before: item.qty, quantity_after: qAfter });
+
+        $("#return-result").textContent = "Item devolvido com sucesso!"; codeInput.value = ""; if (qtyInput) qtyInput.value = "1"; bootstrapApp();
     } catch (e) { $("#return-result").textContent = e.message; }
 }
 
@@ -354,201 +530,283 @@ async function handleReplenish() {
     const code = $("#replenish-code").value;
     const qty = Number($("#replenish-qty").value);
     try {
-        await apiRequest("/movements/replenish", {
-            method: "POST",
-            body: JSON.stringify({ code, quantity: qty })
-        });
-        $("#replenish-result").textContent = "Estoque atualizado com sucesso!";
-        $("#replenish-code").value = "";
-        bootstrapApp();
+        const item = state.items.find(i => normalize(i.code) === normalize(code));
+        if (!item) throw new Error("Insumo não encontrado.");
+
+        const qAfter = item.qty + qty;
+        await db.from('supplies').update({ current_quantity: qAfter }).eq('id', item.id);
+        await db.from('stock_movements').insert({ supply_id: item.id, movement_type: 'replenishment', quantity: qty, quantity_before: item.qty, quantity_after: qAfter, user_id: currentUser?.id });
+
+        $("#replenish-result").textContent = "Estoque atualizado com sucesso!"; $("#replenish-code").value = ""; bootstrapApp();
     } catch (e) { $("#replenish-result").textContent = e.message; }
+}
+
+// LOGICA DE CONTAGEM / BALANÇO
+function findCountItem() {
+    const code = $("#count-code").value;
+    countItem = state.items.find(i => normalize(i.code) === normalize(code));
+    if (!countItem) {
+        $("#count-result").textContent = "Referência não encontrada.";
+        $("#count-details").style.display = "none";
+        return;
+    }
+    $("#count-result").textContent = "";
+    $("#count-item-name").textContent = countItem.name;
+    $("#count-sys-qty").textContent = `${countItem.qty} un`;
+    $("#count-phys-qty").value = countItem.qty; // Defaults to system qty
+    $("#count-details").style.display = "flex";
+}
+
+async function submitCount() {
+    if (!countItem) return;
+    const physQty = Number($("#count-phys-qty").value);
+    const diff = physQty - countItem.qty;
+    
+    if (diff === 0) {
+        $("#count-result").textContent = "Contagem bateu! Nenhuma alteração necessária.";
+        $("#count-code").value = ""; $("#count-details").style.display = "none"; countItem = null;
+        return;
+    }
+
+    try {
+        await db.from('supplies').update({ current_quantity: physQty }).eq('id', countItem.id);
+        
+        // Log movement
+        await db.from('stock_movements').insert({ 
+            supply_id: countItem.id, 
+            movement_type: 'adjustment', 
+            quantity: Math.abs(diff), 
+            quantity_before: countItem.qty, 
+            quantity_after: physQty, 
+            user_id: currentUser?.id,
+            note: diff > 0 ? "Sobrando na contagem" : "Faltando na contagem"
+        });
+
+        $("#count-result").textContent = "Estoque ajustado com sucesso!"; 
+        $("#count-code").value = ""; $("#count-details").style.display = "none"; countItem = null;
+        bootstrapApp();
+    } catch(e) { $("#count-result").textContent = e.message; }
 }
 
 async function approveRequest(id, btn) {
     if (btn) btn.disabled = true;
     try {
-        await apiRequest(`/requests/${id}/approve`, { method: "POST" });
+        const { data: requestRes } = await db.from('stock_requests').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', id).eq('status', 'pending').select();
+        if (requestRes && requestRes.length > 0) {
+            const req = requestRes[0];
+            const { data: supplyRes } = await db.from('supplies').select('current_quantity').eq('id', req.supply_id);
+            if (supplyRes && supplyRes.length > 0) {
+                const qBefore = supplyRes[0].current_quantity;
+                const qAfter = qBefore - req.quantity;
+                await db.from('supplies').update({ current_quantity: qAfter }).eq('id', req.supply_id);
+                await db.from('stock_movements').insert({ supply_id: req.supply_id, user_id: req.user_id, destination_id: req.destination_id, movement_type: 'withdrawal', quantity: req.quantity, quantity_before: qBefore, quantity_after: qAfter, note: req.note });
+            }
+        }
         bootstrapApp();
-    } catch (e) { 
-        alert(e.message);
-        if (btn) btn.disabled = false;
-    }
+    } catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
 
 async function cancelRequest(id, btn) {
     if (btn) btn.disabled = true;
-    try {
-        await apiRequest(`/requests/${id}/cancel`, { method: "DELETE" });
-        bootstrapApp();
-    } catch (e) {
-        alert(e.message);
-        if (btn) btn.disabled = false;
-    }
+    try { await db.from('stock_requests').delete().eq('id', id).eq('status', 'pending'); bootstrapApp(); } 
+    catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
 
-// Manipulação dos Modais (Dialogs) de Criação do Usuário e Insumos
 function openItemDialog(code = null) {
-    const dialog = $("#item-dialog");
-    const form = $("#item-form");
+    const dialog = $("#item-dialog"); const form = $("#item-form");
     if (!dialog || !form) return;
-
     if (code) {
         const item = state.items.find(i => i.code === code);
         if (!item) return;
-        $("#dialog-title").textContent = "Editar Insumo";
-        $("#item-original-code").value = item.code;
-        $("#item-code").value = item.code;
-        $("#item-name").value = item.name;
-        $("#item-category").value = item.category;
-        $("#item-qty").value = item.qty;
-        $("#item-min").value = item.min;
-        $("#item-supplier").value = item.supplier || "";
+        $("#dialog-title").textContent = "Editar Referência"; 
+        $("#item-original-code").value = item.code; 
+        $("#item-code").value = item.code; 
+        $("#item-name").value = item.name; 
+        $("#item-category").value = item.category; 
+        $("#item-min").value = item.min; 
+        $("#item-supplier").value = item.supplier || ""; 
+        $("#item-link").value = item.link || ""; 
+        $("#item-price").value = item.unit_price || ""; 
         $("#item-note").value = item.note || "";
+        const checkbox = $("#item-shared");
+        if (checkbox) checkbox.checked = item.isShared || false;
     } else {
-        $("#dialog-title").textContent = "Novo Insumo";
-        form.reset();
+        $("#dialog-title").textContent = "Nova Referência"; 
+        form.reset(); 
         $("#item-original-code").value = "";
+        const checkbox = $("#item-shared");
+        if (checkbox) checkbox.checked = false;
     }
     dialog.showModal();
 }
 
-// Evento de Login sintonizado com o banco Supabase
 async function handleLogin(e) {
     e.preventDefault();
-    const name = $("#login-user").value;
+    const name = $("#login-user").value.trim();
     const pin = $("#login-pin").value;
     try {
-        const data = await apiRequest("/login", {
-            method: "POST",
-            body: JSON.stringify({ name, pin })
-        });
-        currentUser = data.user;
+        const { data: users, error } = await db.from('app_users').select('*').ilike('name', name);
+        if (error) throw error;
+        if (!users || users.length === 0) throw new Error("Usuário não encontrado.");
+        
+        const user = users[0];
+        if (!user.active) throw new Error("Seu acesso ainda não foi aprovado pelo administrador.");
+        if (String(pin) !== String(user.pin_code)) throw new Error("PIN incorreto.");
+        
+        currentUser = { id: user.id, name: user.name, role: user.role, sector: user.sector };
         $("#session-label").textContent = `${currentUser.name} (${currentUser.role})`;
         $("#login-screen").style.display = "none";
-        
+        $(".app-shell").style.display = "flex";
         $$("[data-admin-only]").forEach(el => el.style.display = isAdmin() ? "" : "none");
         setView(isAdmin() ? "dashboard" : "withdraw");
         
         bootstrapApp();
-        refreshTimer = setInterval(bootstrapApp, 4000); // Polling em tempo real a cada 4 segundos
-    } catch (err) {
-        $("#login-error").textContent = err.message;
-    }
+        refreshTimer = setInterval(bootstrapApp, 4000); 
+    } catch (err) { $("#login-error").textContent = err.message; }
 }
 
-// Configuração de Eventos Globais do seu HTML original
 document.addEventListener("DOMContentLoaded", () => {
     $("#login-form")?.addEventListener("submit", handleLogin);
     $("#return-button")?.addEventListener("click", returnItem);
     $("#return-code")?.addEventListener("keydown", (e) => { if (e.key === "Enter") returnItem(); });
+    
+    // Contagem events
+    $("#count-find-btn")?.addEventListener("click", findCountItem);
+    $("#count-code")?.addEventListener("keydown", (e) => { if (e.key === "Enter") findCountItem(); });
+    $("#count-submit-btn")?.addEventListener("click", submitCount);
+
     $("#replenish-button")?.addEventListener("click", handleReplenish);
+    $("#replenish-code")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const code = $("#replenish-code").value;
+            const item = state.items.find(i => normalize(i.code) === normalize(code));
+            if (item) {
+                const qtyInput = $("#replenish-qty");
+                let current = Number(qtyInput.value) || 0;
+                qtyInput.value = current + 1;
+                $("#replenish-result").textContent = `+1 ${item.name} contado! (A repor: ${qtyInput.value})`;
+            } else {
+                $("#replenish-result").textContent = "Referência não encontrada!";
+            }
+            $("#replenish-code").select();
+        }
+    });
+
+    $("#export-critical-btn")?.addEventListener("click", handleExportCritical);
+    $("#export-history-btn")?.addEventListener("click", handleExportHistory);
+
     $("#global-search")?.addEventListener("input", renderAll);
     $("#technician-filter")?.addEventListener("change", renderAll);
-
-    // Navegação lateral dinâmica
-    $$(".nav-item").forEach(btn => {
-        btn.addEventListener("click", () => setView(btn.dataset.view));
+    $$(".nav-item").forEach(btn => { btn.addEventListener("click", () => setView(btn.dataset.view)); });
+    $$("[data-view-jump]").forEach(btn => { btn.addEventListener("click", () => setView(btn.dataset.viewJump)); });
+    
+    $$("[data-history-tab]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            $$("[data-history-tab]").forEach(b => {
+                b.classList.remove("active");
+                b.style.color = "#aaa";
+                b.style.borderBottom = "2px solid transparent";
+            });
+            btn.classList.add("active");
+            btn.style.color = "#fff";
+            btn.style.borderBottom = "2px solid #ff2a55";
+            currentHistoryTab = btn.dataset.historyTab;
+            renderHistoryTable();
+        });
     });
 
-    // Jump-links internos do seu dashboard
-    $$("[data-view-jump]").forEach(btn => {
-        btn.addEventListener("click", () => setView(btn.dataset.viewJump));
-    });
-
-    // Gatilhos dos Modais originais
     $("#new-item-button")?.addEventListener("click", () => openItemDialog());
     $("#close-dialog")?.addEventListener("click", () => $("#item-dialog").close());
+    
     $("#new-user-button")?.addEventListener("click", () => $("#user-dialog").showModal());
     $("#close-user-dialog")?.addEventListener("click", () => $("#user-dialog").close());
 
-    // Gravação de novo insumo via modal dialog
+    $("#open-register-btn")?.addEventListener("click", () => $("#register-dialog").showModal());
+    $("#close-register-dialog")?.addEventListener("click", () => $("#register-dialog").close());
+
     $("#item-form")?.addEventListener("submit", async (e) => {
-        e.preventDefault(); // IMPORTANTE para evitar que a página recarregue
+        e.preventDefault(); 
         const origCode = $("#item-original-code").value;
-        const body = {
-            code: $("#item-code").value,
-            name: $("#item-name").value,
-            category: $("#item-category").value,
-            qty: Number($("#item-qty").value),
-            min: Number($("#item-min").value),
-            supplier: $("#item-supplier").value,
-            note: $("#item-note").value
+        const checkbox = $("#item-shared");
+        const body = { 
+            code: $("#item-code").value, 
+            name: $("#item-name").value, 
+            category: $("#item-category").value, 
+            minimum_quantity: Number($("#item-min").value) || 0, 
+            supplier: $("#item-supplier").value, 
+            link: $("#item-link").value,
+            unit_price: Number($("#item-price").value) || 0,
+            note: $("#item-note").value,
+            is_shared: checkbox ? checkbox.checked : false
         };
         try {
-            const url = origCode ? `/supplies/${origCode}` : "/supplies";
-            await apiRequest(url, { method: origCode ? "PUT" : "POST", body: JSON.stringify(body) });
-            $("#item-dialog").close();
-            bootstrapApp();
+            if (origCode) {
+                await db.from('supplies').update(body).eq('code', origCode);
+            } else {
+                body.current_quantity = 0;
+                const { data, error } = await db.from('supplies').insert(body).select();
+                if (error) throw error;
+                if (data && data.length > 0) {
+                    await db.from('stock_movements').insert({ supply_id: data[0].id, movement_type: 'replenishment', quantity: 0, quantity_before: 0, quantity_after: 0, user_id: currentUser?.id, note: "Cadastro inicial" });
+                }
+            }
+            $("#item-dialog").close(); bootstrapApp();
         } catch (err) { alert(err.message); }
     });
 
-    // Gravação de novo usuário via modal dialog
     $("#user-form")?.addEventListener("submit", async (e) => {
-        const body = {
-            name: $("#user-name").value,
-            role: $("#user-role").value,
-            pin: $("#user-pin").value
+        e.preventDefault();
+        const sectorInput = $("#user-sector");
+        const body = { 
+            name: $("#user-name").value, 
+            role: $("#user-role").value, 
+            pin_code: $("#user-pin").value, 
+            sector: sectorInput ? sectorInput.value : null,
+            active: true 
         };
-        try {
-            await apiRequest("/users", { method: "POST", body: JSON.stringify(body) });
-            alert("Usuário adicionado!");
-            bootstrapApp();
+        try { await db.from('app_users').insert(body); alert("Usuário adicionado!"); bootstrapApp(); $("#user-dialog").close(); } catch (err) { alert(err.message); }
+    });
+
+    $("#register-form")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const body = { 
+            name: $("#reg-name").value, 
+            role: 'tecnico', 
+            pin_code: $("#reg-pin").value, 
+            sector: $("#reg-sector").value,
+            active: false 
+        };
+        try { 
+            await db.from('app_users').insert(body); 
+            alert("Sua solicitação foi enviada! O administrador irá aprovar em breve."); 
+            $("#register-dialog").close();
+            $("#register-form").reset();
         } catch (err) { alert(err.message); }
     });
 
     $("#logout-button")?.addEventListener("click", () => {
-        clearInterval(refreshTimer);
-        currentUser = null;
-        $("#login-form").reset();
-        $("#login-error").textContent = "";
-        $("#login-screen").style.display = "flex";
+        clearInterval(refreshTimer); currentUser = null; $("#login-form").reset(); $("#login-error").textContent = ""; $("#login-screen").style.display = "flex";
     });
 
-    // Fechar resultados de busca ao clicar fora
     document.addEventListener("click", (e) => {
-        if (!e.target.closest(".search")) {
-            const resultsDiv = $("#search-results");
-            if (resultsDiv) resultsDiv.style.display = "none";
-        }
+        if (!e.target.closest(".search")) { const resultsDiv = $("#search-results"); if (resultsDiv) resultsDiv.style.display = "none"; }
     });
 });
 
-// Renderização dos Resultados de Pesquisa Global
 function renderSearchResults() {
-    const input = $("#global-search");
-    const resultsDiv = $("#search-results");
-    
+    const input = $("#global-search"); const resultsDiv = $("#search-results");
     if (!input || !resultsDiv) return;
-    
     const query = normalize(input.value);
-
-    if (!query) {
-        resultsDiv.style.display = "none";
-        return;
-    }
-
-    const matchingItems = state.items.filter(i => 
-        normalize(i.name).includes(query) || 
-        normalize(i.code).includes(query)
-    );
-
+    if (!query) { resultsDiv.style.display = "none"; return; }
+    const matchingItems = state.items.filter(i => normalize(i.name).includes(query) || normalize(i.code).includes(query));
     if (matchingItems.length === 0) {
         resultsDiv.innerHTML = "<div style='padding: 0.5rem 1rem; color: #666;'>Nenhum insumo encontrado.</div>";
     } else {
         resultsDiv.innerHTML = matchingItems.map(i => `
-            <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.2s;" 
-                 onclick="copySearchCode('${i.code}')"
-                 onmouseover="this.style.background='#f9f9f9'"
-                 onmouseout="this.style.background='transparent'"
-                 title="Clique para copiar o código">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <strong style="color: #333;">${i.name}</strong>
-                    <span style="font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; color: #555;">${i.code}</span>
-                </div>
-                <div style="margin-top: 4px; font-size: 0.85em; color: #666; display: flex; gap: 10px;">
-                    <span>Estoque: <strong style="color: ${Number(i.qty) <= Number(i.min) ? '#e53935' : '#2e7d32'};">${i.qty}</strong></span>
-                    <span>Mín: ${i.min}</span>
-                </div>
+            <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.2s;" onclick="copySearchCode('${i.code}')" onmouseover="this.style.background='#f9f9f9'" onmouseout="this.style.background='transparent'" title="Clique para copiar o código">
+                <div style="display: flex; justify-content: space-between; align-items: center;"><strong style="color: #333;">${i.name}</strong><span style="font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; color: #555;">${i.code}</span></div>
+                <div style="margin-top: 4px; font-size: 0.85em; color: #666; display: flex; gap: 10px;"><span>Estoque: <strong style="color: ${Number(i.qty) <= 1 ? '#e53935' : '#2e7d32'};">${i.qty}</strong></span></div>
             </div>
         `).join("");
     }
@@ -556,12 +814,5 @@ function renderSearchResults() {
 }
 
 function copySearchCode(code) {
-    navigator.clipboard.writeText(code).then(() => {
-        const resultsDiv = $("#search-results");
-        if (resultsDiv) resultsDiv.style.display = "none";
-        alert("Código " + code + " copiado para a área de transferência!");
-    }).catch(err => {
-        alert("Erro ao copiar o código: " + err);
-    });
+    navigator.clipboard.writeText(code).then(() => { const resultsDiv = $("#search-results"); if (resultsDiv) resultsDiv.style.display = "none"; alert("Código " + code + " copiado!"); }).catch(err => alert("Erro: " + err));
 }
-
