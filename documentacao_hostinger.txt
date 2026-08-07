@@ -1,0 +1,76 @@
+Documentação Completa do StockFlow (Migração para Hostinger)
+================================================================
+
+Esta documentação foi elaborada para facilitar o processo de migração do aplicativo StockFlow (atualmente hospedado no Firebase Hosting) para a Hostinger, bem como servir de manual técnico do funcionamento da aplicação.
+
+
+1. Arquitetura do Aplicativo
+----------------------------------------------------------------
+O StockFlow é um Single Page Application (SPA) puramente estático em seu front-end (arquivos base: HTML, CSS, JS puro). Ele não necessita de um servidor Node.js ou PHP rodando para renderizar as telas. Toda a comunicação com o banco de dados é feita diretamente pelo navegador do usuário comunicando-se com o backend.
+
+Stack Tecnológico:
+- Front-end: HTML5, CSS3, JavaScript Vanilla (Puro).
+- Back-end / Banco de Dados: Supabase (PostgreSQL na nuvem).
+- Hospedagem Atual: Firebase Hosting.
+- Hospedagem Futura (Hostinger): Hospedagem de Sites Compartilhada (hPanel / cPanel) usando pasta "public_html".
+
+
+2. Estrutura de Arquivos
+----------------------------------------------------------------
+Todos os arquivos que PRECISAM ser enviados para a sua hospedagem na Hostinger estão localizados dentro da pasta "Public" do seu projeto atual. 
+
+Os arquivos essenciais são:
+- index.html: O coração do aplicativo, contém toda a estrutura da interface e as abas (Dashboard, Histórico, Insumos, etc).
+- styles.css: Estilização visual, esquema de cores (tema escuro), botões, tabelas e animações.
+- app.js: Contém toda a lógica de negócio do aplicativo (login, registro de movimentações, filtro de histórico, cadastro de insumos e chamadas à API do Supabase).
+- manifest.json: Arquivo que configura o app como um PWA (Progressive Web App), permitindo que seja instalado como aplicativo no celular.
+- Imagens: logo-glow.png, icon-red.jpeg, etc (logos e ícones do aplicativo).
+
+NOTA: Os arquivos que ficam nas pastas "scripts/" e arquivos como "package.json" ou ".env" são de uso local de desenvolvimento e scripts administrativos. NÃO devem e não precisam ser enviados para a Hostinger para o site funcionar.
+
+
+3. Banco de Dados (Supabase)
+----------------------------------------------------------------
+Toda a persistência de dados (usuários, insumos e movimentações) está hospedada na nuvem pelo Supabase.
+
+Conexão Front-end:
+A conexão do aplicativo com o Supabase é feita dentro do próprio arquivo app.js, nas primeiras linhas de código. As variáveis de URL e Chave Pública (Anon Key) já estão embutidas e apontam para o seu banco.
+
+Tabelas Principais:
+1. app_users: Armazena os técnicos e o administrador (com seus PINs e setores).
+2. destinations: Armazena as bancadas e laboratórios para onde os insumos são enviados.
+3. supplies: O cadastro dos insumos (nome, quantidade atual, quantidade mínima, etc).
+4. stock_movements: O histórico completo de tudo que entra e sai.
+5. stock_requests: Solicitações que dependem da aprovação do administrador.
+
+IMPORTANTE: A migração de hospedagem para a Hostinger NÃO AFETA o banco de dados, pois ele continuará rodando na nuvem do Supabase. Todos os históricos, senhas de usuários e insumos serão mantidos sem necessidade de exportação/importação de tabelas.
+
+
+4. Passo a Passo: Migrando para a Hostinger
+----------------------------------------------------------------
+Para migrar a aplicação para a Hostinger, siga estas instruções:
+
+1. Acesse seu hPanel (Painel da Hostinger)
+   Faça login na sua conta da Hostinger, vá até a aba "Hospedagem" e clique em "Gerenciar" no seu domínio configurado.
+
+2. Abra o Gerenciador de Arquivos
+   No menu lateral (ou na lista de ferramentas), busque por "Gerenciador de Arquivos" e acesse a pasta raiz do seu domínio, que geralmente se chama "public_html".
+
+3. Limpe a pasta (Opcional)
+   Se o domínio for novo, a Hostinger pode ter colocado um arquivo default.php ou algo do tipo. Pode excluir para deixar a pasta vazia.
+
+4. Faça o Upload dos Arquivos
+   Pegue TODO o conteúdo que está dentro da pasta "Public" do seu projeto no computador (todos os .html, .js, .css e imagens) e faça o upload / arraste-os para dentro da pasta "public_html" lá no Gerenciador de Arquivos da Hostinger.
+
+5. Acesse seu domínio
+   Pronto! Basta acessar o seu site (ex: https://meuapp.com.br) pelo navegador ou celular e o StockFlow já estará rodando na Hostinger e conectando aos seus dados atuais do Supabase.
+
+
+5. Como Atualizar Versões na Hostinger
+----------------------------------------------------------------
+Quando fazíamos pelo Firebase, rodávamos "firebase deploy". Na Hostinger, o processo de atualização será o seguinte:
+
+1. Quando você fizer uma modificação no código (no app.js ou index.html), sempre altere o número da versão no seu index.html, por exemplo: de app.js?v=2.7 para app.js?v=2.8.
+2. Acesse o Gerenciador de Arquivos na Hostinger.
+3. Arraste e solte o arquivo atualizado, sobrescrevendo os antigos na pasta public_html.
+4. Os seus usuários verão a atualização na próxima vez que abrirem o app, ou dando um Ctrl + F5.

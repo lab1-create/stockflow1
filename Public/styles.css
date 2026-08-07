@@ -1,20 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
 /* =========================================
-   Reset e Configurações Básicas
+   Design System - Antigravity UI Minimal
 ========================================= */
+:root {
+    /* Cores de fundo e degradês vibrantes */
+    --bg-dark: #09090b;
+    
+    --glass-bg: rgba(20, 15, 30, 0.2);
+    --glass-border: rgba(255, 255, 255, 0.03);
+    --rim-light: rgba(255, 42, 85, 0.15);
+    
+    /* Vermelhos Brilhantes e Neon */
+    --brand-red: #ff2a55;
+    --brand-gradient: linear-gradient(135deg, #ff2a55 0%, #ff758c 100%);
+    --brand-glow: none;
+    --brand-glow-strong: none;
+    
+    --text-primary: #ffffff;
+    --text-secondary: #8a819e;
+    
+    --radius-sm: 12px;
+    --radius-md: 20px;
+    --radius-lg: 32px;
+}
+
+/* Scrollbar Personalizado (Antigravity) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 42, 85, 0.3);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 42, 85, 0.6);
+}
+
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Outfit', sans-serif;
 }
 
 body {
-    background-color: #f4f6f8;
-    color: #333;
+    background: radial-gradient(circle at top right, #1a1220 0%, #09090b 100%);
+    color: var(--text-primary);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
 }
 
 /* =========================================
-   Tela de Login
+   Tela de Login (Neumórfica & Antigravidade)
 ========================================= */
 #login-screen {
     display: flex;
@@ -23,154 +66,301 @@ body {
     align-items: center;
     min-height: 100vh;
     width: 100%;
-    background-color: #222;
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(circle at center, #15161c 0%, #0a0b0e 100%);
+}
+
+#login-screen::before, #login-screen::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(120px);
+    z-index: 0;
+    pointer-events: none;
+}
+#login-screen::before {
+    width: 500px;
+    height: 500px;
+    background: rgba(255, 42, 85, 0.15);
+    top: -150px;
+    left: -150px;
+}
+#login-screen::after {
+    width: 400px;
+    height: 400px;
+    background: rgba(255, 117, 140, 0.1);
+    bottom: -100px;
+    right: -100px;
 }
 
 .login-card {
-    background: #fff;
-    padding: 2.5rem;
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    background: #0f1014;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    padding: 2.5rem 2rem;
+    border-radius: var(--radius-lg);
+    box-shadow: 20px 20px 50px #060608, -20px -20px 50px #181a20, inset 0 0 0 1px rgba(255,42,85,0.05);
     width: 100%;
     max-width: 400px;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 0.5rem;
+    position: relative;
+    z-index: 1;
 }
 
 .login-brand {
     display: flex;
+    flex-direction: column;
     align-items: center;
     gap: 10px;
+    margin-bottom: 0.5rem;
 }
 
-.brand-mark {
-    background-color: #e53935; /* Detalhe em Vermelho */
-    color: white;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-weight: bold;
-    font-size: 1.5rem;
-    border-radius: 4px;
+.login-brand img {
+    height: 110px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 15px rgba(255, 42, 85, 0.4)); /* Soft red neon glow */
+}
+
+.flow-title {
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.flow-title h2 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+    margin-bottom: 2px;
+}
+
+.eyebrow {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 5px;
+    color: var(--brand-red);
+    font-weight: 700;
+    opacity: 0.9;
 }
 
 .login-error {
-    color: #e53935;
+    color: #ff2a55;
     font-size: 0.9rem;
     text-align: center;
     min-height: 20px;
+    font-weight: 600;
+}
+
+/* Campos Neumórficos Recessed */
+.login-input {
+    background: #0a0b0e !important;
+    border: 1px solid rgba(255, 42, 85, 0.15) !important;
+    box-shadow: inset 4px 4px 10px #040405, inset -4px -4px 10px #101217 !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text-primary) !important;
+    padding: 1rem !important;
+    font-size: 1.1rem !important;
+    transition: all 0.3s ease;
+}
+
+.login-input:focus {
+    border-color: rgba(255, 42, 85, 0.6) !important;
+    box-shadow: 0 0 15px rgba(255, 42, 85, 0.2), inset 4px 4px 10px #040405, inset -4px -4px 10px #101217 !important;
+}
+
+/* Botão Flat Neon */
+.login-btn {
+    background: linear-gradient(135deg, #ff3b5c 0%, #ff7ea1 100%);
+    box-shadow: 0 10px 25px -5px rgba(255, 42, 85, 0.5);
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 2px;
+    margin-top: 0.5rem;
+    padding: 1.2rem;
+    font-size: 1.2rem;
+}
+.login-btn:hover {
+    box-shadow: 0 15px 30px -5px rgba(255, 42, 85, 0.7);
+    transform: translateY(-2px);
 }
 
 /* =========================================
-   Estrutura Principal (App Shell)
+   Estrutura Principal (App Shell Antigravity)
 ========================================= */
 .app-shell {
-    display: flex;
+    display: none;
     height: 100vh;
+    width: 100vw;
+    padding: 1.5rem; /* O segredo do Antigravity: os painéis não tocam nas bordas da tela */
+    gap: 1.5rem;
     overflow: hidden;
 }
 
 /* Menu Lateral */
 .sidebar {
-    width: 260px;
-    background-color: #1a1a1a;
-    color: white;
+    width: 100px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid var(--glass-border);
+    border-right: 1px solid var(--rim-light);
+    border-radius: var(--radius-lg);
     display: flex;
     flex-direction: column;
-    padding: 1.5rem;
+    align-items: center;
+    padding: 2.5rem 0;
+    z-index: 10;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02), 0 20px 50px rgba(0,0,0,0.5);
 }
 
 .sidebar .brand {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 2rem;
+    gap: 8px;
+    margin-bottom: 3rem;
 }
 
-.sidebar .brand span {
-    display: block;
-    font-size: 0.8rem;
-    color: #aaa;
+.sidebar .brand img {
+    height: 40px;
+    object-fit: contain;
+}
+
+.sidebar .brand span, .sidebar .brand strong {
+    display: none; /* Minimalismo extremo: esconde textos da logo no menu fechado */
 }
 
 .nav {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    flex: 1;
+    gap: 1.5rem;
+    width: 100%;
 }
 
 .nav-item {
     background: transparent;
-    color: #ccc;
+    color: var(--text-secondary);
     border: none;
-    padding: 0.8rem 1rem;
-    text-align: left;
-    border-radius: 4px;
+    width: 50px;
+    height: 50px;
+    margin: 0 auto;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     cursor: pointer;
-    font-size: 1rem;
-    transition: all 0.2s;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nav-item svg {
+    width: 24px;
+    height: 24px;
+    stroke-width: 1.5px;
+    transition: all 0.3s ease;
 }
 
 .nav-item:hover {
-    background: #333;
-    color: white;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .nav-item.active {
-    background-color: #e53935; /* Detalhe em Vermelho */
-    color: white;
-    font-weight: bold;
+    color: var(--brand-red);
+    background: transparent;
+    /* Red-to-coral glow for active state */
+    filter: drop-shadow(0 0 15px rgba(255, 42, 85, 0.6));
+    transform: scale(1.1);
 }
 
 .sidebar-footer {
     margin-top: auto;
-    padding-top: 1rem;
-    border-top: 1px solid #333;
-    font-size: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
 }
 
-.status-dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    background-color: #4caf50;
+.sidebar-footer > div {
+    display: none; /* Esconde o label de sessão para minimalismo */
+}
+
+#logout-button {
+    width: 50px;
+    height: 50px;
+    padding: 0;
     border-radius: 50%;
-    margin-right: 5px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: none;
+}
+#logout-button svg {
+    width: 20px;
+    height: 20px;
 }
 
-/* Área de Trabalho (Workspace) */
+/* Área Principal (Workspace de Vidro) */
 .workspace {
     flex: 1;
-    background-color: #f4f6f8;
-    padding: 2rem;
+    background: var(--glass-bg);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid var(--glass-border);
+    border-left: 1px solid var(--rim-light);
+    border-radius: var(--radius-lg);
+    padding: 3.5rem 4rem;
     overflow-y: auto;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02), 0 20px 50px rgba(0,0,0,0.5);
 }
 
 .topbar {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-    background: white;
-    padding: 1rem 1.5rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    align-items: flex-end;
+    margin-bottom: 3.5rem;
+}
+
+#view-title {
+    font-size: 2.8rem;
+    font-weight: 300;
+    letter-spacing: -1px;
+    color: var(--text-primary);
+}
+
+/* Busca Minimalista */
+.search {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+.search > span {
+    display: none;
 }
 
 .search input {
-    padding: 0.5rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    width: 250px;
-    margin-left: 10px;
+    background: transparent !important;
+    color: var(--text-primary) !important;
+    padding: 0.5rem 0 !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 0 !important;
+    width: 280px;
+    font-size: 1rem;
+    font-weight: 300;
+    transition: all 0.4s ease;
+    box-shadow: none !important;
+}
+
+.search input:focus {
+    border-bottom-color: var(--brand-red) !important;
+    background: transparent !important;
+    box-shadow: 0 10px 10px -10px rgba(255,42,85,0.4) !important; /* Glow inferior vermelho */
 }
 
 /* =========================================
-   Controle de Views (Ocultar/Mostrar telas)
+   Controle de Views
 ========================================= */
 .view {
     display: none;
@@ -178,59 +368,71 @@ body {
 
 .view.active {
     display: block;
-    animation: fadeIn 0.3s ease-in-out;
+    animation: zoomFade 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+@keyframes zoomFade {
+    from { opacity: 0; transform: translateY(15px); filter: blur(4px); }
+    to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
 
 /* =========================================
-   Dashboard e Métricas
+   Métricas Minimalistas com Tipografia e Glow
 ========================================= */
 .metrics-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
+    gap: 2rem;
+    margin-bottom: 3rem;
 }
 
 .metric {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    border-left: 4px solid #555;
+    background: transparent;
+    border: none;
+    padding: 1rem 0;
     display: flex;
     flex-direction: column;
 }
 
+.metric span {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
 .metric strong {
-    font-size: 2rem;
-    margin-top: 10px;
-    color: #111;
+    font-size: 3.5rem;
+    line-height: 1.1;
+    font-weight: 300;
+    color: var(--text-primary);
+    text-shadow: 0 10px 30px rgba(255,255,255,0.1);
 }
 
-.metric.danger {
-    border-left-color: #e53935; /* Vermelho para Críticos */
+.metric.danger strong {
+    color: var(--brand-red);
+    text-shadow: 0 10px 40px rgba(255, 42, 85, 0.4);
 }
 
-.metric.success {
-    border-left-color: #4caf50;
+.metric.success strong {
+    color: #ffb8c6; /* Rosa suave */
+    text-shadow: 0 10px 30px rgba(255, 184, 198, 0.3);
 }
 
+/* Painéis Secundários (Tabelas e Cards) */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2rem;
 }
 
 .panel {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    background: transparent;
+    padding: 0;
+    border: none;
+    box-shadow: none;
 }
 
 .panel-head {
@@ -238,49 +440,74 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1.5rem;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 10px;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.panel-head h2 {
+    font-size: 1.1rem;
+    font-weight: 400;
+    letter-spacing: 0.5px;
 }
 
 /* =========================================
-   Formulários, Inputs e Botões
+   Inputs e Botões Minimalistas
 ========================================= */
 label {
     display: flex;
     flex-direction: column;
-    font-weight: 600;
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
-    color: #444;
+    font-weight: 500;
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
 }
 
-input {
-    padding: 0.75rem;
-    margin-top: 0.4rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+input, select {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03) !important;
+    color: var(--text-primary) !important;
+    padding: 0.8rem 1rem;
+    margin-top: 0.3rem;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: var(--radius-sm) !important;
     font-size: 1rem;
+    font-weight: 300;
+    transition: all 0.3s ease;
+    box-shadow: none !important;
 }
 
-input:focus {
-    border-color: #e53935;
+input:focus, select:focus {
+    border-color: rgba(255, 42, 85, 0.4) !important;
     outline: none;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+button {
+    font-family: inherit;
 }
 
 .primary-action {
-    background-color: #e53935; /* Botões principais em Vermelho */
+    background: var(--brand-red);
     color: white;
     border: none;
-    padding: 0.8rem 1.5rem;
-    border-radius: 4px;
+    padding: 1rem 1.8rem;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    font-weight: bold;
-    font-size: 1rem;
-    transition: background 0.2s;
+    font-weight: 500;
+    font-size: 0.95rem;
+    letter-spacing: 0.5px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 20px -10px rgba(255, 42, 85, 0.5);
 }
 
 .primary-action:hover {
-    background-color: #c62828;
+    transform: translateY(-2px);
+    background: #ff476c;
+    box-shadow: 0 15px 25px -10px rgba(255, 42, 85, 0.7);
+}
+
+.primary-action:active {
+    transform: translateY(1px);
 }
 
 .primary-action.wide {
@@ -289,32 +516,89 @@ input:focus {
 
 .ghost-action {
     background: transparent;
-    color: #666;
-    border: 1px solid #ccc;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
+    color: var(--text-secondary);
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-sm);
     cursor: pointer;
+    font-weight: 400;
+    transition: all 0.3s ease;
 }
 
 .ghost-action:hover {
-    background: #eee;
+    color: var(--text-primary);
+    border-color: rgba(255,255,255,0.3);
+}
+
+.danger-action {
+    background: transparent;
+    color: #ff2a55 !important;
+    border: 1px solid rgba(255, 42, 85, 0.2) !important;
+}
+.danger-action:hover {
+    background: rgba(255, 42, 85, 0.1) !important;
+    border-color: #ff2a55 !important;
 }
 
 /* =========================================
-   Modais (Dialogs)
+   Listas e Tabelas Ultra Limpas
+========================================= */
+.compact-row, .table-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 0.95rem;
+    font-weight: 300;
+    transition: all 0.2s;
+}
+
+.table-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.table-row:hover, .compact-row:hover {
+    background: rgba(255,255,255,0.02);
+    padding: 1rem;
+    margin: 0 -1rem;
+    border-radius: 8px;
+    border-bottom-color: transparent;
+}
+
+.pill {
+    background: rgba(255, 42, 85, 0.1);
+    color: #ffb8c6;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: 1px solid rgba(255, 42, 85, 0.2);
+}
+
+/* =========================================
+   Modais Suspensos
 ========================================= */
 dialog {
     margin: auto;
-    border: none;
-    border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    background: rgba(15, 10, 20, 0.7);
+    backdrop-filter: blur(50px);
+    -webkit-backdrop-filter: blur(50px);
+    color: var(--text-primary);
+    border: 1px solid var(--rim-light);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 40px 100px rgba(0,0,0,0.9);
     padding: 2rem;
     width: 100%;
     max-width: 500px;
+    overflow-x: hidden;
 }
 
 dialog::backdrop {
     background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(10px);
 }
 
 .form-grid {
@@ -326,4 +610,68 @@ dialog::backdrop {
 
 .form-grid label.span-2 {
     grid-column: span 2;
+}
+
+.icon-button {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.icon-button:hover {
+    color: var(--text-primary);
+}
+
+/* =========================================
+   Fluxos (Retirada, Devolução, Reposição)
+========================================= */
+.flow-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 600px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.flow-card {
+    background: #0f1014;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    padding: 3rem;
+    border-radius: var(--radius-lg);
+    width: 100%;
+    text-align: center;
+    box-shadow: 20px 20px 50px #060608, -20px -20px 50px #181a20, inset 0 0 0 1px rgba(255,42,85,0.05);
+}
+
+.scan-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 1.5rem;
+    width: 100%;
+}
+
+.scan-input {
+    flex: 1;
+    text-transform: uppercase;
+}
+
+.result-box {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255,255,255,0.1);
+    font-size: 0.95rem;
+}
+
+.stepper {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
 }

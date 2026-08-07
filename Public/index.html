@@ -3,54 +3,70 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>StockFlow</title>
-    <!-- CORRIGIDO: Agora apontando para styles.css (com S) para trazer seu visual vermelho de volta -->
-    <link rel="stylesheet" href="styles.css">
+    <title>Outlet do Celular - Sistema</title>
+    <meta name="theme-color" content="#ff2a55">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Outlet do Celular">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css?v=2.7">
   </head>
   <body>
     <section id="login-screen" class="login-screen">
       <form id="login-form" class="login-card">
-        <div class="brand login-brand">
-          <div class="brand-mark">S</div>
-          <div>
-            <strong>StockFlow</strong>
-            <span>Acesso operational</span>
-          </div>
+        <div class="brand login-brand" style="margin-bottom: 2rem;">
+          <img src="icon-red.jpeg" alt="Outlet do Celular" style="height: 80px; border-radius: 50%; filter: drop-shadow(0 0 20px rgba(255, 42, 85, 0.8));">
         </div>
         <div class="flow-title">
-          <p class="eyebrow">Entrar</p>
           <h2>Selecione seu usuario</h2>
+          <p class="eyebrow">ENTRAR</p>
         </div>
+        <div id="login-error" class="login-error"></div>
         <label>
           Usuario
-          <input id="login-user" type="text" placeholder="Digite seu usuário ou nome" required style="width: 100%; box-sizing: border-box;">
+          <input type="text" id="login-user" placeholder="Digite seu usuário ou nome" required autocomplete="off" class="login-input">
         </label>
         <label>
           PIN
-          <input id="login-pin" type="password" placeholder="Digite sua senha" required>
+          <input type="password" id="login-pin" placeholder="Digite sua senha" required class="login-input">
         </label>
-        <button class="primary-action wide">Entrar</button>
-        <p id="login-error" class="login-error"></p>
+        <button type="submit" class="primary-action wide login-btn">ENTRAR</button>
+        <button type="button" id="open-register-btn" class="ghost-action wide" style="margin-top: 10px;">CRIAR ACESSO</button>
       </form>
     </section>
 
     <div class="app-shell">
       <aside class="sidebar" aria-label="Navegacao principal">
         <div class="brand">
-          <div class="brand-mark">S</div>
+          <img src="icon-red.jpeg" alt="Logo" style="height: 50px; border-radius: 50%;">
           <div>
-            <strong>StockFlow</strong>
+            <strong>Outlet do Celular</strong>
             <span>Controle de insumos</span>
           </div>
         </div>
 
         <nav class="nav">
-          <button class="nav-item active" data-view="dashboard" data-admin-only>Dashboard</button>
-          <button class="nav-item" data-view="withdraw">Retirar Insumo</button>
-          <button class="nav-item" data-view="return">Devolver Insumo</button>
-          <button class="nav-item" data-view="replenish" data-admin-only>Repor Estoque</button>
-          <button class="nav-item" data-view="items" data-admin-only>Insumos</button>
-          <button class="nav-item" data-view="history">Historico</button>
+          <button class="nav-item active" data-view="dashboard" data-admin-only title="Dashboard">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+          </button>
+          <button class="nav-item" data-view="withdraw" title="Retirar Insumo">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </button>
+          <button class="nav-item" data-view="return" title="Devolver Insumo">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </button>
+          <button class="nav-item" data-view="replenish" data-admin-only title="Repor Estoque">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+          </button>
+          <button class="nav-item" data-view="count" data-admin-only title="Contagem">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+          </button>
+          <button class="nav-item" data-view="items" data-admin-only title="Insumos">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+          </button>
+          <button class="nav-item" data-view="history" title="Histórico">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </button>
         </nav>
 
         <div class="sidebar-footer">
@@ -58,7 +74,9 @@
             <span class="status-dot"></span>
             <span id="session-label">Operacao rapida ativa</span>
           </div>
-          <button id="logout-button" class="ghost-action">Sair</button>
+          <button id="logout-button" class="ghost-action" title="Sair">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+          </button>
         </div>
       </aside>
 
@@ -66,7 +84,7 @@
         <header class="topbar">
           <div>
             <p class="eyebrow">Assistencia tecnica</p>
-            <h1 id="view-title">Dashboard</h1>
+            <h1 id="view-title">Painel Administrativo</h1>
           </div>
           <label class="search" style="position: relative;">
             <span>Pesquisar</span>
@@ -82,7 +100,7 @@
               <strong id="metric-total-items">0</strong>
             </article>
             <article class="metric danger">
-              <span>Itens Criticos</span>
+              <span>Crítico (≤ 1 un)</span>
               <strong id="metric-critical">0</strong>
             </article>
             <article class="metric">
@@ -98,46 +116,52 @@
           <div class="dashboard-grid">
             <section class="panel">
               <div class="panel-head">
-                <h2>Solicitacoes em tempo real</h2>
-                <span class="pill warning" id="pending-count">0 pendentes</span>
+                <h2>Pendências de Liberação</h2>
+                <span class="pill warning" id="pending-count">0 requisições</span>
               </div>
               <div id="pending-requests" class="request-list"></div>
             </section>
 
             <section class="panel">
               <div class="panel-head">
-                <h2>Itens criticos</h2>
-                <button class="ghost-action" data-view-jump="replenish">Repor</button>
+                <h2>Aprovação de Acessos</h2>
+                <span class="pill warning" id="pending-users-count">0 pendentes</span>
               </div>
-              <div id="critical-list" class="compact-list"></div>
+              <div id="pending-users" class="compact-list"></div>
             </section>
           </div>
 
           <div class="dashboard-grid" style="margin-top: 1.5rem;">
             <section class="panel">
               <div class="panel-head">
-                <h2>Controle de Acesso</h2>
+                <h2>Alerta: Estoque Crítico</h2>
+                <button id="export-critical-btn" class="primary-action" style="padding: 0.4rem 1rem; font-size: 0.85rem;">Exportar Pedido (CSV)</button>
+              </div>
+              <p class="muted" style="margin-bottom: 10px; font-size: 0.85rem;">Insumos com apenas 1 unidade ou zerados.</p>
+              <div id="critical-list" class="compact-list" style="max-height: 300px; overflow-y: auto;"></div>
+            </section>
+            
+            <section class="panel">
+              <div class="panel-head">
+                <h2>Controle de Usuários Ativos</h2>
                 <button id="new-user-button" class="primary-action">Novo Usuário</button>
               </div>
-              <p class="muted" style="padding: 1rem 0;">Adicione novos operadores e técnicos ao sistema com senhas exclusivas.</p>
+              <p class="muted" style="padding: 1rem 0;">Gerencie os operadores e técnicos do sistema.</p>
             </section>
           </div>
 
           <section class="panel" style="margin-top: 1.5rem;">
             <div class="panel-head">
-              <h2>Tempo medio de uso</h2>
-              <span class="muted">KPI administrative</span>
-            </div>
-            <div id="usage-kpis" class="table"></div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <h2>Ultimas movimentacoes</h2>
-              <button class="ghost-action" data-view-jump="history">Ver historico</button>
+              <h2>Ultimas Movimentações Globais</h2>
+              <button class="ghost-action" data-view-jump="history">Ver histórico de auditoria</button>
             </div>
             <div id="recent-history" class="table"></div>
           </section>
+
+          <footer style="text-align: center; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; align-items: center; gap: 10px;">
+            <img src="icon-red.jpeg" alt="Outlet do Celular" style="height: 40px; border-radius: 50%; filter: drop-shadow(0 0 10px rgba(255, 42, 85, 0.4));">
+            <p class="muted" style="font-size: 0.85rem; color: var(--text-secondary);">Sistema Integrado de Estoque &copy; 2026<br>Outlet do Celular - Todos os direitos reservados.</p>
+          </footer>
         </section>
 
         <section id="withdraw-view" class="view">
@@ -177,8 +201,9 @@
             <section class="flow-card">
               <div class="flow-title">
                 <p class="eyebrow">Administrador</p>
-                <h2>Repor estoque</h2>
+                <h2>Entrada (Fornecedor)</h2>
               </div>
+              <p class="muted" style="margin-bottom:15px;">Adiciona novas unidades recebidas de fornecedores ao estoque.</p>
               <div class="form-grid">
                 <label>
                   Codigo
@@ -189,8 +214,40 @@
                   <input id="replenish-qty" type="number" min="1" value="1">
                 </label>
               </div>
-              <button id="replenish-button" class="primary-action wide">Adicionar ao Estoque</button>
+              <button id="replenish-button" class="primary-action wide">Confirmar Entrada</button>
               <div id="replenish-result" class="result-box muted">Bipe o codigo e informe a quantidade.</div>
+            </section>
+          </div>
+        </section>
+
+        <section id="count-view" class="view">
+          <div class="flow-layout">
+            <section class="flow-card">
+              <div class="flow-title">
+                <p class="eyebrow">Auditoria</p>
+                <h2>Contagem / Balanço</h2>
+              </div>
+              <p class="muted" style="margin-bottom:15px;">Ajusta o saldo do sistema para bater exatamente com a contagem física atual.</p>
+              <div class="form-grid">
+                <label>
+                  Código do Insumo
+                  <input id="count-code" placeholder="Ex: TG012" class="scan-input">
+                </label>
+                <div style="display: flex; gap: 10px;">
+                  <button id="count-find-btn" class="ghost-action" style="flex:1;">Verificar Sistema</button>
+                </div>
+                
+                <div id="count-details" style="display:none; flex-direction:column; gap:10px; margin-top: 10px; border-top: 1px solid #333; padding-top: 15px;">
+                  <p id="count-item-name" style="font-weight: bold;"></p>
+                  <p>Saldo Atual no Sistema: <strong id="count-sys-qty" style="color: #ff2a55;"></strong></p>
+                  <label>
+                    Contagem Física Real
+                    <input id="count-phys-qty" type="number" min="0" placeholder="Qtd. real na prateleira">
+                  </label>
+                  <button id="count-submit-btn" class="primary-action wide">Ajustar Saldo (Auditoria)</button>
+                </div>
+              </div>
+              <div id="count-result" class="result-box muted" style="margin-top: 15px;">Aguardando leitura do código.</div>
             </section>
           </div>
         </section>
@@ -198,8 +255,8 @@
         <section id="items-view" class="view">
           <section class="panel">
             <div class="panel-head">
-              <h2>Insumos</h2>
-              <button id="new-item-button" class="primary-action">Novo Insumo</button>
+              <h2>Insumos (Referências)</h2>
+              <button id="new-item-button" class="primary-action">CRIAR REFERÊNCIA</button>
             </div>
             <div id="items-grid" class="items-grid"></div>
           </section>
@@ -207,11 +264,20 @@
 
         <section id="history-view" class="view">
           <section class="panel">
-            <div class="panel-head">
-              <h2>Historico completo</h2>
-              <select id="technician-filter" data-admin-only>
-                <option value="">Todos os tecnicos</option>
-              </select>
+            <div class="panel-head" style="flex-direction: column; align-items: stretch; gap: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>Auditoria Completa de Movimentações</h2>
+                <div style="display: flex; gap: 10px;">
+                  <select id="technician-filter" data-admin-only>
+                    <option value="">Todos os tecnicos</option>
+                  </select>
+                  <button id="export-history-btn" class="primary-action">Baixar Planilha</button>
+                </div>
+              </div>
+              <div class="tabs" style="display: flex; gap: 10px; margin-top: 5px; border-bottom: 1px solid #444;">
+                <button class="tab-btn active" data-history-tab="withdrawals" style="padding: 10px; background: transparent; border: none; color: #fff; cursor: pointer; border-bottom: 2px solid #ff2a55; font-weight: 500;">Retiradas e Devoluções</button>
+                <button class="tab-btn" data-history-tab="replenishments" style="padding: 10px; background: transparent; border: none; color: #aaa; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500;">Reposição, Contagem e Ajustes</button>
+              </div>
             </div>
             <div id="history-table" class="table"></div>
           </section>
@@ -219,10 +285,11 @@
       </main>
     </div>
 
+    <!-- Modals -->
     <dialog id="item-dialog">
       <form method="dialog" id="item-form" class="dialog-body">
         <div class="panel-head">
-          <h2 id="dialog-title">Novo Insumo</h2>
+          <h2 id="dialog-title">Nova Referência</h2>
           <button type="button" id="close-dialog" class="icon-button" aria-label="Fechar">x</button>
         </div>
         <input type="hidden" id="item-original-code">
@@ -230,23 +297,32 @@
           <label>Codigo<input id="item-code" required></label>
           <label>Nome<input id="item-name" required></label>
           <label>Categoria<input id="item-category" required></label>
-          <label>Quantidade Atual<input id="item-qty" type="number" min="0" required></label>
-          <label>Quantidade Minima<input id="item-min" type="number" min="0" required></label>
+          <label>Quantidade Mínima<input id="item-min" type="number" min="0" value="1"></label>
           <label>Fornecedor<input id="item-supplier"></label>
+          <label>Link (URL)<input id="item-link" type="url" placeholder="https://..."></label>
+          <label>Valor Unitário (R$)<input id="item-price" type="number" step="0.01" min="0" placeholder="0.00"></label>
+          <label>Compartilhado?<input id="item-shared" type="checkbox"></label>
           <label class="span-2">Observacao<input id="item-note"></label>
         </div>
-        <button class="primary-action wide" value="default">Salvar Insumo</button>
+        <button class="primary-action wide" value="default">Salvar Referência</button>
       </form>
     </dialog>
 
     <dialog id="user-dialog">
       <form method="dialog" id="user-form" class="dialog-body">
         <div class="panel-head">
-          <h2>Novo Usuário</h2>
+          <h2>Novo Usuário (Admin)</h2>
           <button type="button" id="close-user-dialog" class="icon-button" aria-label="Fechar">x</button>
         </div>
         <div class="form-grid">
           <label>Nome do Usuário<input id="user-name" required placeholder="Ex: Luiz"></label>
+          <label>Setor
+            <select id="user-sector" required style="width: 100%; height: 38px; margin-top: 4px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 0 8px;">
+              <option value="Triagem">Triagem</option>
+              <option value="Técnico">Técnico</option>
+              <option value="Geral">Geral</option>
+            </select>
+          </label>
           <label>Função / Cargo
             <select id="user-role" required style="width: 100%; height: 38px; margin-top: 4px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 0 8px;">
               <option value="tecnico">Técnico</option>
@@ -259,8 +335,38 @@
       </form>
     </dialog>
 
-    <!-- CORRIGIDO: Adicionado ambos os scripts necessários para o login e dashboard funcionarem em sincronia -->
-    <script src="app.js"></script>
-    <script src="dashboard.js"></script>
+    <dialog id="register-dialog">
+      <form method="dialog" id="register-form" class="dialog-body">
+        <div class="panel-head">
+          <h2>Solicitar Acesso</h2>
+          <button type="button" id="close-register-dialog" class="icon-button" aria-label="Fechar">x</button>
+        </div>
+        <p class="muted" style="margin-bottom: 15px;">Preencha seus dados. O administrador deverá aprovar seu acesso.</p>
+        <div class="form-grid">
+          <label>Seu Nome Completo<input id="reg-name" required placeholder="Ex: João da Silva"></label>
+          <label>Setor
+            <select id="reg-sector" required style="width: 100%; height: 38px; margin-top: 4px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 0 8px;">
+              <option value="Triagem">Triagem</option>
+              <option value="Técnico">Técnico</option>
+              <option value="Geral">Geral</option>
+            </select>
+          </label>
+          <label class="span-2">Crie sua Senha / PIN<input id="reg-pin" type="password" required placeholder="Digite uma senha"></label>
+        </div>
+        <button type="submit" class="primary-action wide">Enviar Solicitação</button>
+      </form>
+    </dialog>
+
+
+    <script src="app.js?v=2.7"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('SW registered!', reg))
+            .catch(err => console.log('SW registration failed', err));
+        });
+      }
+    </script>
   </body>
 </html>

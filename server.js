@@ -3,56 +3,62 @@ const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 
 const app = express();
 const port = Number(process.env.PORT || 4173);
 const host = "0.0.0.0";
 const liveClients = new Set();
+const JWT_SECRET = process.env.JWT_SECRET || "super-secret-key-change-me";
 
-// CORREÇÃO CRÍTICA DO IPV6 (Supabase / Render):
-// Adiciona regras explícitas para evitar o erro ENETUNREACH
 let connectionString = process.env.DATABASE_URL;
 if (connectionString && !connectionString.includes("sslmode=")) {
-    // Força o Supabase a ignorar problemas de IPv6/Pooling se necessário
     if (connectionString.includes("supabase.pool.pooler.supabase.com")) {
-        // Se estiver usando o pooler padrão
         connectionString += connectionString.includes("?") ? "&sslmode=require" : "?sslmode=require";
     }
 }
 
 const pool = new Pool({
     connectionString: connectionString,
-    ssl: {
-        rejectUnauthorized: false
-    }
+    ssl: { rejectUnauthorized: false }
 });
 
-// Configurações Globais
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-
-// CORREÇÃO DA TELA BRANCA: Servir arquivos estáticos ANTES de qualquer rota de API ou do wildcard (*)
+app.use(cookieParser());
 app.use(express.static(__dirname));
+
+// Auth Middlewares
+function verifyToken(req, res, next) {
+    const token = req.cookies.token;
+    if (!token) return res.status(401).json({ error: "Acesso negado. Faça login." });
+    try {
+        const verified = jwt.verify(token, JWT_SECRET);
+        req.user = verified;
+        next();
+    } catch (err) {
+        res.status(400).json({ error: "Sessão inválida ou expirada." });
+    }
+}
+
+function verifyAdmin(req, res, next) {
+    verifyToken(req, res, () => {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: "Acesso restrito a administradores." });
+        }
+        next();
+    });
+}
 
 // Buscar estado consolidado das tabelas do Supabase
 async function fetchState() {
     try {
-        const usersResult = await pool.query(
-            'SELECT id, name, role, pin_code FROM app_users WHERE active = true ORDER BY name ASC'
-        );
-        const users = usersResult.rows;
-
-        const destResult = await pool.query(
-            'SELECT id, name FROM destinations WHERE active = true'
-        );
-        const destinations = destResult.rows.map(d => d.name);
-
-        const suppliesResult = await pool.query(
-            'SELECT id, code, name, category, current_quantity FROM supplies ORDER BY code ASC'
-        );
-        const supplies = suppliesResult.rows;
-
+        const usersResult = await pool.query('SELECT id, name, role, pin_code, active FROM app_users ORDER BY name ASC');
+        const destinationsResult = await pool.query('SELECT id, name FROM destinations WHERE active = true');
+        const suppliesResult = await pool.query('SELECT id, code, name, category, current_quantity FROM supplies ORDER BY code ASC');
+        
         const movResult = await pool.query(`
             SELECT sm.id, sm.supply_id, sm.user_id, sm.destination_id, sm.movement_type, 
                    sm.quantity, sm.note, sm.created_at,
@@ -63,7 +69,6 @@ async function fetchState() {
             LEFT JOIN destinations d ON sm.destination_id = d.id
             ORDER BY sm.created_at DESC LIMIT 100
         `);
-        const movements = movResult.rows;
 
         const reqResult = await pool.query(`
             SELECT sr.id, sr.supply_id, sr.user_id, sr.destination_id, sr.quantity, sr.status, sr.requested_at,
@@ -74,9 +79,14 @@ async function fetchState() {
             LEFT JOIN destinations d ON sr.destination_id = d.id
             ORDER BY sr.requested_at DESC
         `);
-        const requests = reqResult.rows;
 
-        return { users, destinations, supplies, movements, requests };
+        return { 
+            users: usersResult.rows, 
+            destinations: destinationsResult.rows.map(d => d.name), 
+            supplies: suppliesResult.rows, 
+            movements: movResult.rows, 
+            requests: reqResult.rows 
+        };
     } catch (error) {
         console.error('❌ Erro crítico ao buscar dados no Supabase:', error);
         return { users: [], destinations: [], supplies: [], movements: [], requests: [] };
@@ -91,254 +101,265 @@ function broadcastState(state) {
 }
 
 // ---- ENDPOINTS DA API ----
-
-app.get("/api/bootstrap", async (req, res, next) => {
-    try {
-        res.json(await fetchState());
-    } catch (error) {
-        next(error);
-    }
+app.get("/api/bootstrap", verifyToken, async (req, res, next) => {
+    try { res.json(await fetchState()); } catch (error) { next(error); }
 });
 
-app.post("/api/login", async (req, res) => {
+// Auth endpoints
+app.post("/api/auth/login", async (req, res) => {
     try {
         const { name, pin } = req.body;
-        // CORREÇÃO 1: ILIKE em vez de = (ignora maiúsculas/minúsculas)
-        const result = await pool.query(
-            'SELECT id, name, role, pin_code FROM app_users WHERE name ILIKE $1 AND active = true',
-            [name]
-        );
+        const result = await pool.query('SELECT id, name, role, pin_code, active FROM app_users WHERE name ILIKE $1', [name]);
 
-        if (result.rows.length === 0) {
-            return res.status(400).json({ error: "Usuário não encontrado ou inativo." });
-        }
-
+        if (result.rows.length === 0) return res.status(400).json({ error: "Usuário não encontrado." });
         const user = result.rows[0];
-        // CORREÇÃO 2: Conversão de tipos com String()
-        if (String(pin) !== String(user.pin_code)) {
-            return res.status(400).json({ error: "PIN incorreto." });
-        }
+        if (!user.active) return res.status(400).json({ error: "Acesso pendente de aprovação." });
+        if (String(pin) !== String(user.pin_code)) return res.status(400).json({ error: "PIN incorreto." });
 
+        const token = jwt.sign({ id: user.id, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: "8h" });
+        res.cookie("token", token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict" });
+        
         const state = await fetchState();
-        res.json({
-            user: { id: user.id, name: user.name, role: user.role },
-            state
-        });
-    } catch (error) {
-        console.error('Erro ao processar login:', error);
-        res.status(500).json({ error: "Erro interno: " + (error.message || "Verifique o terminal.") });
-    }
+        res.json({ user: { id: user.id, name: user.name, role: user.role }, state });
+    } catch (error) { res.status(500).json({ error: "Erro interno" }); }
 });
 
-app.post("/api/users", async (req, res, next) => {
+app.post("/api/auth/logout", (req, res) => {
+    res.clearCookie("token");
+    res.json({ success: true });
+});
+
+app.get("/api/auth/me", verifyToken, (req, res) => {
+    res.json({ user: req.user });
+});
+
+// Admin endpoints
+app.post("/api/users", verifyAdmin, async (req, res, next) => {
     try {
         const { name, role, pin } = req.body;
-        if (!name || !role || !pin) {
-            return res.status(400).json({ error: "Todos os campos são obrigatórios." });
-        }
-        await pool.query(
-            'INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, true)',
-            [name, role, pin]
-        );
-        const state = await fetchState();
-        broadcastState(state);
-        res.json(state);
-    } catch (error) {
-        next(error);
-    }
+        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, true)', [name, role, pin]);
+        broadcastState(await fetchState());
+        res.json({ success: true });
+    } catch (error) { next(error); }
 });
 
-app.post("/api/supplies", async (req, res, next) => {
+app.post("/api/auth/register", async (req, res, next) => {
+    try {
+        const { name, role, pin } = req.body;
+        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, false)', [name, role, pin]);
+        broadcastState(await fetchState());
+        res.json({ success: true });
+    } catch (error) { next(error); }
+});
+
+app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
     try {
         const { code, name, category, qty, min, supplier, note } = req.body;
-        if (!code || !name || !category) {
-            return res.status(400).json({ error: "Campos obrigatórios ausentes." });
-        }
-        await pool.query(
-            'INSERT INTO supplies (code, name, category, current_quantity, minimum_quantity, supplier, note) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+        const inserted = await pool.query(
+            'INSERT INTO supplies (code, name, category, current_quantity, minimum_quantity, supplier, note) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
             [code, name, category, Number(qty || 0), Number(min || 0), supplier || null, note || null]
         );
-        const state = await fetchState();
-        broadcastState(state);
-        res.json(state);
-    } catch (error) {
-        next(error);
-    }
+        await pool.query(
+            'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id, note) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [inserted.rows[0].id, 'replenishment', 0, 0, 0, req.user.id, "Cadastro inicial"]
+        );
+        broadcastState(await fetchState());
+        res.json({ success: true });
+    } catch (error) { next(error); }
 });
 
-app.put("/api/supplies/:code", async (req, res, next) => {
+app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
     try {
         const { code } = req.params;
         const { name, category, qty, min, supplier, note } = req.body;
-        
         await pool.query(
             'UPDATE supplies SET name = $1, category = $2, current_quantity = $3, minimum_quantity = $4, supplier = $5, note = $6 WHERE code = $7',
             [name, category, Number(qty || 0), Number(min || 0), supplier || null, note || null, code]
         );
-        
-        const state = await fetchState();
-        broadcastState(state);
-        res.json(state);
-    } catch (error) {
-        next(error);
-    }
+        broadcastState(await fetchState());
+        res.json({ success: true });
+    } catch (error) { next(error); }
 });
 
-app.post("/api/movements/withdraw", async (req, res, next) => {
+// Operations
+app.post("/api/movements/withdraw", verifyToken, async (req, res, next) => {
     try {
-        // A tela envia "technician" e "destination" em vez de IDs
         const { code, technician, destination, quantity } = req.body;
         
-        // 1. Achar o Insumo
-        const supplyResult = await pool.query('SELECT id FROM supplies WHERE code = $1', [code]);
-        if (supplyResult.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
-        const supplyId = supplyResult.rows[0].id;
-
-        // 2. Achar o Usuário (Técnico)
-        const userResult = await pool.query('SELECT id FROM app_users WHERE name = $1', [technician]);
-        if (userResult.rows.length === 0) return res.status(400).json({ error: "Usuário não encontrado." });
-        const userId = userResult.rows[0].id;
-
-        // 3. Achar o Destino (Opcional - vamos tentar achar o ID, se não achar fica nulo)
+        const supplyRes = await pool.query('SELECT id FROM supplies WHERE code = $1', [code]);
+        if (supplyRes.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
+        
+        const userRes = await pool.query('SELECT id FROM app_users WHERE name = $1', [technician]);
+        if (userRes.rows.length === 0) return res.status(400).json({ error: "Usuário não encontrado." });
+        
         let destId = null;
         if (destination) {
-            const destResult = await pool.query('SELECT id FROM destinations WHERE name = $1', [destination]);
-            if (destResult.rows.length > 0) destId = destResult.rows[0].id;
+            const destRes = await pool.query('SELECT id FROM destinations WHERE name = $1', [destination]);
+            if (destRes.rows.length > 0) destId = destRes.rows[0].id;
         }
 
-        // 4. Criar a Solicitação Pendente
         await pool.query(
             'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status) VALUES ($1, $2, $3, $4, $5)',
-            [supplyId, userId, destId, Number(quantity) || 1, 'pending']
+            [supplyRes.rows[0].id, userRes.rows[0].id, destId, Number(quantity) || 1, 'pending']
         );
 
-        const state = await fetchState();
-        broadcastState(state);
-        res.json(state);
+        broadcastState(await fetchState());
+        res.json({ success: true });
+    } catch (error) { next(error); }
+});
+
+app.post("/api/requests/:id/approve", verifyAdmin, async (req, res, next) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { id } = req.params;
+        const requestRes = await client.query(
+            "UPDATE stock_requests SET status = 'approved', approved_at = now() WHERE id = $1 AND status = 'pending' RETURNING supply_id, quantity, user_id, destination_id, note",
+            [id]
+        );
+        
+        if (requestRes.rows.length > 0) {
+            const reqData = requestRes.rows[0];
+            const supplyRes = await client.query('SELECT current_quantity FROM supplies WHERE id = $1 FOR UPDATE', [reqData.supply_id]);
+            
+            if (supplyRes.rows.length > 0) {
+                const qBefore = supplyRes.rows[0].current_quantity;
+                const qAfter = qBefore - reqData.quantity;
+                
+                await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, reqData.supply_id]);
+                await client.query(
+                    'INSERT INTO stock_movements (supply_id, user_id, destination_id, movement_type, quantity, quantity_before, quantity_after, note) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+                    [reqData.supply_id, reqData.user_id, reqData.destination_id, 'withdrawal', reqData.quantity, qBefore, qAfter, reqData.note]
+                );
+            }
+        }
+        await client.query('COMMIT');
+        broadcastState(await fetchState());
+        res.json({ success: true });
     } catch (error) {
+        await client.query('ROLLBACK');
         next(error);
+    } finally {
+        client.release();
     }
 });
 
-app.post("/api/movements/return", async (req, res, next) => {
+app.delete("/api/requests/:id/cancel", verifyToken, async (req, res, next) => {
     try {
-        const { code, quantity, technician } = req.body;
-        const supplyResult = await pool.query('SELECT id, current_quantity FROM supplies WHERE code = $1', [code]);
-        if (supplyResult.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
-        
-        const qBefore = supplyResult.rows[0].current_quantity;
-        const qAfter = qBefore + (Number(quantity) || 0);
+        await pool.query("DELETE FROM stock_requests WHERE id = $1 AND status = 'pending'", [req.params.id]);
+        broadcastState(await fetchState());
+        res.json({ success: true });
+    } catch (error) { next(error); }
+});
 
+app.post("/api/movements/return", verifyToken, async (req, res, next) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { code, quantity, technician } = req.body;
+        
+        const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
+        if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
+        
         let userId = null;
         if (technician) {
-            const userResult = await pool.query('SELECT id FROM app_users WHERE name = $1', [technician]);
-            if (userResult.rows.length > 0) userId = userResult.rows[0].id;
+            const userRes = await client.query('SELECT id FROM app_users WHERE name = $1', [technician]);
+            if (userRes.rows.length > 0) userId = userRes.rows[0].id;
         }
 
         if (userId) {
-            const heldResult = await pool.query(`
+            const heldRes = await client.query(`
                 SELECT 
                   COALESCE(SUM(CASE WHEN movement_type = 'withdrawal' THEN quantity ELSE 0 END), 0) -
                   COALESCE(SUM(CASE WHEN movement_type = 'return' THEN quantity ELSE 0 END), 0) as items_held
-                FROM stock_movements
-                WHERE user_id = $1 AND supply_id = $2
-            `, [userId, supplyResult.rows[0].id]);
+                FROM stock_movements WHERE user_id = $1 AND supply_id = $2
+            `, [userId, supplyRes.rows[0].id]);
             
-            const itemsHeld = Number(heldResult.rows[0].items_held) || 0;
+            const itemsHeld = Number(heldRes.rows[0].items_held) || 0;
             if (itemsHeld < (Number(quantity) || 0)) {
-                return res.status(400).json({ error: `Você possui apenas ${itemsHeld} unidade(s) deste item em mãos para devolver.` });
+                throw new Error(`Você possui apenas ${itemsHeld} unidade(s) deste item para devolver.`);
             }
         }
 
-        await pool.query(
-            'UPDATE supplies SET current_quantity = $1 WHERE id = $2',
-            [qAfter, supplyResult.rows[0].id]
-        );
-        
-        await pool.query(
-            'INSERT INTO stock_movements (supply_id, user_id, movement_type, quantity, quantity_before, quantity_after) VALUES ($1, $2, $3, $4, $5, $6)',
-            [supplyResult.rows[0].id, userId, 'return', Number(quantity) || 0, qBefore, qAfter]
-        );
-
-        const state = await fetchState();
-        broadcastState(state);
-        res.json(state);
-    } catch (error) { next(error); }
-});
-
-app.post("/api/movements/replenish", async (req, res, next) => {
-    try {
-        const { code, quantity } = req.body;
-        const supplyResult = await pool.query('SELECT id, current_quantity FROM supplies WHERE code = $1', [code]);
-        if (supplyResult.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
-        
-        const qBefore = supplyResult.rows[0].current_quantity;
+        const qBefore = supplyRes.rows[0].current_quantity;
         const qAfter = qBefore + (Number(quantity) || 0);
 
-        await pool.query(
-            'UPDATE supplies SET current_quantity = $1 WHERE id = $2',
-            [qAfter, supplyResult.rows[0].id]
-        );
-
-        await pool.query(
-            'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after) VALUES ($1, $2, $3, $4, $5)',
-            [supplyResult.rows[0].id, 'replenishment', Number(quantity) || 0, qBefore, qAfter]
+        await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, supplyRes.rows[0].id]);
+        await client.query(
+            'INSERT INTO stock_movements (supply_id, user_id, movement_type, quantity, quantity_before, quantity_after) VALUES ($1, $2, $3, $4, $5, $6)',
+            [supplyRes.rows[0].id, userId, 'return', Number(quantity) || 0, qBefore, qAfter]
         );
         
-        const state = await fetchState();
-        broadcastState(state);
-        res.json(state);
-    } catch (error) { next(error); }
+        await client.query('COMMIT');
+        broadcastState(await fetchState());
+        res.json({ success: true });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: error.message });
+    } finally {
+        client.release();
+    }
 });
 
-app.post("/api/requests/:id/approve", async (req, res, next) => {
+app.post("/api/movements/replenish", verifyToken, async (req, res, next) => {
+    const client = await pool.connect();
     try {
-        const { id } = req.params;
-        const requestResult = await pool.query(
-            "UPDATE stock_requests SET status = 'approved', approved_at = now() WHERE id = $1 AND status = 'pending' RETURNING supply_id, quantity, user_id, destination_id",
-            [id]
-        );
-        if (requestResult.rows.length > 0) {
-            const { supply_id, quantity, user_id, destination_id } = requestResult.rows[0];
-            
-            const supplyResult = await pool.query('SELECT current_quantity FROM supplies WHERE id = $1', [supply_id]);
-            if (supplyResult.rows.length > 0) {
-                const qBefore = supplyResult.rows[0].current_quantity;
-                const qAfter = qBefore - quantity;
-
-                await pool.query(
-                    'UPDATE supplies SET current_quantity = $1 WHERE id = $2',
-                    [qAfter, supply_id]
-                );
-
-                await pool.query(
-                    'INSERT INTO stock_movements (supply_id, user_id, destination_id, movement_type, quantity, quantity_before, quantity_after) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                    [supply_id, user_id, destination_id, 'withdrawal', quantity, qBefore, qAfter]
-                );
-            }
-        }
+        await client.query('BEGIN');
+        const { code, quantity } = req.body;
         
-        const state = await fetchState();
-        broadcastState(state);
-        res.json(state);
-    } catch (error) { next(error); }
+        const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
+        if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
+        
+        const qBefore = supplyRes.rows[0].current_quantity;
+        const qAfter = qBefore + (Number(quantity) || 0);
+
+        await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, supplyRes.rows[0].id]);
+        await client.query(
+            'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id) VALUES ($1, $2, $3, $4, $5, $6)',
+            [supplyRes.rows[0].id, 'replenishment', Number(quantity) || 0, qBefore, qAfter, req.user.id]
+        );
+        
+        await client.query('COMMIT');
+        broadcastState(await fetchState());
+        res.json({ success: true });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: error.message });
+    } finally {
+        client.release();
+    }
 });
 
-app.delete("/api/requests/:id/cancel", async (req, res, next) => {
+app.post("/api/movements/adjust", verifyAdmin, async (req, res, next) => {
+    const client = await pool.connect();
     try {
-        const { id } = req.params;
-        const result = await pool.query(
-            "DELETE FROM stock_requests WHERE id = $1 AND status = 'pending' RETURNING id",
-            [id]
-        );
-        if (result.rows.length === 0) {
-            return res.status(400).json({ error: "Solicitação não encontrada ou já foi processada." });
+        await client.query('BEGIN');
+        const { code, physicalQty } = req.body;
+        
+        const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
+        if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
+        
+        const qBefore = supplyRes.rows[0].current_quantity;
+        const qAfter = Number(physicalQty) || 0;
+        const diff = qAfter - qBefore;
+
+        if (diff !== 0) {
+            await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, supplyRes.rows[0].id]);
+            await client.query(
+                'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id) VALUES ($1, $2, $3, $4, $5, $6)',
+                [supplyRes.rows[0].id, 'adjustment', Math.abs(diff), qBefore, qAfter, req.user.id]
+            );
         }
         
-        const state = await fetchState();
-        broadcastState(state);
-        res.json(state);
-    } catch (error) { next(error); }
+        await client.query('COMMIT');
+        broadcastState(await fetchState());
+        res.json({ success: true });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: error.message });
+    } finally {
+        client.release();
+    }
 });
 
 app.get("/api/events", (req, res) => {
@@ -349,12 +370,9 @@ app.get("/api/events", (req, res) => {
     });
     res.write("\n");
     liveClients.add(res);
-    req.on("close", () => {
-        liveClients.delete(res);
-    });
+    req.on("close", () => { liveClients.delete(res); });
 });
 
-// Fallback SPA - Somente se não for arquivo físico nem rota da API
 app.get("*", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"));
 });
@@ -364,6 +382,6 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: "Erro interno: " + (err.message || "Verifique o terminal.") });
 });
 
-const server = app.listen(port, host, () => {
-    console.log(`✅ Servidor ativo na porta ${port}`);
+app.listen(port, host, () => {
+    console.log(`✅ Servidor seguro ativo na porta ${port}`);
 });

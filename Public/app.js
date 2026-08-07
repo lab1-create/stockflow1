@@ -1,3 +1,12 @@
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 const supabaseUrl = 'https://inmyfrdeiqbzcavijnkg.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlubXlmcmRlaXFiemNhdmlqbmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0MzYxNzUsImV4cCI6MjA5OTAxMjE3NX0.vpJ2tUNO843mnfUh_N5aP_fFymX89s-9guczjzaBXbo';
 const db = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -25,14 +34,15 @@ const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 async function bootstrapApp() {
     try {
-        const [{data: users}, {data: pendingUsrs}, {data: destinations}, {data: supplies}, {data: movements}, {data: requests}] = await Promise.all([
-            db.from('app_users').select('*').eq('active', true).order('name'),
-            db.from('app_users').select('*').eq('active', false).order('created_at'),
-            db.from('destinations').select('id, name').eq('active', true),
-            db.from('supplies').select('*').order('code'),
-            db.from('stock_movements').select('*, supplies(code, name), app_users(name, sector), destinations(name)').order('created_at', { ascending: false }).limit(200),
-            db.from('stock_requests').select('*, supplies(code, name), app_users!stock_requests_user_id_fkey(name, sector), destinations(name)').order('requested_at', { ascending: false })
-        ]);
+        const res = await fetch('/api/bootstrap');
+        const data = await res.json();
+        
+        const users = data.users.filter(u => u.active);
+        const pendingUsrs = data.users.filter(u => !u.active);
+        const destinations = data.destinations;
+        const supplies = data.supplies;
+        const movements = data.movements;
+        const requests = data.requests;
 
         state.items = (supplies || []).map(s => ({
             ...s,
@@ -54,7 +64,7 @@ async function bootstrapApp() {
             else if (m.movement_type === 'adjustment') typeDesc = 'Ajuste/Contagem';
 
             let uName = m.app_users?.name || "Sistema";
-            if (m.note && m.note.startsWith("Para:")) uName = `${uName} (${m.note})`;
+            if (m.note && m.note.startsWith("Para:")) uName = `${uName} (${escapeHTML(m.note)})`;
 
             return {
                 id: m.id,
@@ -181,7 +191,7 @@ function handleExportCritical() {
         const valUn = i.unit_price ? Number(i.unit_price).toFixed(2).replace('.', ',') : "0,00";
         // Exportando vazio na quantidade para preenchimento manual, e uma fórmula simples para o Excel (ex: =B2*D2)
         // Mas como a fórmula varia por idioma (C2*D2) e csv escapa coisas, melhor deixar o TOTAL em branco ou sem fórmula complexa.
-        return [`"${i.name}"`, "", `"${i.link}"`, `"R$ ${valUn}"`, ""];
+        return [`"${escapeHTML(i.name)}"`, "", `"${i.link}"`, `"R$ ${valUn}"`, ""];
     });
     exportCSV(`pedido_insumos_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
 }
@@ -217,7 +227,7 @@ function renderAll() {
     const critList = $("#critical-list");
     if (critList) {
         critList.innerHTML = criticalItems.length
-            ? criticalItems.map(i => `<div class="compact-row"><span>${i.name}</span><strong style="color:#ff2a55;">${i.qty} un</strong></div>`).join("")
+            ? criticalItems.map(i => `<div class="compact-row"><span>${escapeHTML(i.name)}</span><strong style="color:#ff2a55;">${i.qty} un</strong></div>`).join("")
             : `<p class="muted">Estoque sob controle.</p>`;
     }
 
@@ -307,8 +317,12 @@ function renderAll() {
 }
 
 async function approveUser(id) {
+    if (!confirm("Aprovar acesso deste usuário?")) return;
     try {
-        await db.from('app_users').update({ active: true }).eq('id', id);
+        // I need an endpoint for this, wait, there's no endpoint for approveUser in server.js. Let's add fetch if there's no endpoint... Wait, I need an endpoint first!
+        // Actually, the server.js doesn't have an endpoint for approveUser. I'll just change the status locally for now. No wait, that won't save. I'll create an endpoint /api/users/:id/approve in server.js next.
+        const res = await fetch(`/api/users/${id}/approve`, { method: 'POST' });
+        if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
         bootstrapApp();
     } catch(e) { alert("Erro ao aprovar: " + e.message); }
 }
@@ -318,11 +332,11 @@ function renderItemsGrid() {
     if (!grid) return;
     grid.innerHTML = filteredItems().map(i => `
     <div class="item-card" style="padding:15px; border:1px solid #444; border-radius:4px; background:#1e1e1e;">
-      <h3>${i.name} ${i.isShared ? '<span style="font-size:0.7rem; background:#444; padding:2px 6px; border-radius:10px; margin-left:6px;">Uso Conjunto</span>' : ''}</h3>
-      <p class="muted">Código: ${i.code} | Categoria: ${i.category}</p>
+      <h3>${escapeHTML(i.name)} ${i.isShared ? '<span style="font-size:0.7rem; background:#444; padding:2px 6px; border-radius:10px; margin-left:6px;">Uso Conjunto</span>' : ''}</h3>
+      <p class="muted">Código: ${escapeHTML(i.code)} | Categoria: ${i.category}</p>
       <p>Estoque: <strong style="color: ${i.qty <= 1 ? '#ff2a55' : 'inherit'}">${i.qty}</strong></p>
       <div style="display: flex; gap: 8px; margin-top: 8px;">
-        <button class="ghost-action" data-edit-item="${i.code}">Editar</button>
+        <button class="ghost-action" data-edit-item="${escapeHTML(i.code)}">Editar</button>
       </div>
     </div>
   `).join("");
@@ -368,7 +382,7 @@ function renderWithdraw() {
         content.innerHTML = `
             <h3>Quem vai retirar?</h3>
             <div class="form-grid" style="margin-top:10px;">
-                ${state.technicians.map(t => `<button class="primary-action" data-select-tech="${t.name}">${t.name} ${t.sector ? `(${t.sector})` : ''}</button>`).join("")}
+                ${state.technicians.map(t => `<button class="primary-action" data-select-tech="${escapeHTML(t.name)}">${escapeHTML(t.name)} ${t.sector ? `(${t.sector})` : ''}</button>`).join("")}
             </div>
             <div style="margin-top: 20px; text-align: center; border-top: 1px solid #444; padding-top: 15px;">
                 <p class="muted" style="margin-bottom: 10px; font-size: 0.9rem;">Retirada para não cadastrados ou visitantes:</p>
@@ -391,7 +405,7 @@ function renderWithdraw() {
     if (withdraw.step === 2) {
         content.innerHTML = `
             <h3>Bipe o Insumo</h3>
-            <p class="muted">Técnico: ${withdraw.technician}</p>
+            <p class="muted">Técnico: ${escapeHTML(withdraw.technician)}</p>
             <div class="scan-row" style="margin-top:10px;">
                 <input id="withdraw-code-input" class="scan-input" placeholder="Código do insumo">
                 <button id="withdraw-find-btn" class="primary-action">Identificar</button>
@@ -418,7 +432,7 @@ function renderWithdraw() {
     if (withdraw.step === "request_by_name") {
         content.innerHTML = `
             <h3>Solicitar Insumo</h3>
-            <p class="muted">Técnico: ${withdraw.technician}</p>
+            <p class="muted">Técnico: ${escapeHTML(withdraw.technician)}</p>
             <div style="margin-top:10px;">
                 <label style="display: block; text-align: left;">Digite o nome do produto:
                     <input id="request-name-input" class="scan-input" placeholder="Ex: Tela iPhone..." autocomplete="off" style="width: 100%; margin-top: 5px;">
@@ -444,10 +458,10 @@ function renderWithdraw() {
             } else {
                 results.innerHTML = matchingItems.map(i => `
                     <div style="padding: 10px; border-bottom: 1px solid #444; cursor: pointer; transition: background 0.2s;"
-                         onclick="selectItemForWithdraw('${i.code}')"
+                         onclick="selectItemForWithdraw('${escapeHTML(i.code)}')"
                          onmouseover="this.style.background='#222'"
                          onmouseout="this.style.background='transparent'">
-                         <strong style="color: white;">${i.name}</strong> <span class="muted" style="font-size: 0.8rem;">(${i.code})</span>
+                         <strong style="color: white;">${escapeHTML(i.name)}</strong> <span class="muted" style="font-size: 0.8rem;">(${escapeHTML(i.code)})</span>
                          <br><small style="color: ${Number(i.qty) > 0 ? '#2e7d32' : '#e53935'}">Estoque: ${i.qty}</small>
                     </div>
                 `).join("");
@@ -460,29 +474,21 @@ function renderWithdraw() {
         const techInfo = state.technicians.find(t => t.name === withdraw.technician);
         const destName = withdraw.isManual ? "Laboratório" : (techInfo?.defaultDest || "Laboratório");
 
-        content.innerHTML = `<h3>Confirmar Retirada de ${withdraw.item.name}</h3><div class="form-grid" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;"><label>Quantidade <input id="withdraw-qty-input" type="number" min="1" value="1" max="${withdraw.item.qty}"></label><div style="padding:10px; border:1px solid #444; border-radius:4px; background:#222;"><p style="margin:0; font-size:0.9rem;" class="muted">Destino Fixo</p><p style="margin:0; font-weight:bold;">🪑 ${destName}</p></div><input type="hidden" id="withdraw-dest-input" value="${destName}"><button id="withdraw-submit-btn" class="primary-action wide">Solicitar Liberação</button></div>`;
+        content.innerHTML = `<h3>Confirmar Retirada de ${escapeHTML(withdraw.item.name)}</h3><div class="form-grid" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;"><label>Quantidade <input id="withdraw-qty-input" type="number" min="1" value="1" max="${withdraw.item.qty}"></label><div style="padding:10px; border:1px solid #444; border-radius:4px; background:#222;"><p style="margin:0; font-size:0.9rem;" class="muted">Destino Fixo</p><p style="margin:0; font-weight:bold;">🪑 ${escapeHTML(destName)}</p></div><input type="hidden" id="withdraw-dest-input" value="${escapeHTML(destName)}"><button id="withdraw-submit-btn" class="primary-action wide">Solicitar Liberação</button></div>`;
         $("#withdraw-submit-btn").addEventListener("click", async () => {
+            const requestNote = prompt("Motivo / OS (Opcional):") || "";
             try {
-                let userId = null;
-                let requestNote = null;
-
-                if (withdraw.isManual) {
-                    userId = currentUser.id; // Vincula ao admin/operador que fez
-                    requestNote = `Para: ${withdraw.technician}`;
-                } else {
-                    const { data: users } = await db.from('app_users').select('id').eq('name', withdraw.technician);
-                    if (!users || users.length === 0) throw new Error("Usuário não encontrado.");
-                    userId = users[0].id;
-                }
-                
-                let destId = null;
-                const destName = $("#withdraw-dest-input").value;
-                if (destName) {
-                    const { data: dests } = await db.from('destinations').select('id').eq('name', destName);
-                    if (dests && dests.length > 0) destId = dests[0].id;
-                }
-
-                await db.from('stock_requests').insert({ supply_id: withdraw.item.id, user_id: userId, destination_id: destId, quantity: Number($("#withdraw-qty-input").value) || 1, status: 'pending', note: requestNote });
+                const res = await fetch('/api/movements/withdraw', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        code: withdraw.item.code, 
+                        technician: withdraw.technician, 
+                        destination: destName, 
+                        quantity: Number($("#withdraw-qty-input").value) || 1,
+                        note: requestNote
+                    })
+                });
+                if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
                 alert("Solicitação enviada!"); setView("dashboard"); bootstrapApp();
             } catch (e) { alert(e.message); }
         });
@@ -491,37 +497,21 @@ function renderWithdraw() {
 
 async function returnItem() {
     const codeInput = $("#return-code");
-    const qtyInput = $("#return-quantity");
-    if (!codeInput || !codeInput.value) return;
+    const qtyInput = $("#return-qty");
+    const techInput = $("#return-tech");
+    
+    if (!codeInput || !codeInput.value) return alert("Bipe o código do insumo.");
+    
+    const code = codeInput.value;
+    const quantity = qtyInput ? (Number(qtyInput.value) || 1) : 1;
+    const techName = techInput ? techInput.value : currentUser.name;
 
     try {
-        const item = state.items.find(i => normalize(i.code) === normalize(codeInput.value));
-        if (!item) throw new Error("Insumo não encontrado no sistema.");
-
-        const quantity = parseInt(qtyInput?.value || "1", 10);
-        let techName = currentUser.name;
-
-        if (isAdmin()) {
-            const tech = prompt("Nome do Técnico devolvendo:");
-            if (tech) techName = tech; else return;
-        }
-
-        const { data: users } = await db.from('app_users').select('id').eq('name', techName);
-        if (!users || users.length === 0) throw new Error("Usuário não encontrado.");
-
-        const { data: heldMovements } = await db.from('stock_movements').select('movement_type, quantity').eq('user_id', users[0].id).eq('supply_id', item.id);
-        let itemsHeld = 0;
-        if (heldMovements) heldMovements.forEach(m => {
-            if (m.movement_type === 'withdrawal') itemsHeld += m.quantity;
-            if (m.movement_type === 'return') itemsHeld -= m.quantity;
+        const res = await fetch('/api/movements/return', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, quantity, technician: techName })
         });
-
-        if (itemsHeld < quantity) throw new Error(`Você possui apenas ${itemsHeld} unidade(s) deste item em mãos para devolver.`);
-
-        const qAfter = item.qty + quantity;
-        await db.from('supplies').update({ current_quantity: qAfter }).eq('id', item.id);
-        await db.from('stock_movements').insert({ supply_id: item.id, user_id: users[0].id, movement_type: 'return', quantity: quantity, quantity_before: item.qty, quantity_after: qAfter });
-
+        if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
         $("#return-result").textContent = "Item devolvido com sucesso!"; codeInput.value = ""; if (qtyInput) qtyInput.value = "1"; bootstrapApp();
     } catch (e) { $("#return-result").textContent = e.message; }
 }
@@ -533,9 +523,11 @@ async function handleReplenish() {
         const item = state.items.find(i => normalize(i.code) === normalize(code));
         if (!item) throw new Error("Insumo não encontrado.");
 
-        const qAfter = item.qty + qty;
-        await db.from('supplies').update({ current_quantity: qAfter }).eq('id', item.id);
-        await db.from('stock_movements').insert({ supply_id: item.id, movement_type: 'replenishment', quantity: qty, quantity_before: item.qty, quantity_after: qAfter, user_id: currentUser?.id });
+        const res = await fetch('/api/movements/replenish', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: item.code, quantity: qty })
+        });
+        if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
 
         $("#replenish-result").textContent = "Estoque atualizado com sucesso!"; $("#replenish-code").value = ""; bootstrapApp();
     } catch (e) { $("#replenish-result").textContent = e.message; }
@@ -558,57 +550,39 @@ function findCountItem() {
 }
 
 async function submitCount() {
-    if (!countItem) return;
-    const physQty = Number($("#count-phys-qty").value);
-    const diff = physQty - countItem.qty;
-    
-    if (diff === 0) {
-        $("#count-result").textContent = "Contagem bateu! Nenhuma alteração necessária.";
-        $("#count-code").value = ""; $("#count-details").style.display = "none"; countItem = null;
-        return;
-    }
+    if (!countItem) return alert("Selecione um insumo primeiro.");
+    const physQty = Number($("#count-phys").value);
+    if (isNaN(physQty) || physQty < 0) return alert("Quantidade inválida.");
 
     try {
-        await db.from('supplies').update({ current_quantity: physQty }).eq('id', countItem.id);
-        
-        // Log movement
-        await db.from('stock_movements').insert({ 
-            supply_id: countItem.id, 
-            movement_type: 'adjustment', 
-            quantity: Math.abs(diff), 
-            quantity_before: countItem.qty, 
-            quantity_after: physQty, 
-            user_id: currentUser?.id,
-            note: diff > 0 ? "Sobrando na contagem" : "Faltando na contagem"
+        const res = await fetch('/api/movements/adjust', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: countItem.code, physicalQty: physQty })
         });
-
-        $("#count-result").textContent = "Estoque ajustado com sucesso!"; 
-        $("#count-code").value = ""; $("#count-details").style.display = "none"; countItem = null;
+        if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
+        alert(`Estoque ajustado para ${physQty}!`);
+        
+        countItem = null;
+        $("#count-code").value = "";
+        $("#count-info").style.display = "none";
+        $("#count-phys").value = "";
         bootstrapApp();
-    } catch(e) { $("#count-result").textContent = e.message; }
+    } catch (e) { alert(e.message); }
 }
 
 async function approveRequest(id, btn) {
     if (btn) btn.disabled = true;
     try {
-        const { data: requestRes } = await db.from('stock_requests').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', id).eq('status', 'pending').select();
-        if (requestRes && requestRes.length > 0) {
-            const req = requestRes[0];
-            const { data: supplyRes } = await db.from('supplies').select('current_quantity').eq('id', req.supply_id);
-            if (supplyRes && supplyRes.length > 0) {
-                const qBefore = supplyRes[0].current_quantity;
-                const qAfter = qBefore - req.quantity;
-                await db.from('supplies').update({ current_quantity: qAfter }).eq('id', req.supply_id);
-                await db.from('stock_movements').insert({ supply_id: req.supply_id, user_id: req.user_id, destination_id: req.destination_id, movement_type: 'withdrawal', quantity: req.quantity, quantity_before: qBefore, quantity_after: qAfter, note: req.note });
-            }
-        }
+        const res = await fetch(`/api/requests/${id}/approve`, { method: 'POST' });
+        if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
         bootstrapApp();
     } catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
 
 async function cancelRequest(id, btn) {
     if (btn) btn.disabled = true;
-    try { await db.from('stock_requests').delete().eq('id', id).eq('status', 'pending'); bootstrapApp(); } 
+    try { const res = await fetch(`/api/requests/${id}/cancel`, { method: 'DELETE' });
+        if(!res.ok) { const d = await res.json(); throw new Error(d.error); } bootstrapApp(); } 
     catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
 
@@ -645,15 +619,13 @@ async function handleLogin(e) {
     const name = $("#login-user").value.trim();
     const pin = $("#login-pin").value;
     try {
-        const { data: users, error } = await db.from('app_users').select('*').ilike('name', name);
-        if (error) throw error;
-        if (!users || users.length === 0) throw new Error("Usuário não encontrado.");
-        
-        const user = users[0];
-        if (!user.active) throw new Error("Seu acesso ainda não foi aprovado pelo administrador.");
-        if (String(pin) !== String(user.pin_code)) throw new Error("PIN incorreto.");
-        
-        currentUser = { id: user.id, name: user.name, role: user.role, sector: user.sector };
+        const res = await fetch('/api/auth/login', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, pin })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        currentUser = data.user;
         $("#session-label").textContent = `${currentUser.name} (${currentUser.role})`;
         $("#login-screen").style.display = "none";
         $(".app-shell").style.display = "flex";
@@ -685,7 +657,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const qtyInput = $("#replenish-qty");
                 let current = Number(qtyInput.value) || 0;
                 qtyInput.value = current + 1;
-                $("#replenish-result").textContent = `+1 ${item.name} contado! (A repor: ${qtyInput.value})`;
+                $("#replenish-result").textContent = `+1 ${escapeHTML(item.name)} contado! (A repor: ${qtyInput.value})`;
             } else {
                 $("#replenish-result").textContent = "Referência não encontrada!";
             }
@@ -742,14 +714,18 @@ document.addEventListener("DOMContentLoaded", () => {
         };
         try {
             if (origCode) {
-                await db.from('supplies').update(body).eq('code', origCode);
+                const res = await fetch(`/api/supplies/${origCode}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
             } else {
                 body.current_quantity = 0;
-                const { data, error } = await db.from('supplies').insert(body).select();
-                if (error) throw error;
-                if (data && data.length > 0) {
-                    await db.from('stock_movements').insert({ supply_id: data[0].id, movement_type: 'replenishment', quantity: 0, quantity_before: 0, quantity_after: 0, user_id: currentUser?.id, note: "Cadastro inicial" });
-                }
+                const res = await fetch('/api/supplies', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
             }
             $("#item-dialog").close(); bootstrapApp();
         } catch (err) { alert(err.message); }
@@ -765,7 +741,11 @@ document.addEventListener("DOMContentLoaded", () => {
             sector: sectorInput ? sectorInput.value : null,
             active: true 
         };
-        try { await db.from('app_users').insert(body); alert("Usuário adicionado!"); bootstrapApp(); $("#user-dialog").close(); } catch (err) { alert(err.message); }
+        try { const res = await fetch('/api/users', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if(!res.ok) { const d = await res.json(); throw new Error(d.error); } alert("Usuário adicionado!"); bootstrapApp(); $("#user-dialog").close(); } catch (err) { alert(err.message); }
     });
 
     $("#register-form")?.addEventListener("submit", async (e) => {
@@ -778,7 +758,11 @@ document.addEventListener("DOMContentLoaded", () => {
             active: false 
         };
         try { 
-            await db.from('app_users').insert(body); 
+            const res = await fetch('/api/users', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if(!res.ok) { const d = await res.json(); throw new Error(d.error); } 
             alert("Sua solicitação foi enviada! O administrador irá aprovar em breve."); 
             $("#register-dialog").close();
             $("#register-form").reset();
@@ -804,8 +788,8 @@ function renderSearchResults() {
         resultsDiv.innerHTML = "<div style='padding: 0.5rem 1rem; color: #666;'>Nenhum insumo encontrado.</div>";
     } else {
         resultsDiv.innerHTML = matchingItems.map(i => `
-            <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.2s;" onclick="copySearchCode('${i.code}')" onmouseover="this.style.background='#f9f9f9'" onmouseout="this.style.background='transparent'" title="Clique para copiar o código">
-                <div style="display: flex; justify-content: space-between; align-items: center;"><strong style="color: #333;">${i.name}</strong><span style="font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; color: #555;">${i.code}</span></div>
+            <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.2s;" onclick="copySearchCode('${escapeHTML(i.code)}')" onmouseover="this.style.background='#f9f9f9'" onmouseout="this.style.background='transparent'" title="Clique para copiar o código">
+                <div style="display: flex; justify-content: space-between; align-items: center;"><strong style="color: #333;">${escapeHTML(i.name)}</strong><span style="font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; color: #555;">${escapeHTML(i.code)}</span></div>
                 <div style="margin-top: 4px; font-size: 0.85em; color: #666; display: flex; gap: 10px;"><span>Estoque: <strong style="color: ${Number(i.qty) <= 1 ? '#e53935' : '#2e7d32'};">${i.qty}</strong></span></div>
             </div>
         `).join("");
