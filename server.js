@@ -30,7 +30,8 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-app.use(cors({ origin: true, credentials: true }));
+const allowedOrigins = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : true;
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
@@ -233,8 +234,8 @@ app.post("/api/requests/:id/approve", verifyAdmin, async (req, res, next) => {
         await client.query('BEGIN');
         const { id } = req.params;
         const requestRes = await client.query(
-            "UPDATE stock_requests SET status = 'approved', approved_at = now() WHERE id = $1 AND status = 'pending' RETURNING supply_id, quantity, user_id, destination_id, note",
-            [id]
+            "UPDATE stock_requests SET status = 'approved', approved_at = now(), approved_by = $2 WHERE id = $1 AND status = 'pending' RETURNING supply_id, quantity, user_id, destination_id, note",
+            [id, req.user.id]
         );
         
         if (requestRes.rows.length > 0) {
