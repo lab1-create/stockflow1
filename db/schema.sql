@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS app_users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
+    name TEXT UNIQUE NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('tecnico', 'admin')),
     pin_code TEXT NOT NULL, -- Hasheado com bcrypt
     active BOOLEAN DEFAULT false,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS app_users (
 CREATE TABLE IF NOT EXISTS supplies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL,
+    name TEXT UNIQUE NOT NULL,
     category TEXT,
     supplier TEXT,
     note TEXT,
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS supplies (
 
 CREATE TABLE IF NOT EXISTS destinations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
+    name TEXT UNIQUE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 

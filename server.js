@@ -25,6 +25,18 @@ if (connectionString && !connectionString.includes("sslmode=")) {
     }
 }
 
+function validatePositiveInteger(value) {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n <= 0) return null;
+    return n;
+}
+
+function validateNonNegativeInteger(value) {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0) return null;
+    return n;
+}
+
 const pool = new Pool({
     connectionString: connectionString,
     ssl: { rejectUnauthorized: false }
@@ -124,6 +136,12 @@ app.get("/api/bootstrap", verifyToken, async (req, res, next) => {
 });
 
 // Auth endpoints
+const registerLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hora
+    max: 10, // Limite de 10 cadastros por IP por hora
+    message: { error: "Muitas tentativas de cadastro a partir deste IP. Tente novamente mais tarde." }
+});
+
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 min
     max: 10, // 10 attempts
