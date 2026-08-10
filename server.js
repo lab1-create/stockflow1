@@ -44,7 +44,7 @@ app.use(helmet({
 app.use(express.static(path.join(__dirname, 'Public')));
 
 // Auth Middlewares
-function verifyToken(req, res, next) {
+async function verifyToken(req, res, next) {
     const token = req.cookies.token;
     if (!token) return res.status(401).json({ error: "Acesso negado. Faça login." });
     try {
@@ -374,18 +374,22 @@ app.post("/api/movements/adjust", verifyAdmin, async (req, res, next) => {
         await client.query('BEGIN');
         const { code, physicalQty } = req.body;
         
+        const qAfter = validateNonNegativeInteger(physicalQty);
+        if (qAfter === null) {
+            return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior ou igual a zero." });
+        }
+        
         const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
         if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
         
         const qBefore = supplyRes.rows[0].current_quantity;
-        const qAfter = Number(physicalQty) || 0;
         const diff = qAfter - qBefore;
 
         if (diff !== 0) {
             await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, supplyRes.rows[0].id]);
             await client.query(
                 'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id) VALUES ($1, $2, $3, $4, $5, $6)',
-                [supplyRes.rows[0].id, 'adjustment', Math.abs(validQuantity - qBefore), qBefore, qAfter, req.user.id]
+                [supplyRes.rows[0].id, 'adjustment', Math.abs(diff), qBefore, qAfter, req.user.id]
             );
         }
         

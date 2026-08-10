@@ -1,5 +1,5 @@
 -- schema.sql
--- Estrutura oficial do banco de dados (Produção Segura)
+-- Estrutura oficial do banco de dados (Produção Segura) - Sincronizado com o Backend (Fase 7)
 
 CREATE TABLE IF NOT EXISTS app_users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -13,9 +13,13 @@ CREATE TABLE IF NOT EXISTS app_users (
 
 CREATE TABLE IF NOT EXISTS supplies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
+    category TEXT,
+    supplier TEXT,
+    note TEXT,
+    minimum_quantity INTEGER NOT NULL DEFAULT 0,
     current_quantity INTEGER NOT NULL DEFAULT 0,
-    min_quantity INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
@@ -30,8 +34,10 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     supply_id UUID REFERENCES supplies(id),
     user_id UUID REFERENCES app_users(id),
     destination_id UUID REFERENCES destinations(id),
-    type TEXT NOT NULL CHECK (type IN ('withdraw', 'return', 'replenish', 'adjust')),
+    movement_type TEXT NOT NULL CHECK (movement_type IN ('withdrawal', 'return', 'replenishment', 'adjustment')),
     quantity INTEGER NOT NULL,
+    quantity_before INTEGER NOT NULL,
+    quantity_after INTEGER NOT NULL,
     note TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
@@ -45,7 +51,7 @@ CREATE TABLE IF NOT EXISTS stock_requests (
     note TEXT,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'canceled')),
     approved_by UUID REFERENCES app_users(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    requested_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
     approved_at TIMESTAMP WITH TIME ZONE
 );
 
