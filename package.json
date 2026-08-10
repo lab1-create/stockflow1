@@ -8,10 +8,8 @@
     "start": "node server.js",
     "dev": "node server.js",
     "deploy:start": "npm run db:init && node server.js",
-    "db:init": "node scripts/run-sql.js db/schema.sql db/seed.sql",
-    "db:schema": "node scripts/run-sql.js db/schema.sql",
-    "db:seed": "node scripts/run-sql.js db/seed.sql",
-    "db:clear": "node scripts/run-sql.js db/clear-data.sql"
+    "db:init": "node scripts/run-sql.js db/schema.sql",
+    "db:schema": "node scripts/run-sql.js db/schema.sql"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.1",
