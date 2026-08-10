@@ -13,7 +13,7 @@ const app = express();
 const port = Number(process.env.PORT || 4173);
 const host = "0.0.0.0";
 const liveClients = new Set();
-if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production") {
+if (!process.env.JWT_SECRET) {
     throw new Error("FATAL: JWT_SECRET não configurado no ambiente.");
 }
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-for-local-dev-only-change-me";
@@ -204,13 +204,10 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
 // Operations
 app.post("/api/movements/withdraw", verifyToken, async (req, res, next) => {
     try {
-        const { code, technician, destination, quantity } = req.body;
+        const { code, destination, quantity } = req.body;
         
         const supplyRes = await pool.query('SELECT id FROM supplies WHERE code = $1', [code]);
         if (supplyRes.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
-        
-        const userRes = await pool.query('SELECT id FROM app_users WHERE name = $1', [technician]);
-        if (userRes.rows.length === 0) return res.status(400).json({ error: "Usuário não encontrado." });
         
         let destId = null;
         if (destination) {
@@ -220,7 +217,7 @@ app.post("/api/movements/withdraw", verifyToken, async (req, res, next) => {
 
         await pool.query(
             'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status) VALUES ($1, $2, $3, $4, $5)',
-            [supplyRes.rows[0].id, userRes.rows[0].id, destId, Number(quantity) || 1, 'pending']
+            [supplyRes.rows[0].id, req.user.id, destId, Number(quantity) || 1, 'pending']
         );
 
         broadcastState(await fetchState());
