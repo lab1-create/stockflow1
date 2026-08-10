@@ -192,19 +192,28 @@ app.post("/api/users/:id/approve", verifyAdmin, async (req, res, next) => {
 app.post("/api/users", verifyAdmin, async (req, res, next) => {
     try {
         const { name, role, pin } = req.body;
+        if (!name || typeof name !== "string" || !name.trim() || !/^\d{4,6}$/.test(String(pin))) {
+            return res.status(400).json({ error: "Nome e PIN (4-6 dígitos) válidos são obrigatórios." });
+        }
+        if (role !== "admin" && role !== "tecnico") {
+            return res.status(400).json({ error: "Cargo inválido." });
+        }
         const hashedPin = await bcrypt.hash(String(pin), 12);
-        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, true)', [name, role, hashedPin]);
+        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, true)', [name.trim(), role, hashedPin]);
         broadcastState(await fetchState());
         res.json({ success: true });
     } catch (error) { next(error); }
 });
 
-app.post("/api/auth/register", async (req, res, next) => {
+app.post("/api/auth/register", registerLimiter, async (req, res, next) => {
     try {
         const { name, pin } = req.body;
+        if (!name || typeof name !== "string" || !name.trim() || !/^\d{4,6}$/.test(String(pin))) {
+            return res.status(400).json({ error: "Nome e PIN (4-6 dígitos) válidos são obrigatórios." });
+        }
         const role = "tecnico";
         const hashedPin = await bcrypt.hash(String(pin), 12);
-        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, false)', [name, role, hashedPin]);
+        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, false)', [name.trim(), role, hashedPin]);
         broadcastState(await fetchState());
         res.json({ success: true });
     } catch (error) { next(error); }
@@ -213,9 +222,13 @@ app.post("/api/auth/register", async (req, res, next) => {
 app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
     try {
         const { code, name, category, qty, min, supplier, note } = req.body;
+        const validQty = validateNonNegativeInteger(qty);
+        const validMin = validateNonNegativeInteger(min);
+        if (validQty === null || validMin === null) return res.status(400).json({ error: "Quantidade inválida." });
+        
         const inserted = await pool.query(
             'INSERT INTO supplies (code, name, category, current_quantity, minimum_quantity, supplier, note) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-            [code, name, category, Number(qty || 0), Number(min || 0), supplier || null, note || null]
+            [code, name, category, validQty, validMin, supplier || null, note || null]
         );
         await pool.query(
             'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id, note) VALUES ($1, $2, $3, $4, $5, $6, $7)',
@@ -230,9 +243,13 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
     try {
         const { code } = req.params;
         const { name, category, qty, min, supplier, note } = req.body;
+        const validQty = validateNonNegativeInteger(qty);
+        const validMin = validateNonNegativeInteger(min);
+        if (validQty === null || validMin === null) return res.status(400).json({ error: "Quantidade inválida." });
+
         await pool.query(
             'UPDATE supplies SET name = $1, category = $2, current_quantity = $3, minimum_quantity = $4, supplier = $5, note = $6 WHERE code = $7',
-            [name, category, Number(qty || 0), Number(min || 0), supplier || null, note || null, code]
+            [name, category, validQty, validMin, supplier || null, note || null, code]
         );
         broadcastState(await fetchState());
         res.json({ success: true });
@@ -271,25 +288,43 @@ app.post("/api/requests/:id/approve", verifyAdmin, async (req, res, next) => {
         await client.query('BEGIN');
         const { id } = req.params;
         const requestRes = await client.query(
-            "UPDATE stock_requests SET status = 'approved', approved_at = now(), approved_by = $2 WHERE id = $1 AND status = 'pending' RETURNING supply_id, quantity, user_id, destination_id, note",
+            "SELECT supply_id, quantity, user_id, destination_id, note FROM stock_requests WHERE id = $1 AND status = 'pending'",
+            [id]
+        );
+        
+        if (requestRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: "Requisição não encontrada ou já processada." });
+        }
+        
+        const reqData = requestRes.rows[0];
+        const supplyRes = await client.query('SELECT current_quantity FROM supplies WHERE id = $1 FOR UPDATE', [reqData.supply_id]);
+        
+        if (supplyRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: "Insumo não encontrado no banco." });
+        }
+        
+        const qBefore = supplyRes.rows[0].current_quantity;
+        const qAfter = qBefore - reqData.quantity;
+        
+        if (qAfter < 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: "Estoque insuficiente para aprovar esta retirada." });
+        }
+        
+        await client.query(
+            "UPDATE stock_requests SET status = 'approved', approved_at = now(), approved_by = $2 WHERE id = $1",
             [id, req.user.id]
         );
         
-        if (requestRes.rows.length > 0) {
-            const reqData = requestRes.rows[0];
-            const supplyRes = await client.query('SELECT current_quantity FROM supplies WHERE id = $1 FOR UPDATE', [reqData.supply_id]);
+        await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, reqData.supply_id]);
+        
+        await client.query(
+            'INSERT INTO stock_movements (supply_id, user_id, destination_id, movement_type, quantity, quantity_before, quantity_after, note) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+            [reqData.supply_id, reqData.user_id, reqData.destination_id, 'withdrawal', reqData.quantity, qBefore, qAfter, reqData.note]
+        );
             
-            if (supplyRes.rows.length > 0) {
-                const qBefore = supplyRes.rows[0].current_quantity;
-                const qAfter = qBefore - reqData.quantity;
-                
-                await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, reqData.supply_id]);
-                await client.query(
-                    'INSERT INTO stock_movements (supply_id, user_id, destination_id, movement_type, quantity, quantity_before, quantity_after, note) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-                    [reqData.supply_id, reqData.user_id, reqData.destination_id, 'withdrawal', reqData.quantity, qBefore, qAfter, reqData.note]
-                );
-            }
-        }
         await client.query('COMMIT');
         broadcastState(await fetchState());
         res.json({ success: true });
@@ -310,12 +345,13 @@ app.delete("/api/requests/:id/cancel", verifyToken, async (req, res, next) => {
 });
 
 app.post("/api/movements/return", verifyToken, async (req, res, next) => {
+    const { code, quantity } = req.body;
+    const validQuantity = validatePositiveInteger(quantity);
+    if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
+    
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const { code, quantity } = req.body;
-        const validQuantity = validatePositiveInteger(quantity);
-        if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
         const userId = req.user.id;
         
         const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
@@ -356,12 +392,13 @@ app.post("/api/movements/return", verifyToken, async (req, res, next) => {
 });
 
 app.post("/api/movements/replenish", verifyAdmin, async (req, res, next) => {
+    const { code, quantity } = req.body;
+    const validQuantity = validatePositiveInteger(quantity);
+    if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
+    
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const { code, quantity } = req.body;
-        const validQuantity = validatePositiveInteger(quantity);
-        if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
         
         const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
         if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
@@ -387,15 +424,15 @@ app.post("/api/movements/replenish", verifyAdmin, async (req, res, next) => {
 });
 
 app.post("/api/movements/adjust", verifyAdmin, async (req, res, next) => {
+    const { code, physicalQty } = req.body;
+    const qAfter = validateNonNegativeInteger(physicalQty);
+    if (qAfter === null) {
+        return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior ou igual a zero." });
+    }
+    
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const { code, physicalQty } = req.body;
-        
-        const qAfter = validateNonNegativeInteger(physicalQty);
-        if (qAfter === null) {
-            return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior ou igual a zero." });
-        }
         
         const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
         if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
