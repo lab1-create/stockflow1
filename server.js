@@ -10,7 +10,10 @@ const app = express();
 const port = Number(process.env.PORT || 4173);
 const host = "0.0.0.0";
 const liveClients = new Set();
-const JWT_SECRET = process.env.JWT_SECRET || "super-secret-key-change-me";
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production") {
+    throw new Error("FATAL: JWT_SECRET não configurado no ambiente.");
+}
+const JWT_SECRET = process.env.JWT_SECRET || "fallback-for-local-dev-only-change-me";
 
 let connectionString = process.env.DATABASE_URL;
 if (connectionString && !connectionString.includes("sslmode=")) {
@@ -55,7 +58,7 @@ function verifyAdmin(req, res, next) {
 // Buscar estado consolidado das tabelas do Supabase
 async function fetchState() {
     try {
-        const usersResult = await pool.query('SELECT id, name, role, pin_code, active FROM app_users ORDER BY name ASC');
+        const usersResult = await pool.query('SELECT id, name, role, active FROM app_users ORDER BY name ASC');
         const destinationsResult = await pool.query('SELECT id, name FROM destinations WHERE active = true');
         const suppliesResult = await pool.query('SELECT id, code, name, category, current_quantity FROM supplies ORDER BY code ASC');
         
@@ -106,15 +109,25 @@ app.get("/api/bootstrap", verifyToken, async (req, res, next) => {
 });
 
 // Auth endpoints
-app.post("/api/auth/login", async (req, res) => {
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 min
+    max: 10, // 10 attempts
+    message: { error: "Muitas tentativas. Tente novamente mais tarde." }
+});
+
+app.post("/api/auth/login", loginLimiter, async (req, res) => {
     try {
         const { name, pin } = req.body;
-        const result = await pool.query('SELECT id, name, role, pin_code, active FROM app_users WHERE name ILIKE $1', [name]);
+        if (!name || !pin) return res.status(400).json({ error: "Nome e PIN obrigatórios." });
 
+        const result = await pool.query('SELECT id, name, role, pin_code, active FROM app_users WHERE name = $1', [name]);
         if (result.rows.length === 0) return res.status(400).json({ error: "Usuário não encontrado." });
+
         const user = result.rows[0];
-        if (!user.active) return res.status(400).json({ error: "Acesso pendente de aprovação." });
-        if (String(pin) !== String(user.pin_code)) return res.status(400).json({ error: "PIN incorreto." });
+        if (!user.active) return res.status(400).json({ error: "Seu acesso ainda não foi aprovado pelo administrador." });
+        
+        const validPin = await bcrypt.compare(String(pin), user.pin_code);
+        if (!validPin) return res.status(400).json({ error: "PIN incorreto." });
 
         const token = jwt.sign({ id: user.id, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: "8h" });
         res.cookie("token", token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict" });
@@ -246,7 +259,7 @@ app.post("/api/requests/:id/approve", verifyAdmin, async (req, res, next) => {
 
 app.delete("/api/requests/:id/cancel", verifyToken, async (req, res, next) => {
     try {
-        await pool.query("DELETE FROM stock_requests WHERE id = $1 AND status = 'pending'", [req.params.id]);
+        await pool.query("DELETE FROM stock_requests WHERE id = $1 AND status = 'pending' AND user_id = $2", [req.params.id, req.user.id]);
         broadcastState(await fetchState());
         res.json({ success: true });
     } catch (error) { next(error); }
@@ -256,16 +269,11 @@ app.post("/api/movements/return", verifyToken, async (req, res, next) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const { code, quantity, technician } = req.body;
+        const { code, quantity } = req.body;
+        const userId = req.user.id;
         
         const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
         if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
-        
-        let userId = null;
-        if (technician) {
-            const userRes = await client.query('SELECT id FROM app_users WHERE name = $1', [technician]);
-            if (userRes.rows.length > 0) userId = userRes.rows[0].id;
-        }
 
         if (userId) {
             const heldRes = await client.query(`
