@@ -301,7 +301,7 @@ function renderAll() {
         pendUsersList.innerHTML = state.pendingUsers.length
             ? state.pendingUsers.map(u => `
                 <div class="compact-row" style="padding: 8px; border:1px solid #444; border-radius:4px; margin-bottom: 5px;">
-                  <span><strong>${u.name}</strong> (${u.sector})</span>
+                  <span><strong>${escapeHTML(u.name)}</strong> (${u.sector})</span>
                   <button class="primary-action" onclick="approveUser('${u.id}')" style="padding:4px 8px; font-size:0.8rem;">Aprovar</button>
                 </div>
             `).join("")

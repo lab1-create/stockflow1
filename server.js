@@ -30,9 +30,12 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
+if (process.env.NODE_ENV === "production" && !process.env.FRONTEND_URL) {
+    throw new Error("FRONTEND_URL obrigatório em produção");
+}
 const allowedOrigins = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : true;
 app.use(cors({ origin: allowedOrigins, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(helmet({
@@ -46,6 +49,11 @@ function verifyToken(req, res, next) {
     if (!token) return res.status(401).json({ error: "Acesso negado. Faça login." });
     try {
         const verified = jwt.verify(token, JWT_SECRET);
+        const userCheck = await pool.query('SELECT active, role FROM app_users WHERE id = $1', [verified.id]);
+        if (userCheck.rows.length === 0 || !userCheck.rows[0].active) {
+            return res.status(401).json({ error: "Usuário desativado ou removido." });
+        }
+        verified.role = userCheck.rows[0].role; // refresh role from DB
         req.user = verified;
         next();
     } catch (err) {
@@ -154,6 +162,15 @@ app.get("/api/auth/me", verifyToken, (req, res) => {
 });
 
 // Admin endpoints
+app.post("/api/users/:id/approve", verifyAdmin, async (req, res, next) => {
+    try {
+        const result = await pool.query("UPDATE app_users SET active = true, approved_by = $1 WHERE id = $2 RETURNING id", [req.user.id, req.params.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: "Usuário não encontrado" });
+        broadcastState(await fetchState());
+        res.json({ success: true });
+    } catch (err) { next(err); }
+});
+
 app.post("/api/users", verifyAdmin, async (req, res, next) => {
     try {
         const { name, role, pin } = req.body;
@@ -166,7 +183,8 @@ app.post("/api/users", verifyAdmin, async (req, res, next) => {
 
 app.post("/api/auth/register", async (req, res, next) => {
     try {
-        const { name, role, pin } = req.body;
+        const { name, pin } = req.body;
+        const role = "tecnico";
         const hashedPin = await bcrypt.hash(String(pin), 12);
         await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, false)', [name, role, hashedPin]);
         broadcastState(await fetchState());
