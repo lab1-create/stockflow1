@@ -1,3 +1,6 @@
+const rateLimit = require('express-rate-limit');
+const bcrypt = require('bcrypt');
+const helmet = require('helmet');
 require("dotenv").config();
 const path = require("path");
 const express = require("express");
@@ -31,7 +34,10 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
-app.use(express.static(__dirname));
+app.use(helmet({
+    contentSecurityPolicy: false // disabled to prevent breaking frontend for now
+}));
+app.use(express.static(path.join(__dirname, 'Public')));
 
 // Auth Middlewares
 function verifyToken(req, res, next) {
@@ -309,7 +315,7 @@ app.post("/api/movements/return", verifyToken, async (req, res, next) => {
     }
 });
 
-app.post("/api/movements/replenish", verifyToken, async (req, res, next) => {
+app.post("/api/movements/replenish", verifyAdmin, async (req, res, next) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -382,12 +388,13 @@ app.get("/api/events", (req, res) => {
 });
 
 app.get("*", (req, res) => {
-    res.sendFile(path.join(__dirname, "index.html"));
+    res.sendFile(path.join(__dirname, "Public", "index.html"));
 });
 
 app.use((err, req, res, next) => {
     console.error("❌ Erro capturado pelo middleware:", err);
-    res.status(500).json({ error: "Erro interno: " + (err.message || "Verifique o terminal.") });
+    console.error(err);
+        res.status(500).json({ error: "Erro interno do servidor." });
 });
 
 app.listen(port, host, () => {

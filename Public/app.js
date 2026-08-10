@@ -7,9 +7,6 @@ function escapeHTML(str) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
-const supabaseUrl = 'https://inmyfrdeiqbzcavijnkg.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlubXlmcmRlaXFiemNhdmlqbmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0MzYxNzUsImV4cCI6MjA5OTAxMjE3NX0.vpJ2tUNO843mnfUh_N5aP_fFymX89s-9guczjzaBXbo';
-const db = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 let state = {
     users: [],
