@@ -157,7 +157,8 @@ app.get("/api/auth/me", verifyToken, (req, res) => {
 app.post("/api/users", verifyAdmin, async (req, res, next) => {
     try {
         const { name, role, pin } = req.body;
-        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, true)', [name, role, pin]);
+        const hashedPin = await bcrypt.hash(String(pin), 12);
+        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, true)', [name, role, hashedPin]);
         broadcastState(await fetchState());
         res.json({ success: true });
     } catch (error) { next(error); }
@@ -166,7 +167,8 @@ app.post("/api/users", verifyAdmin, async (req, res, next) => {
 app.post("/api/auth/register", async (req, res, next) => {
     try {
         const { name, role, pin } = req.body;
-        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, false)', [name, role, pin]);
+        const hashedPin = await bcrypt.hash(String(pin), 12);
+        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, false)', [name, role, hashedPin]);
         broadcastState(await fetchState());
         res.json({ success: true });
     } catch (error) { next(error); }
@@ -205,6 +207,8 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
 app.post("/api/movements/withdraw", verifyToken, async (req, res, next) => {
     try {
         const { code, destination, quantity } = req.body;
+        const validQuantity = validatePositiveInteger(quantity);
+        if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
         
         const supplyRes = await pool.query('SELECT id FROM supplies WHERE code = $1', [code]);
         if (supplyRes.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
@@ -217,7 +221,7 @@ app.post("/api/movements/withdraw", verifyToken, async (req, res, next) => {
 
         await pool.query(
             'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status) VALUES ($1, $2, $3, $4, $5)',
-            [supplyRes.rows[0].id, req.user.id, destId, Number(quantity) || 1, 'pending']
+            [supplyRes.rows[0].id, req.user.id, destId, validQuantity, 'pending']
         );
 
         broadcastState(await fetchState());
@@ -274,6 +278,8 @@ app.post("/api/movements/return", verifyToken, async (req, res, next) => {
     try {
         await client.query('BEGIN');
         const { code, quantity } = req.body;
+        const validQuantity = validatePositiveInteger(quantity);
+        if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
         const userId = req.user.id;
         
         const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
@@ -288,18 +294,18 @@ app.post("/api/movements/return", verifyToken, async (req, res, next) => {
             `, [userId, supplyRes.rows[0].id]);
             
             const itemsHeld = Number(heldRes.rows[0].items_held) || 0;
-            if (itemsHeld < (Number(quantity) || 0)) {
+            if (itemsHeld < (validQuantity)) {
                 throw new Error(`Você possui apenas ${itemsHeld} unidade(s) deste item para devolver.`);
             }
         }
 
         const qBefore = supplyRes.rows[0].current_quantity;
-        const qAfter = qBefore + (Number(quantity) || 0);
+        const qAfter = qBefore + (validQuantity);
 
         await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, supplyRes.rows[0].id]);
         await client.query(
             'INSERT INTO stock_movements (supply_id, user_id, movement_type, quantity, quantity_before, quantity_after) VALUES ($1, $2, $3, $4, $5, $6)',
-            [supplyRes.rows[0].id, userId, 'return', Number(quantity) || 0, qBefore, qAfter]
+            [supplyRes.rows[0].id, userId, 'return', validQuantity, qBefore, qAfter]
         );
         
         await client.query('COMMIT');
@@ -318,17 +324,19 @@ app.post("/api/movements/replenish", verifyAdmin, async (req, res, next) => {
     try {
         await client.query('BEGIN');
         const { code, quantity } = req.body;
+        const validQuantity = validatePositiveInteger(quantity);
+        if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
         
         const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
         if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
         
         const qBefore = supplyRes.rows[0].current_quantity;
-        const qAfter = qBefore + (Number(quantity) || 0);
+        const qAfter = qBefore + (validQuantity);
 
         await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, supplyRes.rows[0].id]);
         await client.query(
             'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id) VALUES ($1, $2, $3, $4, $5, $6)',
-            [supplyRes.rows[0].id, 'replenishment', Number(quantity) || 0, qBefore, qAfter, req.user.id]
+            [supplyRes.rows[0].id, 'replenishment', validQuantity, qBefore, qAfter, req.user.id]
         );
         
         await client.query('COMMIT');
@@ -359,7 +367,7 @@ app.post("/api/movements/adjust", verifyAdmin, async (req, res, next) => {
             await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, supplyRes.rows[0].id]);
             await client.query(
                 'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id) VALUES ($1, $2, $3, $4, $5, $6)',
-                [supplyRes.rows[0].id, 'adjustment', Math.abs(diff), qBefore, qAfter, req.user.id]
+                [supplyRes.rows[0].id, 'adjustment', Math.abs(validQuantity - qBefore), qBefore, qAfter, req.user.id]
             );
         }
         
@@ -374,7 +382,7 @@ app.post("/api/movements/adjust", verifyAdmin, async (req, res, next) => {
     }
 });
 
-app.get("/api/events", (req, res) => {
+app.get("/api/events", verifyToken, (req, res) => {
     res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
