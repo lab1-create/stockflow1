@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS supplies (
 CREATE TABLE IF NOT EXISTS destinations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT UNIQUE NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
@@ -68,3 +69,11 @@ ALTER TABLE supplies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE destinations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_movements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_requests ENABLE ROW LEVEL SECURITY;
+
+-- ==========================================
+-- INDEXES FOR PERFORMANCE OPTIMIZATION
+-- ==========================================
+CREATE INDEX IF NOT EXISTS idx_supplies_code ON supplies(code);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_supply_id ON stock_movements(supply_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_user_id ON stock_movements(user_id);
+CREATE INDEX IF NOT EXISTS idx_stock_requests_status ON stock_requests(status);

@@ -8,11 +8,18 @@ function escapeHTML(str) {
         .replace(/'/g, "&#039;");
 }
 
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js")
+            .catch(err => console.error("SW Registration failed:", err));
+    });
+}
+
 let state = {
     users: [],
     pendingUsers: [],
     technicians: [],
-    destinations: ["Bancada 01", "Bancada 02", "Bancada 03", "Laboratório"],
+    destinations: [],
     items: [],
     history: [],
     requests: [],
@@ -46,10 +53,7 @@ async function bootstrapApp() {
             qty: s.current_quantity || 0,
             min: s.minimum_quantity || 0,
             supplier: s.supplier || "",
-            note: s.note || "",
-            link: s.link || "",
-            unit_price: s.unit_price || 0,
-            isShared: s.is_shared || false
+            note: s.note || ""
         }));
 
         state.history = (movements || []).map(m => {
@@ -60,35 +64,33 @@ async function bootstrapApp() {
             else if (m.movement_type === 'return') typeDesc = 'Devolução';
             else if (m.movement_type === 'adjustment') typeDesc = 'Ajuste/Contagem';
 
-            let uName = m.app_users?.name || "Sistema";
+            let uName = m.user_name || "Sistema";
             if (m.note && m.note.startsWith("Para:")) uName = `${uName} (${escapeHTML(m.note)})`;
 
             return {
                 id: m.id,
                 user: uName,
-                userSector: m.app_users?.sector || "",
-                type: typeDesc,
-                itemCode: m.supplies?.code || "-",
-                itemName: m.supplies?.name || "Desconhecido",
+                                type: typeDesc,
+                itemCode: m.code || "-",
+                itemName: m.supply_name || "Desconhecido",
                 qty: m.quantity,
                 qtyBefore: m.quantity_before,
                 qtyAfter: m.quantity_after,
-                destination: m.destinations?.name || "-",
+                destination: m.dest_name || "-",
                 at: m.created_at,
                 note: m.note || ""
             };
         });
 
         state.requests = (requests || []).map(r => {
-            let techName = r.app_users?.name || "Desconhecido";
+            let techName = r.user_name || "Desconhecido";
             if (r.note && r.note.startsWith("Para:")) techName = `${techName} (${r.note})`;
             return {
                 id: r.id,
                 technician: techName,
-                technicianSector: r.app_users?.sector || "",
-                qty: r.quantity || 1,
-                itemCode: r.supplies?.code || "-",
-                itemName: r.supplies?.name || "Insumo Desconhecido",
+                                qty: r.quantity || 1,
+                itemCode: r.code || "-",
+                itemName: r.supply_name || "Insumo Desconhecido",
                 status: r.status,
                 note: r.note || ""
             };
@@ -96,8 +98,7 @@ async function bootstrapApp() {
         
         state.technicians = (users || []).map(u => ({ 
             name: u.name, 
-            sector: u.sector || "",
-            defaultDest: destinations?.find(d => d.id === u.default_destination_id)?.name || "Laboratório"
+            defaultDest: "Laboratório"
         }));
         state.pendingUsers = pendingUsrs || [];
         
@@ -183,30 +184,28 @@ function exportCSV(filename, headers, rows) {
 
 function handleExportCritical() {
     const criticalItems = state.items.filter(i => Number(i.qty) <= 1);
-    const headers = ["LISTA DE INSUMOS", "QUANTIDADE", "LINK", "VALOR UN.", "TOTAL"];
+    const headers = ["LISTA DE INSUMOS", "QUANTIDADE"];
     const rows = criticalItems.map(i => {
-        const valUn = i.unit_price ? Number(i.unit_price).toFixed(2).replace('.', ',') : "0,00";
         // Exportando vazio na quantidade para preenchimento manual, e uma fórmula simples para o Excel (ex: =B2*D2)
         // Mas como a fórmula varia por idioma (C2*D2) e csv escapa coisas, melhor deixar o TOTAL em branco ou sem fórmula complexa.
-        return [`"${escapeHTML(i.name)}"`, "", `"${i.link}"`, `"R$ ${valUn}"`, ""];
+        return [`"${escapeHTML(i.name)}"`, ""];
     });
     exportCSV(`pedido_insumos_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
 }
 
 function handleExportHistory() {
-    const headers = ["Data", "Tipo", "Operador", "Setor", "Codigo", "Insumo", "Qtd", "Antes", "Depois", "Destino", "Obs"];
+    const headers = ["Data", "Tipo", "Operador", "Codigo", "Insumo", "Qtd", "Antes", "Depois", "Destino", "Obs"];
     const rows = state.history.map(h => [
         `"${formatDate(h.at)}"`,
         h.type,
         `"${h.user}"`,
-        `"${h.userSector}"`,
         h.itemCode,
         `"${h.itemName}"`,
         h.qty,
         h.qtyBefore,
         h.qtyAfter,
-        `"${h.destination}"`,
-        `"${h.note}"`
+        `"${escapeHTML(h.destination)}"`,
+        `"${escapeHTML(h.note)}"`
     ]);
     exportCSV(`auditoria_estoque_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
 }
@@ -236,30 +235,10 @@ function renderAll() {
         reqList.innerHTML = pendingRequests.length
             ? pendingRequests.map(r => {
                 let warningHtml = "";
-                const item = state.items.find(i => i.code === r.itemCode);
-                
-                if (item && item.isShared && r.technicianSector) {
-                    const thirtyDaysAgo = new Date();
-                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                    
-                    const recentWithdrawal = state.history.find(h => 
-                        h.type === "Retirada" && 
-                        h.itemCode === r.itemCode && 
-                        h.userSector === r.technicianSector &&
-                        new Date(h.at) >= thirtyDaysAgo
-                    );
-                    
-                    if (recentWithdrawal) {
-                        warningHtml = `<div style="background:#ff444422; border:1px solid #ff4444; color:#ff6b6b; padding:8px; border-radius:4px; margin:8px 0; font-size:0.85rem;">
-                            ⚠️ <strong>Atenção:</strong> ${recentWithdrawal.user} (${recentWithdrawal.userSector}) já retirou este insumo em ${formatDate(recentWithdrawal.at)}.
-                        </div>`;
-                    }
-                }
-                
                 return `
           <div class="request-card" style="padding:10px; border:1px solid #444; margin-bottom:8px; border-radius:4px;">
-            <p><strong>${r.technician} ${r.technicianSector ? `(${r.technicianSector})` : ''}</strong> solicitou ${r.qty}x ${r.itemName}</p>
-            ${warningHtml}
+            <p><strong>${escapeHTML(r.technician)} </strong> solicitou ${escapeHTML(String(r.qty))}x ${escapeHTML(r.itemName)}</p>
+            
             <div style="display:flex; gap:8px;">
                 <button class="primary-action" data-approve="${r.id}" style="margin-top:5px; flex:1;">Liberar</button>
                 <button class="danger-action" data-reject="${r.id}" style="margin-top:5px; flex:1; border:1px solid #ff4444; background:transparent; color:#ff4444; border-radius:4px; cursor:pointer;">Rejeitar</button>
@@ -279,7 +258,7 @@ function renderAll() {
         myReqList.innerHTML = myRequests.length
             ? myRequests.map(r => `
           <div class="request-card" style="padding:10px; border:1px solid #444; margin-bottom:8px; border-radius:4px; display: flex; justify-content: space-between; align-items: center;">
-            <p style="margin: 0;">Aguardando <strong>${r.qty}x ${r.itemName}</strong>...</p>
+            <p style="margin: 0;">Aguardando <strong>${escapeHTML(String(r.qty))}x ${escapeHTML(r.itemName)}</strong>...</p>
             <button class="danger-action" data-cancel="${r.id}" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px; border: 1px solid #ff4444; background: transparent; color: #ff4444; cursor: pointer;">Cancelar</button>
           </div>
         `).join("")
@@ -291,7 +270,7 @@ function renderAll() {
     if (recHist) {
         const data = filteredHistory().slice(0, 5);
         recHist.innerHTML = data.length
-            ? `<div class="table-body">` + data.map(h => `<div class="table-row"><span>${h.itemName}</span><span>${h.user} ${h.userSector ? `(${h.userSector})` : ''}${h.destination && h.destination !== "-" ? `<br><small style="color:#999;">🪑 ${h.destination}</small>` : ''}</span><span>${h.type}</span><span>${formatDate(h.at)}</span></div>`).join("") + `</div>`
+            ? `<div class="table-body">` + data.map(h => `<div class="table-row"><span>${escapeHTML(h.itemName)}</span><span>${escapeHTML(h.user)} ${h.destination && h.destination !== "-" ? `<br><small style="color:#999;">🪑 ${escapeHTML(h.destination)}</small>` : ''}</span><span>${escapeHTML(h.type)}</span><span>${formatDate(h.at)}</span></div>`).join("") + `</div>`
             : `<p class="muted">Nenhum registro.</p>`;
     }
     
@@ -301,8 +280,8 @@ function renderAll() {
         pendUsersList.innerHTML = state.pendingUsers.length
             ? state.pendingUsers.map(u => `
                 <div class="compact-row" style="padding: 8px; border:1px solid #444; border-radius:4px; margin-bottom: 5px;">
-                  <span><strong>${escapeHTML(u.name)}</strong> (${u.sector})</span>
-                  <button class="primary-action" onclick="approveUser('${u.id}')" style="padding:4px 8px; font-size:0.8rem;">Aprovar</button>
+                  <span><strong>${escapeHTML(u.name)}</strong></span>
+                  <button class="primary-action" data-approve-user=\"${u.id}\" style="padding:4px 8px; font-size:0.8rem;">Aprovar</button>
                 </div>
             `).join("")
             : `<p class="muted">Nenhum novo cadastro.</p>`;
@@ -329,9 +308,9 @@ function renderItemsGrid() {
     if (!grid) return;
     grid.innerHTML = filteredItems().map(i => `
     <div class="item-card" style="padding:15px; border:1px solid #444; border-radius:4px; background:#1e1e1e;">
-      <h3>${escapeHTML(i.name)} ${i.isShared ? '<span style="font-size:0.7rem; background:#444; padding:2px 6px; border-radius:10px; margin-left:6px;">Uso Conjunto</span>' : ''}</h3>
-      <p class="muted">Código: ${escapeHTML(i.code)} | Categoria: ${i.category}</p>
-      <p>Estoque: <strong style="color: ${i.qty <= 1 ? '#ff2a55' : 'inherit'}">${i.qty}</strong></p>
+      <h3>${escapeHTML(i.name)} </h3>
+      <p class="muted">Código: ${escapeHTML(i.code)} | Categoria: ${escapeHTML(i.category)}</p>
+      <p>Estoque: <strong style="color: ${Number(i.qty) <= 1 ? '#ff2a55' : 'inherit'}">${Number(i.qty)}</strong></p>
       <div style="display: flex; gap: 8px; margin-top: 8px;">
         <button class="ghost-action" data-edit-item="${escapeHTML(i.code)}">Editar</button>
       </div>
@@ -345,9 +324,9 @@ function renderHistoryTable() {
     if (!table) return;
     table.innerHTML = filteredHistory(true).map(h => `
     <div class="table-row">
-      <span><strong>${h.itemName}</strong> (${h.itemCode})</span>
-      <span>Técnico: ${h.user} ${h.userSector ? `(${h.userSector})` : ''}${h.destination && h.destination !== "-" ? `<br><small style="color:#aaa;">🪑 Destino: ${h.destination}</small>` : ''}</span>
-      <span>${h.type} (${h.qty} un)</span>
+      <span><strong>${escapeHTML(h.itemName)}</strong> (${escapeHTML(h.itemCode)})</span>
+      <span>Técnico: ${escapeHTML(h.user)} ${h.destination && h.destination !== "-" ? `<br><small style="color:#aaa;">🪑 Destino: ${escapeHTML(h.destination)}</small>` : ''}</span>
+      <span>${escapeHTML(h.type)} (${escapeHTML(String(h.qty))} un)</span>
       <span class="muted">${formatDate(h.at)}</span>
     </div>
   `).join("");
@@ -379,7 +358,7 @@ function renderWithdraw() {
         content.innerHTML = `
             <h3>Quem vai retirar?</h3>
             <div class="form-grid" style="margin-top:10px;">
-                ${state.technicians.map(t => `<button class="primary-action" data-select-tech="${escapeHTML(t.name)}">${escapeHTML(t.name)} ${t.sector ? `(${t.sector})` : ''}</button>`).join("")}
+                ${state.technicians.map(t => `<button class="primary-action" data-select-tech="${escapeHTML(t.name)}">${escapeHTML(t.name)} </button>`).join("")}
             </div>
             <div style="margin-top: 20px; text-align: center; border-top: 1px solid #444; padding-top: 15px;">
                 <p class="muted" style="margin-bottom: 10px; font-size: 0.9rem;">Retirada para não cadastrados ou visitantes:</p>
@@ -436,7 +415,7 @@ function renderWithdraw() {
                 </label>
             </div>
             <div id="request-name-results" style="margin-top: 10px; max-height: 200px; overflow-y: auto; text-align: left;"></div>
-            <button class="ghost-action" style="margin-top: 15px;" onclick="withdraw.step=2; renderWithdraw();">Voltar</button>
+            <button class="ghost-action" style="margin-top: 15px;" id=\"btn-request-back\">Voltar</button>
         `;
 
         const input = $("#request-name-input");
@@ -455,9 +434,8 @@ function renderWithdraw() {
             } else {
                 results.innerHTML = matchingItems.map(i => `
                     <div style="padding: 10px; border-bottom: 1px solid #444; cursor: pointer; transition: background 0.2s;"
-                         onclick="selectItemForWithdraw('${escapeHTML(i.code)}')"
-                         onmouseover="this.style.background='#222'"
-                         onmouseout="this.style.background='transparent'">
+                         data-select-withdraw=\"${escapeHTML(i.code)}\"
+                         >
                          <strong style="color: white;">${escapeHTML(i.name)}</strong> <span class="muted" style="font-size: 0.8rem;">(${escapeHTML(i.code)})</span>
                          <br><small style="color: ${Number(i.qty) > 0 ? '#2e7d32' : '#e53935'}">Estoque: ${i.qty}</small>
                     </div>
@@ -596,18 +574,12 @@ function openItemDialog(code = null) {
         $("#item-category").value = item.category; 
         $("#item-min").value = item.min; 
         $("#item-supplier").value = item.supplier || ""; 
-        $("#item-link").value = item.link || ""; 
-        $("#item-price").value = item.unit_price || ""; 
         $("#item-note").value = item.note || "";
-        const checkbox = $("#item-shared");
-        if (checkbox) checkbox.checked = item.isShared || false;
-    } else {
+        } else {
         $("#dialog-title").textContent = "Nova Referência"; 
         form.reset(); 
         $("#item-original-code").value = "";
-        const checkbox = $("#item-shared");
-        if (checkbox) checkbox.checked = false;
-    }
+        }
     dialog.showModal();
 }
 
@@ -630,7 +602,7 @@ async function handleLogin(e) {
         setView(isAdmin() ? "dashboard" : "withdraw");
         
         bootstrapApp();
-        refreshTimer = setInterval(bootstrapApp, 4000); 
+        refreshTimer = setInterval(bootstrapApp, 10000); 
     } catch (err) { $("#login-error").textContent = err.message; }
 }
 
@@ -697,18 +669,14 @@ document.addEventListener("DOMContentLoaded", () => {
     $("#item-form")?.addEventListener("submit", async (e) => {
         e.preventDefault(); 
         const origCode = $("#item-original-code").value;
-        const checkbox = $("#item-shared");
         const body = { 
             code: $("#item-code").value, 
             name: $("#item-name").value, 
             category: $("#item-category").value, 
             minimum_quantity: Number($("#item-min").value) || 0, 
             supplier: $("#item-supplier").value, 
-            link: $("#item-link").value,
-            unit_price: Number($("#item-price").value) || 0,
             note: $("#item-note").value,
-            is_shared: checkbox ? checkbox.checked : false
-        };
+            };
         try {
             if (origCode) {
                 const res = await fetch(`/api/supplies/${origCode}`, {
@@ -730,12 +698,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     $("#user-form")?.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const sectorInput = $("#user-sector");
         const body = { 
             name: $("#user-name").value, 
             role: $("#user-role").value, 
             pin_code: $("#user-pin").value, 
-            sector: sectorInput ? sectorInput.value : null,
             active: true 
         };
         try { const res = await fetch('/api/users', {
@@ -751,7 +717,6 @@ document.addEventListener("DOMContentLoaded", () => {
             name: $("#reg-name").value, 
             role: 'tecnico', 
             pin_code: $("#reg-pin").value, 
-            sector: $("#reg-sector").value,
             active: false 
         };
         try { 
@@ -772,6 +737,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.addEventListener("click", (e) => {
         if (!e.target.closest(".search")) { const resultsDiv = $("#search-results"); if (resultsDiv) resultsDiv.style.display = "none"; }
+        
+        const approveUserBtn = e.target.closest("[data-approve-user]");
+        if (approveUserBtn) approveUser(approveUserBtn.dataset.approveUser);
+
+        const requestBackBtn = e.target.closest("#btn-request-back");
+        if (requestBackBtn) { withdraw.step = 2; renderWithdraw(); }
+
+        const selectWithdrawBtn = e.target.closest("[data-select-withdraw]");
+        if (selectWithdrawBtn) selectItemForWithdraw(selectWithdrawBtn.dataset.selectWithdraw);
+
+        const copyCodeBtn = e.target.closest("[data-copy-code]");
+        if (copyCodeBtn) copySearchCode(copyCodeBtn.dataset.copyCode);
     });
 });
 
@@ -785,7 +762,7 @@ function renderSearchResults() {
         resultsDiv.innerHTML = "<div style='padding: 0.5rem 1rem; color: #666;'>Nenhum insumo encontrado.</div>";
     } else {
         resultsDiv.innerHTML = matchingItems.map(i => `
-            <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.2s;" onclick="copySearchCode('${escapeHTML(i.code)}')" onmouseover="this.style.background='#f9f9f9'" onmouseout="this.style.background='transparent'" title="Clique para copiar o código">
+            <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.2s;" data-copy-code=\"${escapeHTML(i.code)}\"  title="Clique para copiar o código">
                 <div style="display: flex; justify-content: space-between; align-items: center;"><strong style="color: #333;">${escapeHTML(i.name)}</strong><span style="font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; color: #555;">${escapeHTML(i.code)}</span></div>
                 <div style="margin-top: 4px; font-size: 0.85em; color: #666; display: flex; gap: 10px;"><span>Estoque: <strong style="color: ${Number(i.qty) <= 1 ? '#e53935' : '#2e7d32'};">${i.qty}</strong></span></div>
             </div>
