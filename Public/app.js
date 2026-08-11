@@ -720,9 +720,7 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         const body = { 
             name: $("#reg-name").value, 
-            role: 'tecnico', 
-            pin_code: $("#reg-pin").value, 
-            active: false 
+            pin: $("#reg-pin").value 
         };
         try { 
             const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
