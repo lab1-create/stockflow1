@@ -129,36 +129,36 @@ function verifyAdmin(req, res, next) {
     });
 }
 
-// Buscar estado consolidado (COM LIMITES)
+// Buscar estado consolidado (PARALELIZADO PARA PERFORMANCE EXTREMA)
 async function fetchState(page = 0, limit = 100) {
     try {
         const offset = page * limit;
-        const usersResult = await pool.query('SELECT id, name, role, active FROM app_users ORDER BY name ASC LIMIT $1 OFFSET $2', [limit, offset]);
-        const destinationsResult = await pool.query('SELECT id, name FROM destinations WHERE active = true LIMIT $1 OFFSET $2', [limit, offset]);
-        const suppliesResult = await pool.query('SELECT id, code, name, category, supplier, note, minimum_quantity, current_quantity, link, unit_price, is_shared FROM supplies ORDER BY code ASC LIMIT $1 OFFSET $2', [limit, offset]);
-        
-        const movResult = await pool.query(`
-            SELECT sm.id, sm.supply_id, sm.user_id, sm.destination_id, sm.movement_type, 
-                   sm.quantity, sm.quantity_before, sm.quantity_after, sm.note, sm.created_at,
-                   s.code, s.name as supply_name, u.name as user_name, d.name as dest_name
-            FROM stock_movements sm
-            LEFT JOIN supplies s ON sm.supply_id = s.id
-            LEFT JOIN app_users u ON sm.user_id = u.id
-            LEFT JOIN destinations d ON sm.destination_id = d.id
-            ORDER BY sm.created_at DESC LIMIT $1 OFFSET $2
-        `, [limit, offset]);
 
-        // Paginação aplicada na busca de requisições
-        const reqResult = await pool.query(`
-            SELECT sr.id, sr.supply_id, sr.user_id, sr.destination_id, sr.quantity, sr.status, sr.requested_at,
-                   s.code, s.name as supply_name, u.name as user_name, d.name as dest_name
-            FROM stock_requests sr
-            LEFT JOIN supplies s ON sr.supply_id = s.id
-            LEFT JOIN app_users u ON sr.user_id = u.id
-            LEFT JOIN destinations d ON sr.destination_id = d.id
-            ORDER BY sr.requested_at DESC
-            LIMIT $1 OFFSET $2
-        `, [limit, offset]);
+        const [usersResult, destinationsResult, suppliesResult, movResult, reqResult] = await Promise.all([
+            pool.query('SELECT id, name, role, active FROM app_users ORDER BY name ASC LIMIT $1 OFFSET $2', [limit, offset]),
+            pool.query('SELECT id, name FROM destinations WHERE active = true LIMIT $1 OFFSET $2', [limit, offset]),
+            pool.query('SELECT id, code, name, category, supplier, note, minimum_quantity, current_quantity, link, unit_price, is_shared FROM supplies ORDER BY code ASC LIMIT $1 OFFSET $2', [limit, offset]),
+            pool.query(`
+                SELECT sm.id, sm.supply_id, sm.user_id, sm.destination_id, sm.movement_type, 
+                       sm.quantity, sm.quantity_before, sm.quantity_after, sm.note, sm.created_at,
+                       s.code, s.name as supply_name, u.name as user_name, d.name as dest_name
+                FROM stock_movements sm
+                LEFT JOIN supplies s ON sm.supply_id = s.id
+                LEFT JOIN app_users u ON sm.user_id = u.id
+                LEFT JOIN destinations d ON sm.destination_id = d.id
+                ORDER BY sm.created_at DESC LIMIT $1 OFFSET $2
+            `, [limit, offset]),
+            pool.query(`
+                SELECT sr.id, sr.supply_id, sr.user_id, sr.destination_id, sr.quantity, sr.status, sr.requested_at,
+                       s.code, s.name as supply_name, u.name as user_name, d.name as dest_name
+                FROM stock_requests sr
+                LEFT JOIN supplies s ON sr.supply_id = s.id
+                LEFT JOIN app_users u ON sr.user_id = u.id
+                LEFT JOIN destinations d ON sr.destination_id = d.id
+                ORDER BY sr.requested_at DESC
+                LIMIT $1 OFFSET $2
+            `, [limit, offset])
+        ]);
 
         return { 
             users: usersResult.rows, 
