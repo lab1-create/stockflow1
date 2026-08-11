@@ -135,7 +135,7 @@ async function fetchState(page = 0, limit = 100) {
         
         const movResult = await pool.query(`
             SELECT sm.id, sm.supply_id, sm.user_id, sm.destination_id, sm.movement_type, 
-                   sm.quantity, sm.note, sm.created_at,
+                   sm.quantity, sm.quantity_before, sm.quantity_after, sm.note, sm.created_at,
                    s.code, s.name as supply_name, u.name as user_name, d.name as dest_name
             FROM stock_movements sm
             LEFT JOIN supplies s ON sm.supply_id = s.id
