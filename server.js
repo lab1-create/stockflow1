@@ -265,8 +265,8 @@ app.post("/api/auth/register", registerLimiter, async (req, res, next) => {
     try {
         const { name, pin } = req.body;
         const validName = validateString(name, 100);
-        if (!validName || !/^\d{4,6}$/.test(String(pin))) {
-            return res.status(400).json({ error: "Nome (máx 100 caracteres) e PIN (4-6 dígitos) válidos são obrigatórios." });
+        if (!validName || typeof pin !== "string" || pin.trim().length < 3) {
+            return res.status(400).json({ error: "Nome e Senha/PIN válidos são obrigatórios (mínimo 3 caracteres)." });
         }
         const role = "tecnico";
         const hashedPin = await bcrypt.hash(String(pin), 12);
