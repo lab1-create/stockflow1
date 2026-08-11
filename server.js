@@ -205,7 +205,7 @@ app.post("/api/auth/login", async (req, res) => {
         const { name, pin } = req.body;
         if (!name || !pin) return res.status(400).json({ error: "Nome e PIN obrigatórios." });
 
-        const result = await pool.query('SELECT id, name, role, pin_code, active FROM app_users WHERE name = $1', [name]);
+        const result = await pool.query('SELECT id, name, role, pin_code, active FROM app_users WHERE LOWER(name) = LOWER($1)', [name]);
         if (result.rows.length === 0) return res.status(401).json({ error: "Credenciais inválidas." });
 
         const user = result.rows[0];
