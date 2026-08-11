@@ -13,6 +13,7 @@ const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 
 const app = express();
+app.set('trust proxy', 1);
 const port = Number(process.env.PORT || 4173);
 const host = "0.0.0.0";
 
@@ -186,8 +187,8 @@ const registerLimiter = rateLimit({
 
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
-    max: 10, 
-    message: { error: "Muitas tentativas. Tente novamente mais tarde." }
+    max: 30, 
+    message: { error: "Muitas tentativas. Tente novamente em alguns minutos." }
 });
 
 app.post("/api/auth/login", loginLimiter, async (req, res) => {
