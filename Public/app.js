@@ -1,3 +1,7 @@
+const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? '' 
+    : 'https://stockflow1-1.onrender.com';
+
 function escapeHTML(str) {
     if (!str) return '';
     return String(str)
@@ -38,7 +42,7 @@ const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 async function bootstrapApp() {
     try {
-        const res = await fetch('/api/bootstrap');
+        const res = await fetch(`${API_BASE_URL}/api/bootstrap`, { credentials: 'include' });
         const data = await res.json();
         
         const users = data.users.filter(u => u.active);
@@ -297,7 +301,7 @@ async function approveUser(id) {
     try {
         // I need an endpoint for this, wait, there's no endpoint for approveUser in server.js. Let's add fetch if there's no endpoint... Wait, I need an endpoint first!
         // Actually, the server.js doesn't have an endpoint for approveUser. I'll just change the status locally for now. No wait, that won't save. I'll create an endpoint /api/users/:id/approve in server.js next.
-        const res = await fetch(`/api/users/${id}/approve`, { method: 'POST' });
+        const res = await fetch(`${API_BASE_URL}/api/users/${id}/approve`, { method: 'POST', credentials: 'include' });
         if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
         bootstrapApp();
     } catch(e) { alert("Erro ao aprovar: " + e.message); }
@@ -453,7 +457,7 @@ function renderWithdraw() {
         $("#withdraw-submit-btn").addEventListener("click", async () => {
             const requestNote = prompt("Motivo / OS (Opcional):") || "";
             try {
-                const res = await fetch('/api/movements/withdraw', {
+                const res = await fetch(`${API_BASE_URL}/api/movements/withdraw`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         code: withdraw.item.code, 
@@ -482,7 +486,7 @@ async function returnItem() {
     const techName = techInput ? techInput.value : currentUser.name;
 
     try {
-        const res = await fetch('/api/movements/return', {
+        const res = await fetch(`${API_BASE_URL}/api/movements/return`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code, quantity, technician: techName })
         });
@@ -498,7 +502,7 @@ async function handleReplenish() {
         const item = state.items.find(i => normalize(i.code) === normalize(code));
         if (!item) throw new Error("Insumo não encontrado.");
 
-        const res = await fetch('/api/movements/replenish', {
+        const res = await fetch(`${API_BASE_URL}/api/movements/replenish`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code: item.code, quantity: qty })
         });
@@ -530,7 +534,7 @@ async function submitCount() {
     if (isNaN(physQty) || physQty < 0) return alert("Quantidade inválida.");
 
     try {
-        const res = await fetch('/api/movements/adjust', {
+        const res = await fetch(`${API_BASE_URL}/api/movements/adjust`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code: countItem.code, physicalQty: physQty })
         });
@@ -548,7 +552,7 @@ async function submitCount() {
 async function approveRequest(id, btn) {
     if (btn) btn.disabled = true;
     try {
-        const res = await fetch(`/api/requests/${id}/approve`, { method: 'POST' });
+        const res = await fetch(`${API_BASE_URL}/api/requests/${id}/approve`, { method: 'POST', credentials: 'include' });
         if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
         bootstrapApp();
     } catch (e) { alert(e.message); if (btn) btn.disabled = false; }
@@ -556,7 +560,7 @@ async function approveRequest(id, btn) {
 
 async function cancelRequest(id, btn) {
     if (btn) btn.disabled = true;
-    try { const res = await fetch(`/api/requests/${id}/cancel`, { method: 'DELETE' });
+    try { const res = await fetch(`${API_BASE_URL}/api/requests/${id}/cancel`, { method: 'DELETE', credentials: 'include' });
         if(!res.ok) { const d = await res.json(); throw new Error(d.error); } bootstrapApp(); } 
     catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
@@ -588,8 +592,9 @@ async function handleLogin(e) {
     const name = $("#login-user").value.trim();
     const pin = $("#login-pin").value;
     try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ name, pin })
         });
         const data = await res.json();
@@ -679,14 +684,14 @@ document.addEventListener("DOMContentLoaded", () => {
             };
         try {
             if (origCode) {
-                const res = await fetch(`/api/supplies/${origCode}`, {
+                const res = await fetch(`${API_BASE_URL}/api/supplies/${origCode}`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
                 });
                 if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
             } else {
                 body.current_quantity = 0;
-                const res = await fetch('/api/supplies', {
+                const res = await fetch(`${API_BASE_URL}/api/supplies`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
                 });
@@ -704,7 +709,7 @@ document.addEventListener("DOMContentLoaded", () => {
             pin_code: $("#user-pin").value, 
             active: true 
         };
-        try { const res = await fetch('/api/users', {
+        try { const res = await fetch(`${API_BASE_URL}/api/users`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
@@ -720,7 +725,7 @@ document.addEventListener("DOMContentLoaded", () => {
             active: false 
         };
         try { 
-            const res = await fetch('/api/users', {
+            const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
