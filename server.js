@@ -293,6 +293,12 @@ app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
         if (validQty === null || validMin === null || !validCode || !validName) {
             return res.status(400).json({ error: "Dados inválidos para o insumo." });
         }
+
+        // Verificar se já existe um insumo com este mesmo código
+        const checkExisting = await pool.query('SELECT id FROM supplies WHERE LOWER(code) = LOWER($1)', [validCode]);
+        if (checkExisting.rows.length > 0) {
+            return res.status(400).json({ error: `O código de insumo '${validCode}' já está cadastrado no sistema.` });
+        }
         
         const inserted = await pool.query(
             'INSERT INTO supplies (code, name, category, current_quantity, minimum_quantity, supplier, note, link, unit_price, is_shared) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id',
@@ -316,6 +322,9 @@ app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
         broadcastUpdate('SUPPLY_CREATED', { supplyCode: validCode });
         res.json({ success: true });
     } catch (error) { 
+        if (error.code === '23505') {
+            return res.status(400).json({ error: "Código de insumo já cadastrado no sistema." });
+        }
         logger.error({ err: error.message, stack: error.stack }, 'Erro ao inserir insumo');
         next(error); 
     }
