@@ -191,7 +191,7 @@ const loginLimiter = rateLimit({
     message: { error: "Muitas tentativas. Tente novamente em alguns minutos." }
 });
 
-app.post("/api/auth/login", loginLimiter, async (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
     try {
         const { name, pin } = req.body;
         if (!name || !pin) return res.status(400).json({ error: "Nome e PIN obrigatórios." });
