@@ -563,4 +563,10 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: "Erro interno do servidor." });
 });
 
+if (process.env.NODE_ENV !== "test") {
+    app.listen(port, host, () => {
+        logger.info(`Servidor rodando em http://${host}:${port}`);
+    });
+}
+
 exports.api = onRequest({ secrets: ["DATABASE_URL", "JWT_SECRET"], region: "us-central1" }, app);
