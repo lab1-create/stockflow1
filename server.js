@@ -211,8 +211,8 @@ app.post("/api/auth/login", async (req, res) => {
         const state = await fetchState();
         res.json({ user: { id: user.id, name: user.name, role: user.role }, state });
     } catch (error) { 
-        logger.error('Login error:', error);
-        res.status(500).json({ error: "Erro interno" }); 
+        logger.error({ err: error.message, stack: error.stack }, 'Login error details');
+        res.status(500).json({ error: error.message || "Erro interno" }); 
     }
 });
 
