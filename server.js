@@ -404,7 +404,7 @@ app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, re
         const validQuantity = validatePositiveInteger(quantity);
         if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
         
-        const supplyRes = await pool.query('SELECT id FROM supplies WHERE code = $1', [code]);
+        const supplyRes = await pool.query('SELECT id FROM supplies WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1)', [code]);
         if (supplyRes.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
         
         let destId = null;
@@ -495,7 +495,7 @@ app.post("/api/movements/return", verifyToken, async (req, res, next) => {
         await client.query('BEGIN');
         const userId = req.user.id;
         
-        const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
+        const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1) FOR UPDATE', [code]);
         if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
 
         if (userId) {
