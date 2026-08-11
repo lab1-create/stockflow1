@@ -50,6 +50,16 @@ function validateNonNegativeInteger(value) {
     return n;
 }
 
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 function validateString(value, maxLength = 255) {
     if (typeof value !== "string") return null;
     const trimmed = value.trim();
