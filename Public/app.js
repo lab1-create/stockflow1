@@ -724,10 +724,11 @@ document.addEventListener("DOMContentLoaded", () => {
         };
         try { 
             const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        if(!res.ok) { const d = await res.json(); throw new Error(d.error); } 
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error); 
             alert("Sua solicitação foi enviada! O administrador irá aprovar em breve."); 
             $("#register-dialog").close();
             $("#register-form").reset();
