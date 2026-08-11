@@ -100,7 +100,11 @@ app.use(express.static(path.join(__dirname, 'Public')));
 
 // Auth Middlewares
 async function verifyToken(req, res, next) {
-    const token = req.cookies.token;
+    let token = req.cookies.token;
+    const authHeader = req.headers.authorization;
+    if (!token && authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.split(" ")[1];
+    }
     if (!token) return res.status(401).json({ error: "Acesso negado. Faça login." });
     try {
         const verified = jwt.verify(token, JWT_SECRET);
@@ -218,7 +222,7 @@ app.post("/api/auth/login", async (req, res) => {
         res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
         
         const state = await fetchState();
-        res.json({ user: { id: user.id, name: user.name, role: user.role }, state });
+        res.json({ user: { id: user.id, name: user.name, role: user.role }, token, state });
     } catch (error) { 
         logger.error({ err: error.message, stack: error.stack }, 'Login error details');
         res.status(500).json({ error: error.message || "Erro interno" }); 

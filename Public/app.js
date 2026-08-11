@@ -40,9 +40,25 @@ let currentHistoryTab = 'withdrawals';
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
+function getAuthHeaders(extraHeaders = {}) {
+    const token = localStorage.getItem("stockflow_token");
+    const headers = { ...extraHeaders };
+    if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+}
+
 async function bootstrapApp() {
     try {
-        const res = await fetch(`${API_BASE_URL}/api/bootstrap`, { credentials: 'include' });
+        const res = await fetch(`${API_BASE_URL}/api/bootstrap`, { 
+            credentials: 'include',
+            headers: getAuthHeaders()
+        });
+        if (res.status === 401) {
+            // Usuario nao autenticado ainda, apenas ignorar silenciosamente
+            return;
+        }
         const data = await res.json();
         
         const users = data.users.filter(u => u.active);
@@ -301,7 +317,11 @@ async function approveUser(id) {
     try {
         // I need an endpoint for this, wait, there's no endpoint for approveUser in server.js. Let's add fetch if there's no endpoint... Wait, I need an endpoint first!
         // Actually, the server.js doesn't have an endpoint for approveUser. I'll just change the status locally for now. No wait, that won't save. I'll create an endpoint /api/users/:id/approve in server.js next.
-        const res = await fetch(`${API_BASE_URL}/api/users/${id}/approve`, { method: 'POST', credentials: 'include' });
+        const res = await fetch(`${API_BASE_URL}/api/users/${id}/approve`, { 
+            method: 'POST', 
+            credentials: 'include',
+            headers: getAuthHeaders()
+        });
         if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
         bootstrapApp();
     } catch(e) { alert("Erro ao aprovar: " + e.message); }
@@ -458,7 +478,8 @@ function renderWithdraw() {
             const requestNote = prompt("Motivo / OS (Opcional):") || "";
             try {
                 const res = await fetch(`${API_BASE_URL}/api/movements/withdraw`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', 
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ 
                         code: withdraw.item.code, 
                         technician: withdraw.technician, 
@@ -487,7 +508,8 @@ async function returnItem() {
 
     try {
         const res = await fetch(`${API_BASE_URL}/api/movements/return`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', 
+            headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ code, quantity, technician: techName })
         });
         if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
@@ -503,7 +525,8 @@ async function handleReplenish() {
         if (!item) throw new Error("Insumo não encontrado.");
 
         const res = await fetch(`${API_BASE_URL}/api/movements/replenish`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', 
+            headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ code: item.code, quantity: qty })
         });
         if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
@@ -535,7 +558,8 @@ async function submitCount() {
 
     try {
         const res = await fetch(`${API_BASE_URL}/api/movements/adjust`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', 
+            headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ code: countItem.code, physicalQty: physQty })
         });
         if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
@@ -552,7 +576,11 @@ async function submitCount() {
 async function approveRequest(id, btn) {
     if (btn) btn.disabled = true;
     try {
-        const res = await fetch(`${API_BASE_URL}/api/requests/${id}/approve`, { method: 'POST', credentials: 'include' });
+        const res = await fetch(`${API_BASE_URL}/api/requests/${id}/approve`, { 
+            method: 'POST', 
+            credentials: 'include',
+            headers: getAuthHeaders()
+        });
         if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
         bootstrapApp();
     } catch (e) { alert(e.message); if (btn) btn.disabled = false; }
@@ -560,7 +588,12 @@ async function approveRequest(id, btn) {
 
 async function cancelRequest(id, btn) {
     if (btn) btn.disabled = true;
-    try { const res = await fetch(`${API_BASE_URL}/api/requests/${id}/cancel`, { method: 'DELETE', credentials: 'include' });
+    try { 
+        const res = await fetch(`${API_BASE_URL}/api/requests/${id}/cancel`, { 
+            method: 'DELETE', 
+            credentials: 'include',
+            headers: getAuthHeaders()
+        });
         if(!res.ok) { const d = await res.json(); throw new Error(d.error); } bootstrapApp(); } 
     catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
@@ -600,6 +633,7 @@ async function handleLogin(e) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         currentUser = data.user;
+        if (data.token) localStorage.setItem("stockflow_token", data.token);
         $("#session-label").textContent = `${currentUser.name} (${currentUser.role})`;
         $("#login-screen").style.display = "none";
         $(".app-shell").style.display = "flex";
@@ -685,14 +719,16 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             if (origCode) {
                 const res = await fetch(`${API_BASE_URL}/api/supplies/${origCode}`, {
-                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    method: 'PUT', 
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify(body)
                 });
                 if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
             } else {
                 body.current_quantity = 0;
                 const res = await fetch(`${API_BASE_URL}/api/supplies`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', 
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify(body)
                 });
                 if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
@@ -709,8 +745,10 @@ document.addEventListener("DOMContentLoaded", () => {
             pin_code: $("#user-pin").value, 
             active: true 
         };
-        try { const res = await fetch(`${API_BASE_URL}/api/users`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+        try { 
+            const res = await fetch(`${API_BASE_URL}/api/users`, {
+                method: 'POST', 
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify(body)
         });
         if(!res.ok) { const d = await res.json(); throw new Error(d.error); } alert("Usuário adicionado!"); bootstrapApp(); $("#user-dialog").close(); } catch (err) { alert(err.message); }
