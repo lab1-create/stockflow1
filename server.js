@@ -206,13 +206,13 @@ app.post("/api/auth/login", async (req, res) => {
         if (!name || !pin) return res.status(400).json({ error: "Nome e PIN obrigatórios." });
 
         const result = await pool.query('SELECT id, name, role, pin_code, active FROM app_users WHERE LOWER(name) = LOWER($1)', [name]);
-        if (result.rows.length === 0) return res.status(401).json({ error: "Credenciais inválidas." });
+        if (result.rows.length === 0) return res.status(401).json({ error: "Usuário não encontrado no banco de dados." });
 
         const user = result.rows[0];
         if (!user.active) return res.status(403).json({ error: "Seu acesso ainda não foi aprovado pelo administrador." });
         
         const validPin = await bcrypt.compare(String(pin), user.pin_code);
-        if (!validPin) return res.status(401).json({ error: "Credenciais inválidas." });
+        if (!validPin) return res.status(401).json({ error: "Senha / PIN incorreto." });
 
         const token = jwt.sign({ id: user.id, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: "8h" });
         res.cookie("token", token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict" });
