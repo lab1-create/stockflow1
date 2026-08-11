@@ -32,10 +32,9 @@ if (process.env.NODE_ENV === "production" && !process.env.FRONTEND_URL) {
 const JWT_SECRET = process.env.JWT_SECRET;
 
 let connectionString = process.env.DATABASE_URL;
-if (connectionString && !connectionString.includes("sslmode=")) {
-    if (connectionString.includes("supabase.pool.pooler.supabase.com")) {
-        connectionString += connectionString.includes("?") ? "&sslmode=require" : "?sslmode=require";
-    }
+if (connectionString) {
+    // Remover sslmode query param manual se existir para deixar o objeto pg.ssl cuidar disso
+    connectionString = connectionString.replace(/[?&]sslmode=[^&]*/, '');
 }
 
 // Validation Helpers
@@ -60,7 +59,7 @@ function validateString(value, maxLength = 255) {
 
 const pool = new Pool({
     connectionString: connectionString,
-    ssl: { rejectUnauthorized: false }
+    ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false }
 });
 
 if (process.env.NODE_ENV === "production" && !process.env.FRONTEND_URL) {
