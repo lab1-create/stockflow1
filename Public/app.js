@@ -712,12 +712,15 @@ document.addEventListener("DOMContentLoaded", () => {
             code: $("#item-code").value, 
             name: $("#item-name").value, 
             category: $("#item-category").value, 
-            minimum_quantity: Number($("#item-min").value) || 0, 
+            min: Number($("#item-min").value) || 0,
+            qty: 0, 
             supplier: $("#item-supplier").value, 
             note: $("#item-note").value,
-            };
+        };
         try {
             if (origCode) {
+                const existingItem = state.items.find(i => i.code === origCode);
+                body.qty = existingItem ? existingItem.qty : 0;
                 const res = await fetch(`${API_BASE_URL}/api/supplies/${origCode}`, {
                     method: 'PUT', 
                     headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -725,7 +728,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
                 if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
             } else {
-                body.current_quantity = 0;
                 const res = await fetch(`${API_BASE_URL}/api/supplies`, {
                     method: 'POST', 
                     headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
