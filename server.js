@@ -215,7 +215,7 @@ app.post("/api/auth/login", async (req, res) => {
         if (!validPin) return res.status(401).json({ error: "Senha / PIN incorreto." });
 
         const token = jwt.sign({ id: user.id, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: "8h" });
-        res.cookie("token", token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict" });
+        res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
         
         const state = await fetchState();
         res.json({ user: { id: user.id, name: user.name, role: user.role }, state });
