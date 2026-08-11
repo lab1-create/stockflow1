@@ -716,6 +716,9 @@ document.addEventListener("DOMContentLoaded", () => {
             qty: 0, 
             supplier: $("#item-supplier").value, 
             note: $("#item-note").value,
+            link: $("#item-link")?.value || "",
+            unit_price: Number($("#item-price")?.value) || 0,
+            is_shared: $("#item-shared")?.checked || false
         };
         try {
             if (origCode) {

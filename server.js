@@ -135,7 +135,7 @@ async function fetchState(page = 0, limit = 100) {
         const offset = page * limit;
         const usersResult = await pool.query('SELECT id, name, role, active FROM app_users ORDER BY name ASC LIMIT $1 OFFSET $2', [limit, offset]);
         const destinationsResult = await pool.query('SELECT id, name FROM destinations WHERE active = true LIMIT $1 OFFSET $2', [limit, offset]);
-        const suppliesResult = await pool.query('SELECT id, code, name, category, supplier, note, minimum_quantity, current_quantity FROM supplies ORDER BY code ASC LIMIT $1 OFFSET $2', [limit, offset]);
+        const suppliesResult = await pool.query('SELECT id, code, name, category, supplier, note, minimum_quantity, current_quantity, link, unit_price, is_shared FROM supplies ORDER BY code ASC LIMIT $1 OFFSET $2', [limit, offset]);
         
         const movResult = await pool.query(`
             SELECT sm.id, sm.supply_id, sm.user_id, sm.destination_id, sm.movement_type, 
@@ -284,7 +284,7 @@ app.post("/api/auth/register", registerLimiter, async (req, res, next) => {
 
 app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
     try {
-        const { code, name, category, qty, min, supplier, note } = req.body;
+        const { code, name, category, qty, min, supplier, note, link, unit_price, is_shared } = req.body;
         const validQty = validateNonNegativeInteger(qty);
         const validMin = validateNonNegativeInteger(min);
         const validCode = validateString(code, 50);
@@ -295,8 +295,19 @@ app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
         }
         
         const inserted = await pool.query(
-            'INSERT INTO supplies (code, name, category, current_quantity, minimum_quantity, supplier, note) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-            [validCode, validName, validateString(category, 50), validQty, validMin, validateString(supplier, 100), validateString(note, 255)]
+            'INSERT INTO supplies (code, name, category, current_quantity, minimum_quantity, supplier, note, link, unit_price, is_shared) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id',
+            [
+                validCode, 
+                validName, 
+                validateString(category, 50), 
+                validQty, 
+                validMin, 
+                validateString(supplier, 100), 
+                validateString(note, 255),
+                validateString(link, 255),
+                Number(unit_price) || 0,
+                Boolean(is_shared)
+            ]
         );
         await pool.query(
             'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id, note) VALUES ($1, $2, $3, $4, $5, $6, $7)',
@@ -304,7 +315,10 @@ app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
         );
         broadcastUpdate('SUPPLY_CREATED', { supplyCode: validCode });
         res.json({ success: true });
-    } catch (error) { next(error); }
+    } catch (error) { 
+        logger.error({ err: error.message, stack: error.stack }, 'Erro ao inserir insumo');
+        next(error); 
+    }
 });
 
 app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
@@ -312,7 +326,7 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
     try {
         await client.query('BEGIN');
         const { code } = req.params;
-        const { name, category, qty, min, supplier, note } = req.body;
+        const { name, category, qty, min, supplier, note, link, unit_price, is_shared } = req.body;
         
         const validQty = validateNonNegativeInteger(qty);
         const validMin = validateNonNegativeInteger(min);
@@ -333,8 +347,19 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
         const supplyId = supplyRes.rows[0].id;
 
         await client.query(
-            'UPDATE supplies SET name = $1, category = $2, current_quantity = $3, minimum_quantity = $4, supplier = $5, note = $6 WHERE id = $7',
-            [validName, validateString(category, 50), validQty, validMin, validateString(supplier, 100), validateString(note, 255), supplyId]
+            'UPDATE supplies SET name = $1, category = $2, current_quantity = $3, minimum_quantity = $4, supplier = $5, note = $6, link = $7, unit_price = $8, is_shared = $9 WHERE id = $10',
+            [
+                validName, 
+                validateString(category, 50), 
+                validQty, 
+                validMin, 
+                validateString(supplier, 100), 
+                validateString(note, 255),
+                validateString(link, 255),
+                Number(unit_price) || 0,
+                Boolean(is_shared),
+                supplyId
+            ]
         );
 
         if (qBefore !== validQty) {
