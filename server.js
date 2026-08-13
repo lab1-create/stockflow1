@@ -314,10 +314,12 @@ app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
                 Boolean(is_shared)
             ]
         );
-        await pool.query(
-            'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id, note) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-            [inserted.rows[0].id, 'replenishment', validQty, 0, validQty, req.user.id, "Cadastro inicial"]
-        );
+        if (validQty > 0) {
+            await pool.query(
+                'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id, note) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                [inserted.rows[0].id, 'replenishment', validQty, 0, validQty, req.user.id, "Cadastro inicial"]
+            );
+        }
         broadcastUpdate('SUPPLY_CREATED', { supplyCode: validCode });
         res.json({ success: true });
     } catch (error) { 
