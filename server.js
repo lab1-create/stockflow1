@@ -223,7 +223,7 @@ app.post("/api/auth/login", async (req, res) => {
         
         res.json({ user: { id: user.id, name: user.name, role: user.role }, token });
     } catch (error) { 
-        logger.error({ err: error.message, stack: error.stack }, 'Login error details');
+        console.error("❌ ERRO CRÍTICO NO LOGIN:", error);
         res.status(500).json({ error: error.message || "Erro interno" }); 
     }
 });
