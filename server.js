@@ -420,6 +420,8 @@ app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, re
         broadcastUpdate('WITHDRAW_REQUESTED');
         res.json({ success: true });
     } catch (error) { next(error); }
+});
+
 app.post("/api/requests/custom", verifyToken, async (req, res, next) => {
     try {
         const { itemName, quantity, note } = req.body;
