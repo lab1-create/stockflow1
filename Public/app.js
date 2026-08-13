@@ -513,16 +513,8 @@ function renderWithdraw() {
                 });
 
                 if (!res.ok) {
-                    // Se o insumo nao existir, criar a solicitacao customizada pela rota /api/custom-requests
-                    const res2 = await fetch(`${API_BASE_URL}/api/custom-requests`, {
-                        method: 'POST',
-                        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-                        body: JSON.stringify({ itemName: nameVal, quantity: qty, note: `Solicitado por ${withdraw.technician}. ${note}` })
-                    });
-                    if (!res2.ok) {
-                        const d2 = await res2.json().catch(() => ({}));
-                        throw new Error(d2.error || "Erro ao registrar solicitação com o Administrador.");
-                    }
+                    const d = await res.json().catch(() => ({}));
+                    throw new Error(d.error || "Erro ao registrar solicitação com o Administrador.");
                 }
 
                 alert(`Solicitação do item '${nameVal}' enviada com sucesso ao administrador!`);
