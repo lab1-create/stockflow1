@@ -501,7 +501,7 @@ function renderWithdraw() {
             const qty = Number(qtyStr) || 1;
             const note = prompt("Observação para o administrador (Opcional):") || "";
             try {
-                const res = await fetch(`${API_BASE_URL}/api/requests/custom`, {
+                const res = await fetch(`${API_BASE_URL}/api/custom-requests`, {
                     method: 'POST',
                     headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ itemName: nameVal, quantity: qty, note: `Solicitado por ${withdraw.technician}. ${note}` })

@@ -422,6 +422,27 @@ app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, re
     } catch (error) { next(error); }
 });
 
+app.post("/api/custom-requests", verifyToken, async (req, res, next) => {
+    try {
+        const { itemName, quantity, note } = req.body;
+        const validName = validateString(itemName, 150);
+        const validQuantity = validatePositiveInteger(quantity) || 1;
+        
+        if (!validName) return res.status(400).json({ error: "Nome do insumo solicitado é obrigatório." });
+
+        const supplyRes = await pool.query('SELECT id FROM supplies WHERE LOWER(name) = LOWER($1) OR LOWER(code) = LOWER($1)', [validName]);
+        const supplyId = supplyRes.rows.length > 0 ? supplyRes.rows[0].id : null;
+
+        await pool.query(
+            'INSERT INTO stock_requests (supply_id, user_id, quantity, status, note) VALUES ($1, $2, $3, $4, $5)',
+            [supplyId, req.user.id, validQuantity, 'pending', `[SOLICITAÇÃO DE INSUMO: ${validName}] ${note || ''}`]
+        );
+
+        broadcastUpdate('CUSTOM_REQUEST_CREATED');
+        res.json({ success: true });
+    } catch (error) { next(error); }
+});
+
 app.post("/api/requests/custom", verifyToken, async (req, res, next) => {
     try {
         const { itemName, quantity, note } = req.body;
