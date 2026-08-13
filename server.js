@@ -622,6 +622,10 @@ app.post("/api/movements/adjust", verifyAdmin, async (req, res, next) => {
 
 
 
+app.use("/api/*", (req, res) => {
+    res.status(404).json({ error: `Rota de API '${req.originalUrl}' não encontrada.` });
+});
+
 app.get("*", (req, res) => {
     res.sendFile(path.join(__dirname, "Public", "index.html"));
 });
