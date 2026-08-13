@@ -93,10 +93,10 @@ app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
-app.use(helmet({
-    contentSecurityPolicy: true
-}));
-app.use(express.static(path.join(__dirname, 'Public')));
+// Servir arquivos estáticos apenas se não for produção ou se a pasta Public existir localmente
+if (process.env.NODE_ENV !== "production") {
+    app.use(express.static(path.join(__dirname, 'Public')));
+}
 
 // Auth Middlewares
 async function verifyToken(req, res, next) {
@@ -644,12 +644,8 @@ app.post("/api/movements/adjust", verifyAdmin, async (req, res, next) => {
 
 
 
-app.use("/api/*", (req, res) => {
-    res.status(404).json({ error: `Rota de API '${req.originalUrl}' não encontrada.` });
-});
-
-app.get("*", (req, res) => {
-    res.sendFile(path.join(__dirname, "Public", "index.html"));
+app.all("*", (req, res) => {
+    res.status(404).json({ error: `Rota '${req.originalUrl}' não encontrada.` });
 });
 
 app.use((err, req, res, next) => {
