@@ -391,37 +391,6 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
 });
 
 // Operations
-const withdrawLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minuto
-    max: 20, // max 20 requests
-    message: { error: "Muitas requisições. Aguarde um momento." }
-});
-
-app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, res, next) => {
-    try {
-        const { code, destination, quantity, note } = req.body;
-        const validQuantity = validatePositiveInteger(quantity);
-        if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
-        
-        const supplyRes = await pool.query('SELECT id FROM supplies WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1)', [code]);
-        if (supplyRes.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
-        
-        let destId = null;
-        if (destination) {
-            const destRes = await pool.query('SELECT id FROM destinations WHERE name = $1', [destination]);
-            if (destRes.rows.length > 0) destId = destRes.rows[0].id;
-        }
-
-        await pool.query(
-            'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status, note) VALUES ($1, $2, $3, $4, $5, $6)',
-            [supplyRes.rows[0].id, req.user.id, destId, validQuantity, 'pending', validateString(note, 255)]
-        );
-
-        broadcastUpdate('WITHDRAW_REQUESTED');
-        res.json({ success: true });
-    } catch (error) { next(error); }
-});
-
 app.post("/api/custom-requests", verifyToken, async (req, res, next) => {
     try {
         const { itemName, quantity, note } = req.body;
@@ -451,7 +420,6 @@ app.post("/api/requests/custom", verifyToken, async (req, res, next) => {
         
         if (!validName) return res.status(400).json({ error: "Nome do insumo solicitado é obrigatório." });
 
-        // Tentar encontrar insumo por nome ou criar vinculo nulo (para cadastrar depois no admin)
         const supplyRes = await pool.query('SELECT id FROM supplies WHERE LOWER(name) = LOWER($1) OR LOWER(code) = LOWER($1)', [validName]);
         const supplyId = supplyRes.rows.length > 0 ? supplyRes.rows[0].id : null;
 
@@ -461,6 +429,37 @@ app.post("/api/requests/custom", verifyToken, async (req, res, next) => {
         );
 
         broadcastUpdate('CUSTOM_REQUEST_CREATED');
+        res.json({ success: true });
+    } catch (error) { next(error); }
+});
+
+const withdrawLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minuto
+    max: 20, // max 20 requests
+    message: { error: "Muitas requisições. Aguarde um momento." }
+});
+
+app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, res, next) => {
+    try {
+        const { code, destination, quantity, note } = req.body;
+        const validQuantity = validatePositiveInteger(quantity);
+        if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
+        
+        const supplyRes = await pool.query('SELECT id FROM supplies WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1)', [code]);
+        if (supplyRes.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
+        
+        let destId = null;
+        if (destination) {
+            const destRes = await pool.query('SELECT id FROM destinations WHERE name = $1', [destination]);
+            if (destRes.rows.length > 0) destId = destRes.rows[0].id;
+        }
+
+        await pool.query(
+            'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status, note) VALUES ($1, $2, $3, $4, $5, $6)',
+            [supplyRes.rows[0].id, req.user.id, destId, validQuantity, 'pending', validateString(note, 255)]
+        );
+
+        broadcastUpdate('WITHDRAW_REQUESTED');
         res.json({ success: true });
     } catch (error) { next(error); }
 });
