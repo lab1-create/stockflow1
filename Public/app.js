@@ -76,6 +76,15 @@ async function bootstrapApp() {
             note: s.note || ""
         }));
 
+        // Mapeamento e calculo de status "Em uso" por insumo e usuario
+        const userSupplyBalance = {};
+        (movements || []).slice().reverse().forEach(m => {
+            const key = `${m.user_id}_${m.supply_id}`;
+            if (!userSupplyBalance[key]) userSupplyBalance[key] = 0;
+            if (m.movement_type === 'withdrawal') userSupplyBalance[key] += Number(m.quantity) || 0;
+            if (m.movement_type === 'return') userSupplyBalance[key] = Math.max(0, userSupplyBalance[key] - (Number(m.quantity) || 0));
+        });
+
         state.history = (movements || []).map(m => {
             let typeDesc = 'Desconhecido';
             if (m.note === "Cadastro inicial") typeDesc = "Cadastro";
@@ -86,11 +95,16 @@ async function bootstrapApp() {
 
             let uName = m.user_name || "Sistema";
             if (m.note && m.note.startsWith("Para:")) uName = `${uName} (${escapeHTML(m.note)})`;
+            else if (m.note && m.note.startsWith("Retirado por")) uName = escapeHTML(m.note);
+
+            const key = `${m.user_id}_${m.supply_id}`;
+            const inUse = m.movement_type === 'withdrawal' && (userSupplyBalance[key] > 0);
 
             return {
                 id: m.id,
                 user: uName,
-                                type: typeDesc,
+                type: typeDesc,
+                inUse: inUse,
                 itemCode: m.code || "-",
                 itemName: m.supply_name || "Desconhecido",
                 qty: m.quantity,
@@ -350,7 +364,10 @@ function renderHistoryTable() {
     <div class="table-row">
       <span><strong>${escapeHTML(h.itemName)}</strong> (${escapeHTML(h.itemCode)})</span>
       <span>Técnico: ${escapeHTML(h.user)} ${h.destination && h.destination !== "-" ? `<br><small style="color:#aaa;">🪑 Destino: ${escapeHTML(h.destination)}</small>` : ''}</span>
-      <span>${escapeHTML(h.type)} (${escapeHTML(String(h.qty))} un)</span>
+      <span>
+        ${escapeHTML(h.type)} (${escapeHTML(String(h.qty))} un)
+        ${h.inUse ? `<span style="background: #ff2a55; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; margin-left: 6px; font-weight: bold;">EM USO</span>` : ''}
+      </span>
       <span class="muted">${formatDate(h.at)}</span>
     </div>
   `).join("");
@@ -431,15 +448,18 @@ function renderWithdraw() {
 
     if (withdraw.step === "request_by_name") {
         content.innerHTML = `
-            <h3>Solicitar Insumo</h3>
+            <h3>Solicitar Insumo (Cadastrado ou Novo)</h3>
             <p class="muted">Técnico: ${escapeHTML(withdraw.technician)}</p>
             <div style="margin-top:10px;">
-                <label style="display: block; text-align: left;">Digite o nome do produto:
-                    <input id="request-name-input" class="scan-input" placeholder="Ex: Tela iPhone..." autocomplete="off" style="width: 100%; margin-top: 5px;">
+                <label style="display: block; text-align: left;">Digite o nome do produto ou equipamento:
+                    <input id="request-name-input" class="scan-input" placeholder="Ex: Amperímetro, Tela iPhone..." autocomplete="off" style="width: 100%; margin-top: 5px;">
                 </label>
             </div>
-            <div id="request-name-results" style="margin-top: 10px; max-height: 200px; overflow-y: auto; text-align: left;"></div>
-            <button class="ghost-action" style="margin-top: 15px;" id=\"btn-request-back\">Voltar</button>
+            <div id="request-name-results" style="margin-top: 10px; max-height: 180px; overflow-y: auto; text-align: left;"></div>
+            <div style="margin-top: 15px; border-top: 1px solid #444; padding-top: 15px;">
+                <button id="btn-submit-custom-request" class="primary-action wide">Solicitar Item Não Cadastrado</button>
+                <button class="ghost-action wide" style="margin-top: 10px;" id="btn-request-back">Voltar</button>
+            </div>
         `;
 
         const input = $("#request-name-input");
@@ -454,17 +474,43 @@ function renderWithdraw() {
             }
             const matchingItems = state.items.filter(i => normalize(i.name).includes(query) || normalize(i.code).includes(query));
             if (matchingItems.length === 0) {
-                results.innerHTML = "<p class='muted' style='padding: 10px;'>Nenhum produto encontrado.</p>";
+                results.innerHTML = "<p class='muted' style='padding: 10px;'>Item não encontrado no catálogo. Você pode clicar no botão abaixo para solicitar como item não cadastrado!</p>";
             } else {
                 results.innerHTML = matchingItems.map(i => `
                     <div style="padding: 10px; border-bottom: 1px solid #444; cursor: pointer; transition: background 0.2s;"
-                         data-select-withdraw=\"${escapeHTML(i.code)}\"
+                         data-select-withdraw="${escapeHTML(i.code)}"
                          >
                          <strong style="color: white;">${escapeHTML(i.name)}</strong> <span class="muted" style="font-size: 0.8rem;">(${escapeHTML(i.code)})</span>
                          <br><small style="color: ${Number(i.qty) > 0 ? '#2e7d32' : '#e53935'}">Estoque: ${i.qty}</small>
                     </div>
                 `).join("");
+                $$("[data-select-withdraw]").forEach(el => {
+                    el.addEventListener("click", () => {
+                        window.selectItemForWithdraw(el.dataset.selectWithdraw);
+                    });
+                });
             }
+        });
+
+        $("#btn-request-back")?.addEventListener("click", () => { withdraw.step = 2; renderWithdraw(); });
+
+        $("#btn-submit-custom-request")?.addEventListener("click", async () => {
+            const nameVal = input.value.trim();
+            if (!nameVal) return alert("Digite o nome do produto para solicitar.");
+            const qtyStr = prompt("Quantidade necessária:", "1");
+            const qty = Number(qtyStr) || 1;
+            const note = prompt("Observação para o administrador (Opcional):") || "";
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/requests/custom`, {
+                    method: 'POST',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ itemName: nameVal, quantity: qty, note: `Solicitado por ${withdraw.technician}. ${note}` })
+                });
+                if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+                alert(`Solicitação do item '${nameVal}' enviada com sucesso ao administrador!`);
+                setView("dashboard");
+                bootstrapApp();
+            } catch (e) { alert(e.message); }
         });
         return;
     }
@@ -473,9 +519,31 @@ function renderWithdraw() {
         const techInfo = state.technicians.find(t => t.name === withdraw.technician);
         const destName = withdraw.isManual ? "Laboratório" : (techInfo?.defaultDest || "Laboratório");
 
-        content.innerHTML = `<h3>Confirmar Retirada de ${escapeHTML(withdraw.item.name)}</h3><div class="form-grid" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;"><label>Quantidade <input id="withdraw-qty-input" type="number" min="1" value="1" max="${withdraw.item.qty}"></label><div style="padding:10px; border:1px solid #444; border-radius:4px; background:#222;"><p style="margin:0; font-size:0.9rem;" class="muted">Destino Fixo</p><p style="margin:0; font-weight:bold;">🪑 ${escapeHTML(destName)}</p></div><input type="hidden" id="withdraw-dest-input" value="${escapeHTML(destName)}"><button id="withdraw-submit-btn" class="primary-action wide">Solicitar Liberação</button></div>`;
+        content.innerHTML = `
+            <h3>Confirmar Retirada de ${escapeHTML(withdraw.item.name)}</h3>
+            <div class="form-grid" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;">
+                <label>Quantidade <input id="withdraw-qty-input" type="number" min="1" value="1" max="${withdraw.item.qty}"></label>
+                ${withdraw.isManual ? `
+                    <label>Para quem / Destino da Saída Manual:
+                        <input id="withdraw-manual-dest" placeholder="Ex: Massimo, Sala 2..." value="${escapeHTML(withdraw.manualDest || '')}" style="width:100%; margin-top:4px;">
+                    </label>
+                ` : `
+                    <div style="padding:10px; border:1px solid #444; border-radius:4px; background:#222;">
+                        <p style="margin:0; font-size:0.9rem;" class="muted">Destino Fixo</p>
+                        <p style="margin:0; font-weight:bold;">🪑 ${escapeHTML(destName)}</p>
+                    </div>
+                `}
+                <button id="withdraw-submit-btn" class="primary-action wide">Solicitar Liberação</button>
+            </div>
+        `;
         $("#withdraw-submit-btn").addEventListener("click", async () => {
-            const requestNote = prompt("Motivo / OS (Opcional):") || "";
+            let note = "";
+            if (withdraw.isManual) {
+                const customDest = $("#withdraw-manual-dest")?.value.trim();
+                note = `Retirado por ${withdraw.technician}${customDest ? ' (Para: ' + customDest + ')' : ''}`;
+            } else {
+                note = prompt("Motivo / OS (Opcional):") || "";
+            }
             try {
                 const res = await fetch(`${API_BASE_URL}/api/movements/withdraw`, {
                     method: 'POST', 
@@ -485,11 +553,11 @@ function renderWithdraw() {
                         technician: withdraw.technician, 
                         destination: destName, 
                         quantity: Number($("#withdraw-qty-input").value) || 1,
-                        note: requestNote
+                        note: note
                     })
                 });
                 if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
-                alert("Solicitação enviada!"); setView("dashboard"); bootstrapApp();
+                alert("Solicitação de retirada enviada!"); setView("dashboard"); bootstrapApp();
             } catch (e) { alert(e.message); }
         });
     }

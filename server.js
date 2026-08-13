@@ -221,8 +221,7 @@ app.post("/api/auth/login", async (req, res) => {
         const token = jwt.sign({ id: user.id, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: "8h" });
         res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
         
-        const state = await fetchState();
-        res.json({ user: { id: user.id, name: user.name, role: user.role }, token, state });
+        res.json({ user: { id: user.id, name: user.name, role: user.role }, token });
     } catch (error) { 
         logger.error({ err: error.message, stack: error.stack }, 'Login error details');
         res.status(500).json({ error: error.message || "Erro interno" }); 
@@ -400,7 +399,7 @@ const withdrawLimiter = rateLimit({
 
 app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, res, next) => {
     try {
-        const { code, destination, quantity } = req.body;
+        const { code, destination, quantity, note } = req.body;
         const validQuantity = validatePositiveInteger(quantity);
         if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
         
@@ -414,8 +413,8 @@ app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, re
         }
 
         await pool.query(
-            'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status) VALUES ($1, $2, $3, $4, $5)',
-            [supplyRes.rows[0].id, req.user.id, destId, validQuantity, 'pending']
+            'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status, note) VALUES ($1, $2, $3, $4, $5, $6)',
+            [supplyRes.rows[0].id, req.user.id, destId, validQuantity, 'pending', validateString(note, 255)]
         );
 
         broadcastUpdate('WITHDRAW_REQUESTED');
@@ -598,6 +597,26 @@ app.post("/api/movements/adjust", verifyAdmin, async (req, res, next) => {
     } finally {
         client.release();
     }
+app.post("/api/requests/custom", verifyToken, async (req, res, next) => {
+    try {
+        const { itemName, quantity, note } = req.body;
+        const validName = validateString(itemName, 150);
+        const validQuantity = validatePositiveInteger(quantity) || 1;
+        
+        if (!validName) return res.status(400).json({ error: "Nome do insumo solicitado é obrigatório." });
+
+        // Tentar encontrar insumo por nome ou criar vinculo nulo (para cadastrar depois no admin)
+        const supplyRes = await pool.query('SELECT id FROM supplies WHERE LOWER(name) = LOWER($1) OR LOWER(code) = LOWER($1)', [validName]);
+        const supplyId = supplyRes.rows.length > 0 ? supplyRes.rows[0].id : null;
+
+        await pool.query(
+            'INSERT INTO stock_requests (supply_id, user_id, quantity, status, note) VALUES ($1, $2, $3, $4, $5)',
+            [supplyId, req.user.id, validQuantity, 'pending', `[SOLICITAÇÃO DE INSUMO: ${validName}] ${note || ''}`]
+        );
+
+        broadcastUpdate('CUSTOM_REQUEST_CREATED');
+        res.json({ success: true });
+    } catch (error) { next(error); }
 });
 
 
