@@ -506,7 +506,14 @@ function renderWithdraw() {
                     headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ itemName: nameVal, quantity: qty, note: `Solicitado por ${withdraw.technician}. ${note}` })
                 });
-                if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+                const contentType = res.headers.get("content-type") || "";
+                let d = {};
+                if (contentType.includes("application/json")) {
+                    d = await res.json();
+                }
+                if (!res.ok) { 
+                    throw new Error(d.error || "O servidor ainda está aplicando a rota. Aguarde alguns segundos e tente novamente."); 
+                }
                 alert(`Solicitação do item '${nameVal}' enviada com sucesso ao administrador!`);
                 setView("dashboard");
                 bootstrapApp();
