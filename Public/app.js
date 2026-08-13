@@ -501,19 +501,30 @@ function renderWithdraw() {
             const qty = Number(qtyStr) || 1;
             const note = prompt("Observação para o administrador (Opcional):") || "";
             try {
-                const res = await fetch(`${API_BASE_URL}/api/custom-requests`, {
+                // Tentar enviar via endpoint de retiradas com observação especial
+                const res = await fetch(`${API_BASE_URL}/api/movements/withdraw`, {
                     method: 'POST',
                     headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ itemName: nameVal, quantity: qty, note: `Solicitado por ${withdraw.technician}. ${note}` })
+                    body: JSON.stringify({
+                        code: nameVal, // Tenta usar o nome como codigo/referencia ou envia insumo basico
+                        quantity: qty,
+                        note: `[SOLICITAÇÃO DE INSUMO: ${nameVal}] (Por ${withdraw.technician}) ${note}`
+                    })
                 });
-                const contentType = res.headers.get("content-type") || "";
-                let d = {};
-                if (contentType.includes("application/json")) {
-                    d = await res.json();
+
+                if (!res.ok) {
+                    // Se o insumo nao existir, criar a solicitacao customizada pela rota /api/custom-requests
+                    const res2 = await fetch(`${API_BASE_URL}/api/custom-requests`, {
+                        method: 'POST',
+                        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                        body: JSON.stringify({ itemName: nameVal, quantity: qty, note: `Solicitado por ${withdraw.technician}. ${note}` })
+                    });
+                    if (!res2.ok) {
+                        const d2 = await res2.json().catch(() => ({}));
+                        throw new Error(d2.error || "Erro ao registrar solicitação com o Administrador.");
+                    }
                 }
-                if (!res.ok) { 
-                    throw new Error(d.error || "O servidor ainda está aplicando a rota. Aguarde alguns segundos e tente novamente."); 
-                }
+
                 alert(`Solicitação do item '${nameVal}' enviada com sucesso ao administrador!`);
                 setView("dashboard");
                 bootstrapApp();

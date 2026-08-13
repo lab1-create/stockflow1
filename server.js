@@ -446,7 +446,7 @@ app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, re
         if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
         
         const supplyRes = await pool.query('SELECT id FROM supplies WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1)', [code]);
-        if (supplyRes.rows.length === 0) return res.status(400).json({ error: "Insumo não encontrado." });
+        const supplyId = supplyRes.rows.length > 0 ? supplyRes.rows[0].id : null;
         
         let destId = null;
         if (destination) {
@@ -454,9 +454,11 @@ app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, re
             if (destRes.rows.length > 0) destId = destRes.rows[0].id;
         }
 
+        const finalNote = supplyId ? validateString(note, 255) : `[SOLICITAÇÃO DE INSUMO NÃO CADASTRADO: ${code}] ${note || ''}`;
+
         await pool.query(
             'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status, note) VALUES ($1, $2, $3, $4, $5, $6)',
-            [supplyRes.rows[0].id, req.user.id, destId, validQuantity, 'pending', validateString(note, 255)]
+            [supplyId, req.user.id, destId, validQuantity, 'pending', finalNote]
         );
 
         broadcastUpdate('WITHDRAW_REQUESTED');
