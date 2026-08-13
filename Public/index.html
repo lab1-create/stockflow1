@@ -287,7 +287,7 @@
 
     <!-- Modals -->
     <dialog id="item-dialog">
-      <form method="dialog" id="item-form" class="dialog-body">
+      <form id="item-form" class="dialog-body">
         <div class="panel-head">
           <h2 id="dialog-title">Nova Referência</h2>
           <button type="button" id="close-dialog" class="icon-button" aria-label="Fechar">x</button>
@@ -304,12 +304,12 @@
           <label>Compartilhado?<input id="item-shared" type="checkbox"></label>
           <label class="span-2">Observacao<input id="item-note"></label>
         </div>
-        <button class="primary-action wide" value="default">Salvar Referência</button>
+        <button type="submit" class="primary-action wide">Salvar Referência</button>
       </form>
     </dialog>
 
     <dialog id="user-dialog">
-      <form method="dialog" id="user-form" class="dialog-body">
+      <form id="user-form" class="dialog-body">
         <div class="panel-head">
           <h2>Novo Usuário (Admin)</h2>
           <button type="button" id="close-user-dialog" class="icon-button" aria-label="Fechar">x</button>
@@ -358,6 +358,6 @@
     </dialog>
 
 
-    <script src="app.js?v=3.2"></script>
+    <script src="app.js?v=3.3"></script>
   </body>
 </html>
