@@ -210,14 +210,14 @@ function filteredHistory(forTable = false) {
 }
 
 function setView(view) {
-    if (!isAdmin() && ["dashboard", "replenish", "count", "items"].includes(view)) {
+    if (!isAdmin() && ["dashboard", "replenish", "count", "items", "out-of-stock"].includes(view)) {
         view = "withdraw";
     }
     currentView = view;
     $$(".view").forEach(node => node.classList.toggle("active", node.id === `${view}-view`));
     $$(".nav-item").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
 
-    const titleMap = { dashboard: "Painel Administrativo", withdraw: "Retirar Insumo", return: "Devolver Insumo", replenish: "Entrada (Reposição)", count: "Contagem / Auditoria", items: "Insumos", history: "Auditoria Completa", "request-item": "Solicitar Insumo" };
+    const titleMap = { dashboard: "Painel Administrativo", withdraw: "Retirar Insumo", return: "Devolver Insumo", replenish: "Entrada (Reposição)", count: "Contagem / Auditoria", items: "Insumos", history: "Auditoria Completa", "request-item": "Solicitar Insumo", "out-of-stock": "Insumos Faltantes" };
     if ($("#view-title")) $("#view-title").textContent = titleMap[view] || "Dashboard";
 
     if (view === "withdraw") {
@@ -288,16 +288,12 @@ function renderAll() {
     }
 
     const pendingRequests = state.requests.filter(r => r.status === "pending");
-    const outOfStockItems = state.items.filter(i => Number(i.qty) === 0);
-    if ($("#pending-count")) $("#pending-count").textContent = `${pendingRequests.length + outOfStockItems.length} pendentes`;
+    if ($("#pending-count")) $("#pending-count").textContent = `${pendingRequests.length} pendentes`;
 
     const reqList = $("#pending-requests");
     if (reqList) {
-        let html = "";
-        
-        if (pendingRequests.length > 0) {
-            html += `<h4 style="margin: 5px 0 10px 0; color: #aaa; border-bottom: 1px solid #333; padding-bottom: 5px;">Solicitações de Técnicos</h4>`;
-            html += pendingRequests.map(r => {
+        reqList.innerHTML = pendingRequests.length
+            ? pendingRequests.map(r => {
                 if (r.isCustom) {
                     return `
                       <div class="request-card" style="padding:10px; border:1px solid #ff9800; margin-bottom:8px; border-radius:4px; background: rgba(255,152,0,0.05);">
@@ -319,30 +315,28 @@ function renderAll() {
                       </div>
                     `;
                 }
-            }).join("");
-        }
-        
-        if (outOfStockItems.length > 0) {
-            html += `<h4 style="margin: 15px 0 10px 0; color: #aaa; border-bottom: 1px solid #333; padding-bottom: 5px;">Insumos Zerados</h4>`;
-            html += outOfStockItems.map(i => `
+            }).join("")
+            : `<p class="muted">Nenhuma solicitação pendente.</p>`;
+            
+        $$("[data-approve]").forEach(btn => btn.addEventListener("click", () => approveRequest(btn.dataset.approve, btn)));
+        $$("[data-reject]").forEach(btn => btn.addEventListener("click", () => cancelRequest(btn.dataset.reject, btn)));
+        $$("[data-register-name]").forEach(btn => btn.addEventListener("click", () => openItemDialog(null, btn.dataset.registerName)));
+    }
+
+    const outOfStockItems = state.items.filter(i => Number(i.qty) === 0);
+    const oosList = $("#out-of-stock-list");
+    if (oosList) {
+        oosList.innerHTML = outOfStockItems.length
+            ? outOfStockItems.map(i => `
               <div class="request-card" style="padding:10px; border:1px solid #ff4444; margin-bottom:8px; border-radius:4px; background: rgba(255,68,68,0.05);">
                 <p>O insumo <strong>${escapeHTML(i.name)}</strong> (${escapeHTML(i.code)}) acabou!</p>
                 <div style="display:flex; gap:8px;">
                     <button class="primary-action" data-replenish-code="${escapeHTML(i.code)}" style="margin-top:5px; flex:1; background:#cc1111; border-color:#cc1111; color:white;">Repor Estoque</button>
                 </div>
               </div>
-            `).join("");
-        }
-        
-        if (pendingRequests.length === 0 && outOfStockItems.length === 0) {
-            html = `<p class="muted">Nenhuma solicitação ou insumo zerado.</p>`;
-        }
-        
-        reqList.innerHTML = html;
+            `).join("")
+            : `<p class="muted">Todos os insumos possuem estoque cadastrado.</p>`;
             
-        $$("[data-approve]").forEach(btn => btn.addEventListener("click", () => approveRequest(btn.dataset.approve, btn)));
-        $$("[data-reject]").forEach(btn => btn.addEventListener("click", () => cancelRequest(btn.dataset.reject, btn)));
-        $$("[data-register-name]").forEach(btn => btn.addEventListener("click", () => openItemDialog(null, btn.dataset.registerName)));
         $$("[data-replenish-code]").forEach(btn => btn.addEventListener("click", () => {
             setView("replenish");
             const codeInput = $("#replenish-code");

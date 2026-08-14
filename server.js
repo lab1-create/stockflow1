@@ -545,7 +545,11 @@ app.post("/api/requests/:id/approve", verifyAdmin, async (req, res, next) => {
 
 app.delete("/api/requests/:id/cancel", verifyToken, async (req, res, next) => {
     try {
-        await pool.query("DELETE FROM stock_requests WHERE id = $1 AND status = 'pending' AND user_id = $2", [req.params.id, req.user.id]);
+        if (req.user.role === 'admin') {
+            await pool.query("DELETE FROM stock_requests WHERE id = $1 AND status = 'pending'", [req.params.id]);
+        } else {
+            await pool.query("DELETE FROM stock_requests WHERE id = $1 AND status = 'pending' AND user_id = $2", [req.params.id, req.user.id]);
+        }
         broadcastUpdate('REQUEST_CANCELLED', { requestId: req.params.id });
         res.json({ success: true });
     } catch (error) { next(error); }
