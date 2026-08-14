@@ -55,6 +55,9 @@
           <button class="nav-item" data-view="return" title="Devolver Insumo">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
           </button>
+          <button class="nav-item" data-view="request-item" title="Solicitar Insumo">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          </button>
           <button class="nav-item" data-view="replenish" data-admin-only title="Repor Estoque">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
           </button>
@@ -175,6 +178,33 @@
                 <h2>Minhas Solicitações Pendentes</h2>
               </div>
               <div id="my-pending-requests" class="compact-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="request-item-view" class="view">
+          <div class="flow-layout">
+            <section class="flow-card" style="text-align: left;">
+              <div class="flow-title">
+                <p class="eyebrow">Solicitação</p>
+                <h2>Solicitar Insumo</h2>
+              </div>
+              <p class="muted" style="margin-bottom: 15px; font-size: 0.9rem;">Solicite um insumo (cadastrado ou novo) para que o administrador aprove ou compre.</p>
+              <form id="custom-request-form" style="display: grid; gap: 15px; margin-top: 10px;">
+                <label style="display: flex; flex-direction: column; gap: 5px;">
+                  Nome do Insumo / Equipamento
+                  <input id="custom-req-name" required placeholder="Ex: Amperímetro, Fita Isolante..." style="padding: 8px; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff;">
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 5px;">
+                  Quantidade Necessária
+                  <input id="custom-req-qty" type="number" min="1" value="1" required style="padding: 8px; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff;">
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 5px;">
+                  Observação para o Administrador (Opcional)
+                  <textarea id="custom-req-note" placeholder="Explique por que precisa deste item..." style="padding: 8px; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff; height: 80px; resize: vertical;"></textarea>
+                </label>
+                <button type="submit" class="primary-action wide">Enviar Solicitação</button>
+              </form>
             </section>
           </div>
         </section>

@@ -79,7 +79,11 @@ async function bootstrapApp() {
         // Mapeamento e calculo de status "Em uso" por insumo e usuario
         const userSupplyBalance = {};
         (movements || []).slice().reverse().forEach(m => {
-            const key = `${m.user_id}_${m.supply_id}`;
+            let uName = m.user_name || "Sistema";
+            if (m.note && m.note.startsWith("Para:")) uName = `${uName} (${m.note})`;
+            else if (m.note && (m.note.startsWith("Retirado por") || m.note.includes(" Retirou "))) uName = m.note;
+
+            const key = `${uName}_${m.supply_id}`;
             if (!userSupplyBalance[key]) userSupplyBalance[key] = 0;
             if (m.movement_type === 'withdrawal') userSupplyBalance[key] += Number(m.quantity) || 0;
             if (m.movement_type === 'return') userSupplyBalance[key] = Math.max(0, userSupplyBalance[key] - (Number(m.quantity) || 0));
@@ -95,9 +99,9 @@ async function bootstrapApp() {
 
             let uName = m.user_name || "Sistema";
             if (m.note && m.note.startsWith("Para:")) uName = `${uName} (${escapeHTML(m.note)})`;
-            else if (m.note && m.note.startsWith("Retirado por")) uName = escapeHTML(m.note);
+            else if (m.note && (m.note.startsWith("Retirado por") || m.note.includes(" Retirou "))) uName = escapeHTML(m.note);
 
-            const key = `${m.user_id}_${m.supply_id}`;
+            const key = `${uName}_${m.supply_id}`;
             const inUse = m.movement_type === 'withdrawal' && (userSupplyBalance[key] > 0);
 
             return {
@@ -119,12 +123,34 @@ async function bootstrapApp() {
         state.requests = (requests || []).map(r => {
             let techName = r.user_name || "Desconhecido";
             if (r.note && r.note.startsWith("Para:")) techName = `${techName} (${r.note})`;
+            
+            let itemName = r.supply_name;
+            let isCustom = false;
+            if (!itemName && r.note) {
+                const match = r.note.match(/\[SOLICITAÇÃO DE INSUMO NÃO CADASTRADO:\s*([^\]]+)\]/);
+                if (match) {
+                    itemName = match[1];
+                    isCustom = true;
+                } else {
+                    const match2 = r.note.match(/\[SOLICITAÇÃO DE INSUMO:\s*([^\]]+)\]/);
+                    if (match2) {
+                        itemName = match2[1];
+                        isCustom = true;
+                    }
+                }
+            }
+            if (!itemName) {
+                itemName = "Insumo Desconhecido";
+                isCustom = !r.supply_id;
+            }
+
             return {
                 id: r.id,
                 technician: techName,
-                                qty: r.quantity || 1,
+                qty: r.quantity || 1,
                 itemCode: r.code || "-",
-                itemName: r.supply_name || "Insumo Desconhecido",
+                itemName: itemName,
+                isCustom: isCustom,
                 status: r.status,
                 note: r.note || ""
             };
@@ -191,7 +217,7 @@ function setView(view) {
     $$(".view").forEach(node => node.classList.toggle("active", node.id === `${view}-view`));
     $$(".nav-item").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
 
-    const titleMap = { dashboard: "Painel Administrativo", withdraw: "Retirar Insumo", return: "Devolver Insumo", replenish: "Entrada (Reposição)", count: "Contagem / Auditoria", items: "Insumos", history: "Auditoria Completa" };
+    const titleMap = { dashboard: "Painel Administrativo", withdraw: "Retirar Insumo", return: "Devolver Insumo", replenish: "Entrada (Reposição)", count: "Contagem / Auditoria", items: "Insumos", history: "Auditoria Completa", "request-item": "Solicitar Insumo" };
     if ($("#view-title")) $("#view-title").textContent = titleMap[view] || "Dashboard";
 
     if (view === "withdraw") {
@@ -262,27 +288,70 @@ function renderAll() {
     }
 
     const pendingRequests = state.requests.filter(r => r.status === "pending");
-    if ($("#pending-count")) $("#pending-count").textContent = `${pendingRequests.length} pendentes`;
+    const outOfStockItems = state.items.filter(i => Number(i.qty) === 0);
+    if ($("#pending-count")) $("#pending-count").textContent = `${pendingRequests.length + outOfStockItems.length} pendentes`;
 
     const reqList = $("#pending-requests");
     if (reqList) {
-        reqList.innerHTML = pendingRequests.length
-            ? pendingRequests.map(r => {
-                let warningHtml = "";
-                return `
-          <div class="request-card" style="padding:10px; border:1px solid #444; margin-bottom:8px; border-radius:4px;">
-            <p><strong>${escapeHTML(r.technician)} </strong> solicitou ${escapeHTML(String(r.qty))}x ${escapeHTML(r.itemName)}</p>
-            
-            <div style="display:flex; gap:8px;">
-                <button class="primary-action" data-approve="${r.id}" style="margin-top:5px; flex:1;">Liberar</button>
-                <button class="danger-action" data-reject="${r.id}" style="margin-top:5px; flex:1; border:1px solid #ff4444; background:transparent; color:#ff4444; border-radius:4px; cursor:pointer;">Rejeitar</button>
-            </div>
-          </div>
-        `}).join("")
-            : `<p class="muted">Nenhuma solicitação pendente.</p>`;
+        let html = "";
+        
+        if (pendingRequests.length > 0) {
+            html += `<h4 style="margin: 5px 0 10px 0; color: #aaa; border-bottom: 1px solid #333; padding-bottom: 5px;">Solicitações de Técnicos</h4>`;
+            html += pendingRequests.map(r => {
+                if (r.isCustom) {
+                    return `
+                      <div class="request-card" style="padding:10px; border:1px solid #ff9800; margin-bottom:8px; border-radius:4px; background: rgba(255,152,0,0.05);">
+                        <p><strong>${escapeHTML(r.technician)} </strong> solicitou <strong style="color:#ff9800;">${escapeHTML(r.itemName)}</strong> (Não cadastrado)</p>
+                        <div style="display:flex; gap:8px;">
+                            <button class="primary-action" data-register-name="${escapeHTML(r.itemName)}" style="margin-top:5px; flex:1; background:#ef6c00; border-color:#ef6c00; color:white;">Cadastrar</button>
+                            <button class="danger-action" data-reject="${r.id}" style="margin-top:5px; flex:1; border:1px solid #ff4444; background:transparent; color:#ff4444; border-radius:4px; cursor:pointer;">Rejeitar</button>
+                        </div>
+                      </div>
+                    `;
+                } else {
+                    return `
+                      <div class="request-card" style="padding:10px; border:1px solid #444; margin-bottom:8px; border-radius:4px;">
+                        <p><strong>${escapeHTML(r.technician)} </strong> solicitou ${escapeHTML(String(r.qty))}x ${escapeHTML(r.itemName)}</p>
+                        <div style="display:flex; gap:8px;">
+                            <button class="primary-action" data-approve="${r.id}" style="margin-top:5px; flex:1;">Liberar</button>
+                            <button class="danger-action" data-reject="${r.id}" style="margin-top:5px; flex:1; border:1px solid #ff4444; background:transparent; color:#ff4444; border-radius:4px; cursor:pointer;">Rejeitar</button>
+                        </div>
+                      </div>
+                    `;
+                }
+            }).join("");
+        }
+        
+        if (outOfStockItems.length > 0) {
+            html += `<h4 style="margin: 15px 0 10px 0; color: #aaa; border-bottom: 1px solid #333; padding-bottom: 5px;">Insumos Zerados</h4>`;
+            html += outOfStockItems.map(i => `
+              <div class="request-card" style="padding:10px; border:1px solid #ff4444; margin-bottom:8px; border-radius:4px; background: rgba(255,68,68,0.05);">
+                <p>O insumo <strong>${escapeHTML(i.name)}</strong> (${escapeHTML(i.code)}) acabou!</p>
+                <div style="display:flex; gap:8px;">
+                    <button class="primary-action" data-replenish-code="${escapeHTML(i.code)}" style="margin-top:5px; flex:1; background:#cc1111; border-color:#cc1111; color:white;">Repor Estoque</button>
+                </div>
+              </div>
+            `).join("");
+        }
+        
+        if (pendingRequests.length === 0 && outOfStockItems.length === 0) {
+            html = `<p class="muted">Nenhuma solicitação ou insumo zerado.</p>`;
+        }
+        
+        reqList.innerHTML = html;
             
         $$("[data-approve]").forEach(btn => btn.addEventListener("click", () => approveRequest(btn.dataset.approve, btn)));
         $$("[data-reject]").forEach(btn => btn.addEventListener("click", () => cancelRequest(btn.dataset.reject, btn)));
+        $$("[data-register-name]").forEach(btn => btn.addEventListener("click", () => openItemDialog(null, btn.dataset.registerName)));
+        $$("[data-replenish-code]").forEach(btn => btn.addEventListener("click", () => {
+            setView("replenish");
+            const codeInput = $("#replenish-code");
+            if (codeInput) {
+                codeInput.value = btn.dataset.replenishCode;
+                codeInput.focus();
+                codeInput.select();
+            }
+        }));
     }
 
     const myReqList = $("#my-pending-requests");
@@ -304,7 +373,17 @@ function renderAll() {
     if (recHist) {
         const data = filteredHistory().slice(0, 5);
         recHist.innerHTML = data.length
-            ? `<div class="table-body">` + data.map(h => `<div class="table-row"><span>${escapeHTML(h.itemName)}</span><span>${escapeHTML(h.user)} ${h.destination && h.destination !== "-" ? `<br><small style="color:#999;">🪑 ${escapeHTML(h.destination)}</small>` : ''}</span><span>${escapeHTML(h.type)}</span><span>${formatDate(h.at)}</span></div>`).join("") + `</div>`
+            ? `<div class="table-body">` + data.map(h => `
+                <div class="table-row">
+                    <span>${escapeHTML(h.itemName)}</span>
+                    <span>${escapeHTML(h.user)} ${h.destination && h.destination !== "-" ? `<br><small style="color:#999;">🪑 ${escapeHTML(h.destination)}</small>` : ''}</span>
+                    <span>
+                        ${escapeHTML(h.type)}
+                        ${h.inUse ? `<span style="background: #ff2a55; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; margin-left: 6px; font-weight: bold;">EM USO</span>` : ''}
+                    </span>
+                    <span>${formatDate(h.at)}</span>
+                </div>
+            `).join("") + `</div>`
             : `<p class="muted">Nenhum registro.</p>`;
     }
     
@@ -550,7 +629,7 @@ function renderWithdraw() {
             let note = "";
             if (withdraw.isManual) {
                 const customDest = $("#withdraw-manual-dest")?.value.trim();
-                note = `Retirado por ${withdraw.technician}${customDest ? ' (Para: ' + customDest + ')' : ''}`;
+                note = `${withdraw.technician} Retirou ${withdraw.item.name}${customDest ? ' para ' + customDest : ''}`;
             } else {
                 note = prompt("Motivo / OS (Opcional):") || "";
             }
@@ -676,7 +755,7 @@ async function cancelRequest(id, btn) {
     catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
 
-function openItemDialog(code = null) {
+function openItemDialog(code = null, defaultName = null) {
     const dialog = $("#item-dialog"); const form = $("#item-form");
     if (!dialog || !form) return;
     if (code) {
@@ -690,11 +769,14 @@ function openItemDialog(code = null) {
         $("#item-min").value = item.min; 
         $("#item-supplier").value = item.supplier || ""; 
         $("#item-note").value = item.note || "";
-        } else {
+    } else {
         $("#dialog-title").textContent = "Nova Referência"; 
         form.reset(); 
         $("#item-original-code").value = "";
+        if (defaultName) {
+            $("#item-name").value = defaultName;
         }
+    }
     dialog.showModal();
 }
 
@@ -776,6 +858,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
     $("#new-item-button")?.addEventListener("click", () => openItemDialog());
     $("#close-dialog")?.addEventListener("click", () => $("#item-dialog").close());
+    
+    $("#custom-request-form")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const itemName = $("#custom-req-name").value.trim();
+        const quantity = Number($("#custom-req-qty").value) || 1;
+        const note = $("#custom-req-note").value.trim();
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/custom-requests`, {
+                method: 'POST',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ itemName, quantity, note })
+            });
+            if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+            alert(`Solicitação do item '${itemName}' enviada com sucesso!`);
+            $("#custom-request-form").reset();
+            setView("withdraw");
+            bootstrapApp();
+        } catch (err) { alert(err.message); }
+    });
     
     $("#new-user-button")?.addEventListener("click", () => $("#user-dialog").showModal());
     $("#close-user-dialog")?.addEventListener("click", () => $("#user-dialog").close());

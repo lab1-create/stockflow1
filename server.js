@@ -251,13 +251,13 @@ app.post("/api/users", verifyAdmin, async (req, res, next) => {
     try {
         const { name, role, pin } = req.body;
         const validName = validateString(name, 100);
-        if (!validName || !/^\d{4,6}$/.test(String(pin))) {
-            return res.status(400).json({ error: "Nome (máx 100 caracteres) e PIN (4-6 dígitos) válidos são obrigatórios." });
+        if (!validName || typeof pin !== "string" || pin.trim().length < 3) {
+            return res.status(400).json({ error: "Nome (máx 100 caracteres) e Senha/PIN válidos são obrigatórios (mínimo 3 caracteres)." });
         }
         if (role !== "admin" && role !== "tecnico") {
             return res.status(400).json({ error: "Cargo inválido." });
         }
-        const hashedPin = await bcrypt.hash(String(pin), 12);
+        const hashedPin = await bcrypt.hash(String(pin), 10);
         await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, true)', [validName, role, hashedPin]);
         broadcastUpdate('USER_CREATED');
         res.json({ success: true });
@@ -272,7 +272,7 @@ app.post("/api/auth/register", registerLimiter, async (req, res, next) => {
             return res.status(400).json({ error: "Nome e Senha/PIN válidos são obrigatórios (mínimo 3 caracteres)." });
         }
         const role = "tecnico";
-        const hashedPin = await bcrypt.hash(String(pin), 12);
+        const hashedPin = await bcrypt.hash(String(pin), 10);
         // Sanitizar notas antes de gravar (XSS protection)
         const sanitizedName = escapeHTML(validName);
         await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, false)', [sanitizedName, role, hashedPin]);
@@ -320,6 +320,22 @@ app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
                 [inserted.rows[0].id, 'replenishment', validQty, 0, validQty, req.user.id, "Cadastro inicial"]
             );
         }
+        
+        // Auto-link pending stock_requests that match the name or code
+        const newSupplyId = inserted.rows[0].id;
+        await pool.query(
+            `UPDATE stock_requests 
+             SET supply_id = $1 
+             WHERE supply_id IS NULL 
+               AND (
+                 LOWER(note) LIKE LOWER($2) 
+                 OR LOWER(note) LIKE LOWER($3)
+                 OR LOWER(note) LIKE LOWER($4)
+                 OR LOWER(note) LIKE LOWER($5)
+               )`,
+            [newSupplyId, `%[SOLICITAÇÃO DE INSUMO: ${validName}]%`, `%[SOLICITAÇÃO DE INSUMO NÃO CADASTRADO: ${validName}]%`, `%${validName}%`, `%${validCode}%`]
+        );
+
         broadcastUpdate('SUPPLY_CREATED', { supplyCode: validCode });
         res.json({ success: true });
     } catch (error) { 
@@ -484,6 +500,11 @@ app.post("/api/requests/:id/approve", verifyAdmin, async (req, res, next) => {
         }
         
         const reqData = requestRes.rows[0];
+        if (!reqData.supply_id) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: "Este insumo não está cadastrado no catálogo. Por favor, cadastre-o antes de aprovar." });
+        }
+
         const supplyRes = await client.query('SELECT current_quantity FROM supplies WHERE id = $1 FOR UPDATE', [reqData.supply_id]);
         
         if (supplyRes.rows.length === 0) {
@@ -643,8 +664,7 @@ app.post("/api/movements/adjust", verifyAdmin, async (req, res, next) => {
     } finally {
         client.release();
     }
-
-
+});
 
 app.all("*", (req, res) => {
     res.status(404).json({ error: `Rota '${req.originalUrl}' não encontrada.` });
