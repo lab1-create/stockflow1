@@ -62,7 +62,7 @@ async function bootstrapApp() {
         const data = await res.json();
         
         const users = data.users.filter(u => u.active);
-        const pendingUsrs = data.users.filter(u => !u.active);
+        const pendingUsrs = data.users.filter(u => !u.active || u.pending_pin_code);
         const destinations = data.destinations;
         const supplies = data.supplies;
         const movements = data.movements;
@@ -385,12 +385,15 @@ function renderAll() {
     if (pendUsersList) {
         if ($("#pending-users-count")) $("#pending-users-count").textContent = `${state.pendingUsers.length} pendentes`;
         pendUsersList.innerHTML = state.pendingUsers.length
-            ? state.pendingUsers.map(u => `
-                <div class="compact-row" style="padding: 8px; border:1px solid #444; border-radius:4px; margin-bottom: 5px;">
-                  <span><strong>${escapeHTML(u.name)}</strong></span>
-                  <button class="primary-action" data-approve-user=\"${u.id}\" style="padding:4px 8px; font-size:0.8rem;">Aprovar</button>
-                </div>
-            `).join("")
+            ? state.pendingUsers.map(u => {
+                const isReset = !!u.pending_pin_code;
+                return `
+                  <div class="compact-row" style="padding: 8px; border:1px solid #444; border-radius:4px; margin-bottom: 5px;">
+                    <span><strong>${escapeHTML(u.name)}</strong>${isReset ? ' <span style="color:#ffa726; font-size:0.8rem;">(Senha)</span>' : ''}</span>
+                    <button class="primary-action" data-approve-user="${u.id}" style="padding:4px 8px; font-size:0.8rem;">Aprovar</button>
+                  </div>
+                `;
+            }).join("")
             : `<p class="muted">Nenhum novo cadastro.</p>`;
     }
 
@@ -948,6 +951,29 @@ document.addEventListener("DOMContentLoaded", () => {
             alert("Sua solicitação foi enviada! O administrador irá aprovar em breve."); 
             $("#register-dialog").close();
             $("#register-form").reset();
+        } catch (err) { alert(err.message); }
+    });
+
+    $("#open-reset-btn")?.addEventListener("click", () => $("#reset-dialog").showModal());
+    $("#close-reset-dialog")?.addEventListener("click", () => $("#reset-dialog").close());
+
+    $("#reset-form")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const body = { 
+            name: $("#reset-name").value, 
+            pin: $("#reset-pin").value 
+        };
+        try { 
+            const res = await fetch(`${API_BASE_URL}/api/auth/reset-password-request`, {
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error); 
+            alert("Solicitação de redefinição de senha enviada! O administrador irá aprovar em breve."); 
+            $("#reset-dialog").close();
+            $("#reset-form").reset();
         } catch (err) { alert(err.message); }
     });
 

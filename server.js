@@ -135,7 +135,7 @@ async function fetchState(page = 0, limit = 100) {
         const offset = page * limit;
 
         const [usersResult, destinationsResult, suppliesResult, movResult, reqResult] = await Promise.all([
-            pool.query('SELECT id, name, role, active FROM app_users ORDER BY name ASC LIMIT $1 OFFSET $2', [limit, offset]),
+            pool.query('SELECT id, name, role, active, pending_pin_code FROM app_users ORDER BY name ASC LIMIT $1 OFFSET $2', [limit, offset]),
             pool.query('SELECT id, name FROM destinations WHERE active = true LIMIT $1 OFFSET $2', [limit, offset]),
             pool.query('SELECT id, code, name, category, supplier, note, minimum_quantity, current_quantity, link, unit_price, is_shared FROM supplies ORDER BY code ASC LIMIT $1 OFFSET $2', [limit, offset]),
             pool.query(`
@@ -240,8 +240,21 @@ app.get("/api/auth/me", verifyToken, (req, res) => {
 // Admin endpoints
 app.post("/api/users/:id/approve", verifyAdmin, async (req, res, next) => {
     try {
-        const result = await pool.query("UPDATE app_users SET active = true, approved_by = $1 WHERE id = $2 RETURNING id", [req.user.id, req.params.id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: "Usuário não encontrado" });
+        const userRes = await pool.query("SELECT pending_pin_code FROM app_users WHERE id = $1", [req.params.id]);
+        if (userRes.rows.length === 0) return res.status(404).json({ error: "Usuário não encontrado" });
+        
+        const user = userRes.rows[0];
+        if (user.pending_pin_code) {
+            await pool.query(
+                "UPDATE app_users SET pin_code = pending_pin_code, pending_pin_code = NULL, active = true, approved_by = $1 WHERE id = $2",
+                [req.user.id, req.params.id]
+            );
+        } else {
+            await pool.query(
+                "UPDATE app_users SET active = true, approved_by = $1 WHERE id = $2",
+                [req.user.id, req.params.id]
+            );
+        }
         broadcastUpdate('USER_APPROVED', { userId: req.params.id });
         res.json({ success: true });
     } catch (err) { next(err); }
@@ -277,6 +290,27 @@ app.post("/api/auth/register", registerLimiter, async (req, res, next) => {
         const sanitizedName = escapeHTML(validName);
         await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, false)', [sanitizedName, role, hashedPin]);
         broadcastUpdate('USER_REGISTERED');
+        res.json({ success: true });
+    } catch (error) { next(error); }
+});
+
+app.post("/api/auth/reset-password-request", registerLimiter, async (req, res, next) => {
+    try {
+        const { name, pin } = req.body;
+        const validName = validateString(name, 100);
+        if (!validName || typeof pin !== "string" || pin.trim().length < 3) {
+            return res.status(400).json({ error: "Nome e Senha/PIN válidos são obrigatórios (mínimo 3 caracteres)." });
+        }
+        
+        const userRes = await pool.query('SELECT id FROM app_users WHERE LOWER(name) = LOWER($1)', [validName]);
+        if (userRes.rows.length === 0) {
+            return res.status(404).json({ error: "Usuário não encontrado." });
+        }
+        
+        const hashedPin = await bcrypt.hash(String(pin), 10);
+        await pool.query('UPDATE app_users SET pending_pin_code = $1 WHERE id = $2', [hashedPin, userRes.rows[0].id]);
+        
+        broadcastUpdate('USER_RESET_REQUESTED');
         res.json({ success: true });
     } catch (error) { next(error); }
 });
@@ -459,7 +493,7 @@ const withdrawLimiter = rateLimit({
 
 app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, res, next) => {
     try {
-        const { code, destination, quantity, note } = req.body;
+        const { code, destination, quantity, note, technician } = req.body;
         const validQuantity = validatePositiveInteger(quantity);
         if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
         
@@ -472,11 +506,19 @@ app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, re
             if (destRes.rows.length > 0) destId = destRes.rows[0].id;
         }
 
+        let targetUserId = req.user.id;
+        if (technician) {
+            const techRes = await pool.query('SELECT id FROM app_users WHERE LOWER(name) = LOWER($1)', [technician.trim()]);
+            if (techRes.rows.length > 0) {
+                targetUserId = techRes.rows[0].id;
+            }
+        }
+
         const finalNote = supplyId ? validateString(note, 255) : `[SOLICITAÇÃO DE INSUMO NÃO CADASTRADO: ${code}] ${note || ''}`;
 
         await pool.query(
             'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status, note) VALUES ($1, $2, $3, $4, $5, $6)',
-            [supplyId, req.user.id, destId, validQuantity, 'pending', finalNote]
+            [supplyId, targetUserId, destId, validQuantity, 'pending', finalNote]
         );
 
         broadcastUpdate('WITHDRAW_REQUESTED');

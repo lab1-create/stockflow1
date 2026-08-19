@@ -32,6 +32,7 @@
         </label>
         <button type="submit" class="primary-action wide login-btn">ENTRAR</button>
         <button type="button" id="open-register-btn" class="ghost-action wide" style="margin-top: 10px;">CRIAR ACESSO</button>
+        <button type="button" id="open-reset-btn" class="ghost-action wide" style="margin-top: 10px; border-color: #555; color: #aaa;">REDEFINIR SENHA</button>
       </form>
     </section>
 
@@ -397,6 +398,21 @@
           <label class="span-2">Crie sua Senha / PIN<input id="reg-pin" type="password" required placeholder="Digite uma senha"></label>
         </div>
         <button type="submit" class="primary-action wide">Enviar Solicitação</button>
+      </form>
+    </dialog>
+
+    <dialog id="reset-dialog">
+      <form id="reset-form" class="dialog-body">
+        <div class="panel-head">
+          <h2>Redefinir Senha</h2>
+          <button type="button" id="close-reset-dialog" class="icon-button" aria-label="Fechar">x</button>
+        </div>
+        <p class="muted" style="margin-bottom: 15px;">Digite seu nome exato e a nova senha desejada. O administrador deverá aprovar a alteração.</p>
+        <div class="form-grid">
+          <label class="span-2">Seu Nome de Usuário<input id="reset-name" required placeholder="Ex: João da Silva"></label>
+          <label class="span-2">Nova Senha / PIN<input id="reset-pin" type="password" required placeholder="Digite a nova senha"></label>
+        </div>
+        <button type="submit" class="primary-action wide">Solicitar Redefinição</button>
       </form>
     </dialog>
 
