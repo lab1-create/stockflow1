@@ -41,8 +41,12 @@ let currentHistoryTab = 'withdrawals';
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
+function normalizeSector(s) {
+    return String(s || "").trim().toLowerCase() === "faturamento" ? "faturamento" : "tecnica";
+}
+
 function setSector(sector) {
-    state.currentSector = sector === 'faturamento' ? 'faturamento' : 'tecnica';
+    state.currentSector = normalizeSector(sector);
     if (isAdmin()) {
         localStorage.setItem("stockflow_active_sector", state.currentSector);
     }
@@ -101,7 +105,7 @@ async function bootstrapApp() {
 
         state.items = (supplies || []).map(s => ({
             ...s,
-            sector: s.sector || 'tecnica',
+            sector: normalizeSector(s.sector),
             qty: s.current_quantity || 0,
             min: s.minimum_quantity || 0,
             supplier: s.supplier || "",
@@ -149,7 +153,7 @@ async function bootstrapApp() {
                 destination: m.dest_name || "-",
                 at: m.created_at,
                 note: m.note || "",
-                sector: m.sector || 'tecnica'
+                sector: normalizeSector(m.sector)
             };
         });
 
@@ -186,20 +190,23 @@ async function bootstrapApp() {
                 isCustom: isCustom,
                 status: r.status,
                 note: r.note || "",
-                sector: r.sector || 'tecnica'
+                sector: normalizeSector(r.sector)
             };
         });
         
-        state.technicians = (users || []).map(u => ({ 
-            name: u.name, 
-            sector: u.sector || 'tecnica',
-            defaultDest: (u.sector === 'faturamento') ? "Faturamento" : "Laboratório"
-        }));
+        state.technicians = (users || []).map(u => {
+            const normSec = normalizeSector(u.sector);
+            return { 
+                name: u.name, 
+                sector: normSec,
+                defaultDest: (normSec === 'faturamento') ? "Faturamento" : "Laboratório"
+            };
+        });
         state.users = users || [];
         state.pendingUsers = pendingUsrs || [];
         
         if (destinations && destinations.length > 0) {
-            state.destinations = destinations.map(d => d.name);
+            state.destinations = destinations.map(d => d.name || d);
         }
 
         renderAll();
@@ -507,16 +514,6 @@ function renderHistoryTable() {
       <span class="muted">${formatDate(h.at)}</span>
     </div>
   `).join("");
-}
-
-function renderTechnicianFilter() {
-    const select = $("#technician-filter");
-    if (!select || select.options.length > 1) return;
-    state.technicians.forEach(t => {
-        const opt = document.createElement("option");
-        opt.value = t.name; opt.textContent = t.name;
-        select.appendChild(opt);
-    });
 }
 
 window.selectItemForWithdraw = (code) => {
@@ -868,10 +865,10 @@ async function handleLogin(e) {
         if (isAdmin()) {
             if ($("#sector-switcher")) $("#sector-switcher").style.display = "inline-flex";
             const savedSector = localStorage.getItem("stockflow_active_sector");
-            state.currentSector = savedSector || 'tecnica';
+            state.currentSector = savedSector ? normalizeSector(savedSector) : 'tecnica';
         } else {
             if ($("#sector-switcher")) $("#sector-switcher").style.display = "none";
-            state.currentSector = currentUser.sector || 'tecnica';
+            state.currentSector = normalizeSector(currentUser.sector);
         }
         updateSectorUI();
 
@@ -1007,6 +1004,7 @@ document.addEventListener("DOMContentLoaded", () => {
             name: $("#user-name").value, 
             role: $("#user-role").value, 
             sector: $("#user-sector")?.value || 'tecnica',
+            pin: $("#user-pin").value,
             pin_code: $("#user-pin").value, 
             active: true 
         };

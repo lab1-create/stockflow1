@@ -1,34 +1,42 @@
-const CACHE_NAME = 'stockflow-cache-v1';
+const CACHE_NAME = 'stockflow-cache-v4';
 const urlsToCache = [
   './',
   './index.html',
-  './app.js',
-  './style.css',
+  './app.js?v=4.0',
+  './styles.css?v=3.9',
   './manifest.json'
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        return cache.addAll(urlsToCache);
+        return cache.addAll(urlsToCache).catch(() => {});
       })
   );
 });
 
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
+  );
+});
+
 self.addEventListener('fetch', event => {
-  // Only intercept GET requests
   if (event.request.method !== 'GET') return;
-  // Don't intercept API calls
   if (event.request.url.includes('/api/')) return;
 
+  // Network-first strategy to ensure fresh UI updates
   event.respondWith(
-    caches.match(event.request)
+    fetch(event.request)
       .then(response => {
-        if (response) {
-          return response; // Return from cache
-        }
-        return fetch(event.request);
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone)).catch(() => {});
+        return response;
       })
+      .catch(() => caches.match(event.request))
   );
 });

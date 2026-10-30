@@ -1,7 +1,3 @@
-const dns = require('dns');
-if (dns.setDefaultResultOrder) {
-    dns.setDefaultResultOrder('ipv4first');
-}
 const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcrypt');
 const helmet = require('helmet');
@@ -71,10 +67,31 @@ function validateString(value, maxLength = 255) {
     return trimmed;
 }
 
+function normalizeSector(s) {
+    return String(s || "").trim().toLowerCase() === "faturamento" ? "faturamento" : "tecnica";
+}
+
 const pool = new Pool({
     connectionString: connectionString,
     ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false }
 });
+
+let schemaInitialized = false;
+async function ensureSchema() {
+    if (schemaInitialized) return;
+    try {
+        await pool.query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS sector TEXT NOT NULL DEFAULT 'tecnica';");
+        await pool.query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS pending_pin_code TEXT;");
+        await pool.query("ALTER TABLE supplies ADD COLUMN IF NOT EXISTS sector TEXT NOT NULL DEFAULT 'tecnica';");
+        await pool.query("ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS sector TEXT NOT NULL DEFAULT 'tecnica';");
+        await pool.query("ALTER TABLE stock_requests ADD COLUMN IF NOT EXISTS sector TEXT NOT NULL DEFAULT 'tecnica';");
+        await pool.query("INSERT INTO destinations (name, active) SELECT 'Faturamento', true WHERE NOT EXISTS (SELECT 1 FROM destinations WHERE LOWER(name) = 'faturamento');");
+        schemaInitialized = true;
+        logger.info("✅ Schema verificado com sucesso.");
+    } catch (err) {
+        logger.error({ err: err.message }, "⚠️ Erro ao verificar schema:");
+    }
+}
 
 if (process.env.NODE_ENV === "production" && !process.env.FRONTEND_URL) {
     throw new Error("FRONTEND_URL obrigatório em produção");
@@ -117,7 +134,7 @@ async function verifyToken(req, res, next) {
             return res.status(401).json({ error: "Usuário desativado ou removido." });
         }
         verified.role = userCheck.rows[0].role; // refresh role from DB
-        verified.sector = userCheck.rows[0].sector || 'tecnica';
+        verified.sector = normalizeSector(userCheck.rows[0].sector);
         req.user = verified;
         next();
     } catch (err) {
@@ -137,6 +154,7 @@ function verifyAdmin(req, res, next) {
 // Buscar estado consolidado (PARALELIZADO PARA PERFORMANCE EXTREMA)
 async function fetchState(page = 0, limit = 100) {
     try {
+        await ensureSchema();
         const offset = page * limit;
 
         const [usersResult, destinationsResult, suppliesResult, movResult, reqResult] = await Promise.all([
@@ -145,7 +163,8 @@ async function fetchState(page = 0, limit = 100) {
             pool.query('SELECT id, code, name, category, sector, supplier, note, minimum_quantity, current_quantity, link, unit_price, is_shared FROM supplies ORDER BY code ASC LIMIT $1 OFFSET $2', [limit, offset]),
             pool.query(`
                 SELECT sm.id, sm.supply_id, sm.user_id, sm.destination_id, sm.movement_type, 
-                       sm.quantity, sm.quantity_before, sm.quantity_after, sm.note, sm.created_at, sm.sector,
+                       sm.quantity, sm.quantity_before, sm.quantity_after, sm.note, sm.created_at,
+                       COALESCE(s.sector, sm.sector, 'tecnica') as sector,
                        s.code, s.name as supply_name, u.name as user_name, d.name as dest_name
                 FROM stock_movements sm
                 LEFT JOIN supplies s ON sm.supply_id = s.id
@@ -154,7 +173,8 @@ async function fetchState(page = 0, limit = 100) {
                 ORDER BY sm.created_at DESC LIMIT $1 OFFSET $2
             `, [limit, offset]),
             pool.query(`
-                SELECT sr.id, sr.supply_id, sr.user_id, sr.destination_id, sr.quantity, sr.status, sr.requested_at, sr.sector,
+                SELECT sr.id, sr.supply_id, sr.user_id, sr.destination_id, sr.quantity, sr.status, sr.note, sr.requested_at,
+                       COALESCE(s.sector, sr.sector, 'tecnica') as sector,
                        s.code, s.name as supply_name, u.name as user_name, d.name as dest_name
                 FROM stock_requests sr
                 LEFT JOIN supplies s ON sr.supply_id = s.id
@@ -223,7 +243,7 @@ app.post("/api/auth/login", async (req, res) => {
         const validPin = await bcrypt.compare(String(pin), user.pin_code);
         if (!validPin) return res.status(401).json({ error: "Senha / PIN incorreto." });
 
-        const userSector = user.sector || 'tecnica';
+        const userSector = normalizeSector(user.sector);
         const token = jwt.sign({ id: user.id, name: user.name, role: user.role, sector: userSector }, JWT_SECRET, { expiresIn: "8h" });
         res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
         
@@ -268,7 +288,8 @@ app.post("/api/users/:id/approve", verifyAdmin, async (req, res, next) => {
 
 app.post("/api/users", verifyAdmin, async (req, res, next) => {
     try {
-        const { name, role, pin, sector } = req.body;
+        const { name, role, sector } = req.body;
+        const pin = req.body.pin || req.body.pin_code;
         const validName = validateString(name, 100);
         if (!validName || typeof pin !== "string" || pin.trim().length < 3) {
             return res.status(400).json({ error: "Nome (máx 100 caracteres) e Senha/PIN válidos são obrigatórios (mínimo 3 caracteres)." });
@@ -276,7 +297,7 @@ app.post("/api/users", verifyAdmin, async (req, res, next) => {
         if (role !== "admin" && role !== "tecnico") {
             return res.status(400).json({ error: "Cargo inválido." });
         }
-        const validSector = sector === "faturamento" ? "faturamento" : "tecnica";
+        const validSector = normalizeSector(sector);
         const hashedPin = await bcrypt.hash(String(pin), 10);
         await pool.query('INSERT INTO app_users (name, role, sector, pin_code, active) VALUES ($1, $2, $3, $4, true)', [validName, role, validSector, hashedPin]);
         broadcastUpdate('USER_CREATED');
@@ -751,8 +772,10 @@ app.use((err, req, res, next) => {
 });
 
 if (process.env.NODE_ENV !== "test") {
-    app.listen(port, host, () => {
-        logger.info(`Servidor rodando em http://${host}:${port}`);
+    ensureSchema().finally(() => {
+        app.listen(port, host, () => {
+            logger.info(`Servidor rodando em http://${host}:${port}`);
+        });
     });
 }
 
