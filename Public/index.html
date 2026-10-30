@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Outlet do Celular">
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="styles.css?v=4.1">
+    <link rel="stylesheet" href="styles.css?v=4.2">
   </head>
   <body>
     <section id="login-screen" class="login-screen">
@@ -49,30 +49,39 @@
         <nav class="nav">
           <button class="nav-item active" data-view="dashboard" data-admin-only title="Dashboard">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+            <span class="nav-label">Painel Geral</span>
           </button>
           <button class="nav-item" data-view="withdraw" title="Retirar Insumo">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span class="nav-label">Retirar Insumo</span>
           </button>
           <button class="nav-item" data-view="return" title="Devolver Insumo">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span class="nav-label">Devolver Insumo</span>
           </button>
           <button class="nav-item" data-view="request-item" title="Solicitar Insumo">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <span class="nav-label">Solicitar Insumo</span>
           </button>
           <button class="nav-item" data-view="history" title="Histórico">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span class="nav-label">Auditoria / Histórico</span>
           </button>
           <button class="nav-item" data-view="replenish" data-admin-only title="Repor Estoque">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+            <span class="nav-label">Entrada (Reposição)</span>
           </button>
           <button class="nav-item" data-view="count" data-admin-only title="Contagem">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+            <span class="nav-label">Contagem / Auditoria</span>
           </button>
           <button class="nav-item" data-view="items" data-admin-only title="Insumos">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+            <span class="nav-label">Catálogo de Insumos</span>
           </button>
           <button class="nav-item" data-view="out-of-stock" data-admin-only title="Itens Faltantes">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            <span class="nav-label">Insumos Faltantes</span>
           </button>
         </nav>
 
@@ -259,33 +268,57 @@
         </section>
 
         <section id="count-view" class="view">
-          <div class="flow-layout">
-            <section class="flow-card">
-              <div class="flow-title">
-                <p class="eyebrow">Auditoria</p>
-                <h2>Contagem / Balanço</h2>
-              </div>
-              <p class="muted" style="margin-bottom:15px;">Ajusta o saldo do sistema para bater exatamente com a contagem física atual.</p>
-              <div class="form-grid">
-                <label>
-                  Código do Insumo
-                  <input id="count-code" placeholder="Ex: TG012" class="scan-input">
-                </label>
-                <div style="display: flex; gap: 10px;">
-                  <button id="count-find-btn" class="ghost-action" style="flex:1;">Verificar Sistema</button>
+          <div class="dashboard-grid" style="align-items: start;">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow" style="font-size: 0.75rem; letter-spacing: 3px; margin-bottom: 4px;">Balanço Individual</p>
+                  <h2>Identificar & Contar Insumo</h2>
                 </div>
-                
-                <div id="count-details" style="display:none; flex-direction:column; gap:10px; margin-top: 10px; border-top: 1px solid #333; padding-top: 15px;">
-                  <p id="count-item-name" style="font-weight: bold;"></p>
-                  <p>Saldo Atual no Sistema: <strong id="count-sys-qty" style="color: #ff2a55;"></strong></p>
-                  <label>
-                    Contagem Física Real
+              </div>
+              <p class="muted" style="margin-bottom:15px; font-size: 0.9rem;">Bipe o código, digite o nome ou selecione o insumo na lista para ajustar o saldo do sistema.</p>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <label>
+                  Selecionar da Lista de Insumos
+                  <select id="count-select-item">
+                    <option value="">-- Escolha um insumo cadastrado --</option>
+                  </select>
+                </label>
+                <div style="display: flex; gap: 10px; align-items: flex-end;">
+                  <label style="flex: 1; margin-bottom: 0;">
+                    Ou Bipe / Digite o Código ou Nome
+                    <input id="count-code" placeholder="Ex: TG012, Cola, Tela..." class="scan-input">
+                  </label>
+                  <button type="button" id="count-find-btn" class="ghost-action" style="height: 46px; white-space: nowrap;">Verificar Sistema</button>
+                </div>
+
+                <div id="count-details" style="display:none; flex-direction:column; gap:12px; margin-top: 8px; background: rgba(220, 38, 38, 0.08); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 12px; padding: 16px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong id="count-item-name" style="font-size: 1.1rem; color: #fff;"></strong>
+                    <span id="count-item-code-badge" class="pill"></span>
+                  </div>
+                  <p style="margin: 0; color: #d4c4c8;">Saldo Atual no Sistema: <strong id="count-sys-qty" style="color: #f87171; font-size: 1.15rem;"></strong></p>
+                  <label style="margin-bottom: 0;">
+                    Contagem Física Real (Prateleira)
                     <input id="count-phys-qty" type="number" min="0" placeholder="Qtd. real na prateleira">
                   </label>
-                  <button id="count-submit-btn" class="primary-action wide">Ajustar Saldo (Auditoria)</button>
+                  <button type="button" id="count-submit-btn" class="primary-action wide">Ajustar Saldo (Auditoria)</button>
                 </div>
               </div>
-              <div id="count-result" class="result-box muted" style="margin-top: 15px;">Aguardando leitura do código.</div>
+              <div id="count-result" class="result-box muted" style="margin-top: 15px;">Aguardando leitura ou seleção do insumo.</div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head" style="flex-wrap: wrap; gap: 10px;">
+                <div>
+                  <p class="eyebrow" style="font-size: 0.75rem; letter-spacing: 3px; margin-bottom: 4px;">Auditoria Rápida</p>
+                  <h2>Tabela de Contagem Física</h2>
+                </div>
+                <input type="search" id="tech-count-search" placeholder="🔎 Filtrar insumo..." style="max-width: 220px; margin: 0;">
+              </div>
+              <div style="max-height: 520px; overflow-y: auto; padding-right: 4px;">
+                <div id="tech-count-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+              </div>
             </section>
           </div>
         </section>
@@ -856,6 +889,6 @@
     </dialog>
 
 
-    <script src="app.js?v=4.1"></script>
+    <script src="app.js?v=4.2"></script>
   </body>
 </html>

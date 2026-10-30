@@ -481,6 +481,7 @@ function renderAll() {
     renderItemsGrid();
     renderHistoryTable();
     renderTechnicianFilter();
+    renderTechCountPanel();
     renderFaturamentoAll();
 }
 
@@ -782,42 +783,106 @@ async function handleReplenish() {
     } catch (e) { $("#replenish-result").textContent = e.message; }
 }
 
-// LOGICA DE CONTAGEM / BALANÇO
-function findCountItem() {
-    const code = $("#count-code").value;
-    countItem = state.items.find(i => (i.sector || 'tecnica') === state.currentSector && normalize(i.code) === normalize(code));
-    if (!countItem) {
+// LOGICA DE CONTAGEM / BALANÇO (ASSISTÊNCIA TÉCNICA)
+function showSelectedCountItem(item) {
+    if (!item) {
         $("#count-result").textContent = "Referência não encontrada neste setor.";
         $("#count-details").style.display = "none";
         return;
     }
-    $("#count-result").textContent = "";
-    $("#count-item-name").textContent = countItem.name;
-    $("#count-sys-qty").textContent = `${countItem.qty} un`;
-    $("#count-phys-qty").value = countItem.qty; // Defaults to system qty
+    countItem = item;
+    if ($("#count-select-item")) $("#count-select-item").value = item.code;
+    if ($("#count-code")) $("#count-code").value = item.code;
+    if ($("#count-item-code-badge")) $("#count-item-code-badge").textContent = item.code;
+    $("#count-result").textContent = `Insumo identificado: ${item.name} (${item.code}). Informe a contagem física e confirme.`;
+    $("#count-item-name").textContent = item.name;
+    $("#count-sys-qty").textContent = `${item.qty} un`;
+    $("#count-phys-qty").value = item.qty;
     $("#count-details").style.display = "flex";
+    $("#count-phys-qty")?.focus();
+    $("#count-phys-qty")?.select();
+}
+
+function findCountItem() {
+    const rawQuery = ($("#count-code")?.value || $("#count-select-item")?.value || "").trim();
+    if (!rawQuery) {
+        $("#count-result").textContent = "Digite o código/nome ou escolha um insumo na lista.";
+        $("#count-details").style.display = "none";
+        return;
+    }
+    const q = normalize(rawQuery);
+    const sectorItems = state.items.filter(i => (i.sector || 'tecnica') === state.currentSector);
+    const exactMatch = sectorItems.find(i => normalize(i.code) === q || normalize(i.name) === q);
+    const partialMatch = sectorItems.find(i => normalize(i.code).includes(q) || normalize(i.name).includes(q));
+    showSelectedCountItem(exactMatch || partialMatch || null);
 }
 
 async function submitCount() {
-    if (!countItem) return alert("Selecione um insumo primeiro.");
-    const physQty = Number($("#count-phys").value);
-    if (isNaN(physQty) || physQty < 0) return alert("Quantidade inválida.");
+    if (!countItem) return alert("Selecione ou identifique um insumo primeiro.");
+    const physInput = $("#count-phys-qty");
+    const physQty = Number(physInput ? physInput.value : NaN);
+    if (isNaN(physQty) || physQty < 0) return alert("Informe uma quantidade física válida (0 ou maior).");
 
+    const btn = $("#count-submit-btn");
+    if (btn) btn.disabled = true;
     try {
         const res = await fetch(`${API_BASE_URL}/api/movements/adjust`, {
             method: 'POST', 
             headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ code: countItem.code, physicalQty: physQty })
         });
-        if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
-        alert(`Estoque ajustado para ${physQty}!`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erro ao registrar contagem.");
         
+        const adjustedName = countItem.name;
         countItem = null;
-        $("#count-code").value = "";
-        $("#count-info").style.display = "none";
-        $("#count-phys").value = "";
-        bootstrapApp();
-    } catch (e) { alert(e.message); }
+        if ($("#count-code")) $("#count-code").value = "";
+        if ($("#count-select-item")) $("#count-select-item").value = "";
+        if ($("#count-details")) $("#count-details").style.display = "none";
+        if ($("#count-phys-qty")) $("#count-phys-qty").value = "";
+        if ($("#count-result")) {
+            $("#count-result").innerHTML = `<span style="color:#4ade80; font-weight:600;">✅ Saldo de "${escapeHTML(adjustedName)}" ajustado para ${physQty} un com sucesso!</span>`;
+        }
+        await bootstrapApp();
+    } catch (e) {
+        alert(e.message);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function renderTechCountPanel() {
+    const select = $("#count-select-item");
+    const sectorItems = state.items.filter(i => (i.sector || 'tecnica') === 'tecnica');
+    if (select) {
+        const cur = select.value;
+        select.innerHTML = `<option value="">-- Escolha um insumo cadastrado (${sectorItems.length}) --</option>` +
+            sectorItems.map(i => `<option value="${escapeHTML(i.code)}">[${escapeHTML(i.code)}] ${escapeHTML(i.name)} (Saldo: ${i.qty} un)</option>`).join("");
+        if (cur && sectorItems.some(i => i.code === cur)) select.value = cur;
+    }
+
+    const listEl = $("#tech-count-list");
+    if (!listEl) return;
+    const filterQ = normalize($("#tech-count-search")?.value || "");
+    const filtered = sectorItems.filter(i => !filterQ || [i.code, i.name, i.category].some(f => normalize(f).includes(filterQ)));
+
+    if (filtered.length === 0) {
+        listEl.innerHTML = `<p class="muted" style="padding:1rem; text-align:center;">Nenhum insumo encontrado.</p>`;
+        return;
+    }
+
+    listEl.innerHTML = filtered.map(item => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 14px; background:rgba(12,5,8,0.65); border:1px solid rgba(220,38,38,0.2); border-radius:10px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:160px;">
+            <strong style="color:#fff; font-size:0.95rem;">${escapeHTML(item.name)}</strong>
+            <div style="font-size:0.78rem; color:#b89fa5;">Código: <span style="color:#f87171; font-family:monospace;">${escapeHTML(item.code)}</span> · Sistema: <strong>${Number(item.qty) || 0} un</strong></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="number" min="0" data-tech-count-qty="${escapeHTML(item.code)}" value="${Number(item.qty) || 0}" style="width:84px !important; margin:0 !important; padding:6px 8px !important; text-align:center; font-weight:700;">
+            <button type="button" class="primary-action" data-tech-count-save="${escapeHTML(item.code)}" style="padding:7px 12px; font-size:0.8rem;">Ajustar</button>
+          </div>
+        </div>
+    `).join("");
 }
 
 async function approveRequest(id, btn) {
@@ -917,7 +982,15 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Contagem events
     $("#count-find-btn")?.addEventListener("click", findCountItem);
-    $("#count-code")?.addEventListener("keydown", (e) => { if (e.key === "Enter") findCountItem(); });
+    $("#count-code")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); findCountItem(); } });
+    $("#count-phys-qty")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submitCount(); } });
+    $("#count-select-item")?.addEventListener("change", (e) => {
+        const code = e.target.value;
+        if (!code) return;
+        const item = state.items.find(i => (i.sector || 'tecnica') === state.currentSector && i.code === code);
+        if (item) showSelectedCountItem(item);
+    });
+    $("#tech-count-search")?.addEventListener("input", renderTechCountPanel);
     $("#count-submit-btn")?.addEventListener("click", submitCount);
 
     $("#replenish-button")?.addEventListener("click", handleReplenish);
@@ -1116,6 +1189,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const copyCodeBtn = e.target.closest("[data-copy-code]");
         if (copyCodeBtn) copySearchCode(copyCodeBtn.dataset.copyCode);
+
+        const techCountSaveBtn = e.target.closest("[data-tech-count-save]");
+        if (techCountSaveBtn) {
+            const code = techCountSaveBtn.dataset.techCountSave;
+            const qtyInput = document.querySelector(`[data-tech-count-qty="${code}"]`);
+            if (!qtyInput) return;
+            const physicalQty = Number(qtyInput.value);
+            if (isNaN(physicalQty) || physicalQty < 0) return alert("Quantidade inválida.");
+            techCountSaveBtn.disabled = true;
+            fetch(`${API_BASE_URL}/api/movements/adjust`, {
+                method: 'POST',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ code, physicalQty })
+            })
+            .then(async res => {
+                const d = await res.json();
+                if (!res.ok) throw new Error(d.error || "Erro ao ajustar saldo.");
+                if ($("#count-result")) {
+                    $("#count-result").innerHTML = `<span style="color:#4ade80; font-weight:600;">✅ Saldo do código ${escapeHTML(code)} ajustado para ${physicalQty} un!</span>`;
+                }
+                await bootstrapApp();
+            })
+            .catch(err => alert(err.message))
+            .finally(() => { techCountSaveBtn.disabled = false; });
+        }
     });
 });
 
