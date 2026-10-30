@@ -1,3 +1,7 @@
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+    dns.setDefaultResultOrder('ipv4first');
+}
 const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcrypt');
 const helmet = require('helmet');
@@ -108,11 +112,12 @@ async function verifyToken(req, res, next) {
     if (!token) return res.status(401).json({ error: "Acesso negado. Faça login." });
     try {
         const verified = jwt.verify(token, JWT_SECRET);
-        const userCheck = await pool.query('SELECT active, role FROM app_users WHERE id = $1', [verified.id]);
+        const userCheck = await pool.query('SELECT active, role, sector FROM app_users WHERE id = $1', [verified.id]);
         if (userCheck.rows.length === 0 || !userCheck.rows[0].active) {
             return res.status(401).json({ error: "Usuário desativado ou removido." });
         }
         verified.role = userCheck.rows[0].role; // refresh role from DB
+        verified.sector = userCheck.rows[0].sector || 'tecnica';
         req.user = verified;
         next();
     } catch (err) {
@@ -135,12 +140,12 @@ async function fetchState(page = 0, limit = 100) {
         const offset = page * limit;
 
         const [usersResult, destinationsResult, suppliesResult, movResult, reqResult] = await Promise.all([
-            pool.query('SELECT id, name, role, active, pending_pin_code FROM app_users ORDER BY name ASC LIMIT $1 OFFSET $2', [limit, offset]),
+            pool.query('SELECT id, name, role, sector, active, pending_pin_code FROM app_users ORDER BY name ASC LIMIT $1 OFFSET $2', [limit, offset]),
             pool.query('SELECT id, name FROM destinations WHERE active = true LIMIT $1 OFFSET $2', [limit, offset]),
-            pool.query('SELECT id, code, name, category, supplier, note, minimum_quantity, current_quantity, link, unit_price, is_shared FROM supplies ORDER BY code ASC LIMIT $1 OFFSET $2', [limit, offset]),
+            pool.query('SELECT id, code, name, category, sector, supplier, note, minimum_quantity, current_quantity, link, unit_price, is_shared FROM supplies ORDER BY code ASC LIMIT $1 OFFSET $2', [limit, offset]),
             pool.query(`
                 SELECT sm.id, sm.supply_id, sm.user_id, sm.destination_id, sm.movement_type, 
-                       sm.quantity, sm.quantity_before, sm.quantity_after, sm.note, sm.created_at,
+                       sm.quantity, sm.quantity_before, sm.quantity_after, sm.note, sm.created_at, sm.sector,
                        s.code, s.name as supply_name, u.name as user_name, d.name as dest_name
                 FROM stock_movements sm
                 LEFT JOIN supplies s ON sm.supply_id = s.id
@@ -149,7 +154,7 @@ async function fetchState(page = 0, limit = 100) {
                 ORDER BY sm.created_at DESC LIMIT $1 OFFSET $2
             `, [limit, offset]),
             pool.query(`
-                SELECT sr.id, sr.supply_id, sr.user_id, sr.destination_id, sr.quantity, sr.status, sr.requested_at,
+                SELECT sr.id, sr.supply_id, sr.user_id, sr.destination_id, sr.quantity, sr.status, sr.requested_at, sr.sector,
                        s.code, s.name as supply_name, u.name as user_name, d.name as dest_name
                 FROM stock_requests sr
                 LEFT JOIN supplies s ON sr.supply_id = s.id
@@ -209,7 +214,7 @@ app.post("/api/auth/login", async (req, res) => {
         const { name, pin } = req.body;
         if (!name || !pin) return res.status(400).json({ error: "Nome e PIN obrigatórios." });
 
-        const result = await pool.query('SELECT id, name, role, pin_code, active FROM app_users WHERE LOWER(name) = LOWER($1)', [name]);
+        const result = await pool.query('SELECT id, name, role, sector, pin_code, active FROM app_users WHERE LOWER(name) = LOWER($1)', [name]);
         if (result.rows.length === 0) return res.status(401).json({ error: "Usuário não encontrado no banco de dados." });
 
         const user = result.rows[0];
@@ -218,10 +223,11 @@ app.post("/api/auth/login", async (req, res) => {
         const validPin = await bcrypt.compare(String(pin), user.pin_code);
         if (!validPin) return res.status(401).json({ error: "Senha / PIN incorreto." });
 
-        const token = jwt.sign({ id: user.id, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: "8h" });
+        const userSector = user.sector || 'tecnica';
+        const token = jwt.sign({ id: user.id, name: user.name, role: user.role, sector: userSector }, JWT_SECRET, { expiresIn: "8h" });
         res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
         
-        res.json({ user: { id: user.id, name: user.name, role: user.role }, token });
+        res.json({ user: { id: user.id, name: user.name, role: user.role, sector: userSector }, token });
     } catch (error) { 
         console.error("❌ ERRO CRÍTICO NO LOGIN:", error);
         res.status(500).json({ error: error.message || "Erro interno" }); 
@@ -262,7 +268,7 @@ app.post("/api/users/:id/approve", verifyAdmin, async (req, res, next) => {
 
 app.post("/api/users", verifyAdmin, async (req, res, next) => {
     try {
-        const { name, role, pin } = req.body;
+        const { name, role, pin, sector } = req.body;
         const validName = validateString(name, 100);
         if (!validName || typeof pin !== "string" || pin.trim().length < 3) {
             return res.status(400).json({ error: "Nome (máx 100 caracteres) e Senha/PIN válidos são obrigatórios (mínimo 3 caracteres)." });
@@ -270,8 +276,9 @@ app.post("/api/users", verifyAdmin, async (req, res, next) => {
         if (role !== "admin" && role !== "tecnico") {
             return res.status(400).json({ error: "Cargo inválido." });
         }
+        const validSector = sector === "faturamento" ? "faturamento" : "tecnica";
         const hashedPin = await bcrypt.hash(String(pin), 10);
-        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, true)', [validName, role, hashedPin]);
+        await pool.query('INSERT INTO app_users (name, role, sector, pin_code, active) VALUES ($1, $2, $3, $4, true)', [validName, role, validSector, hashedPin]);
         broadcastUpdate('USER_CREATED');
         res.json({ success: true });
     } catch (error) { next(error); }
@@ -279,16 +286,17 @@ app.post("/api/users", verifyAdmin, async (req, res, next) => {
 
 app.post("/api/auth/register", registerLimiter, async (req, res, next) => {
     try {
-        const { name, pin } = req.body;
+        const { name, pin, sector } = req.body;
         const validName = validateString(name, 100);
         if (!validName || typeof pin !== "string" || pin.trim().length < 3) {
             return res.status(400).json({ error: "Nome e Senha/PIN válidos são obrigatórios (mínimo 3 caracteres)." });
         }
         const role = "tecnico";
+        const validSector = sector === "faturamento" ? "faturamento" : "tecnica";
         const hashedPin = await bcrypt.hash(String(pin), 10);
         // Sanitizar notas antes de gravar (XSS protection)
         const sanitizedName = escapeHTML(validName);
-        await pool.query('INSERT INTO app_users (name, role, pin_code, active) VALUES ($1, $2, $3, false)', [sanitizedName, role, hashedPin]);
+        await pool.query('INSERT INTO app_users (name, role, sector, pin_code, active) VALUES ($1, $2, $3, $4, false)', [sanitizedName, role, validSector, hashedPin]);
         broadcastUpdate('USER_REGISTERED');
         res.json({ success: true });
     } catch (error) { next(error); }
@@ -317,11 +325,12 @@ app.post("/api/auth/reset-password-request", registerLimiter, async (req, res, n
 
 app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
     try {
-        const { code, name, category, qty, min, supplier, note, link, unit_price, is_shared } = req.body;
+        const { code, name, category, qty, min, supplier, note, link, unit_price, is_shared, sector } = req.body;
         const validQty = validateNonNegativeInteger(qty);
         const validMin = validateNonNegativeInteger(min);
         const validCode = validateString(code, 50);
         const validName = validateString(name, 150);
+        const validSector = sector === 'faturamento' ? 'faturamento' : 'tecnica';
         
         if (validQty === null || validMin === null || !validCode || !validName) {
             return res.status(400).json({ error: "Dados inválidos para o insumo." });
@@ -334,7 +343,7 @@ app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
         }
         
         const inserted = await pool.query(
-            'INSERT INTO supplies (code, name, category, current_quantity, minimum_quantity, supplier, note, link, unit_price, is_shared) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id',
+            'INSERT INTO supplies (code, name, category, current_quantity, minimum_quantity, supplier, note, link, unit_price, is_shared, sector) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id',
             [
                 validCode, 
                 validName, 
@@ -345,13 +354,14 @@ app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
                 validateString(note, 255),
                 validateString(link, 255),
                 Number(unit_price) || 0,
-                Boolean(is_shared)
+                Boolean(is_shared),
+                validSector
             ]
         );
         if (validQty > 0) {
             await pool.query(
-                'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id, note) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                [inserted.rows[0].id, 'replenishment', validQty, 0, validQty, req.user.id, "Cadastro inicial"]
+                'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id, note, sector) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+                [inserted.rows[0].id, 'replenishment', validQty, 0, validQty, req.user.id, "Cadastro inicial", validSector]
             );
         }
         
@@ -386,18 +396,19 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
     try {
         await client.query('BEGIN');
         const { code } = req.params;
-        const { name, category, qty, min, supplier, note, link, unit_price, is_shared } = req.body;
+        const { name, category, qty, min, supplier, note, link, unit_price, is_shared, sector } = req.body;
         
         const validQty = validateNonNegativeInteger(qty);
         const validMin = validateNonNegativeInteger(min);
         const validName = validateString(name, 150);
+        const validSector = sector === 'faturamento' ? 'faturamento' : (sector === 'tecnica' ? 'tecnica' : null);
         
         if (validQty === null || validMin === null || !validName) {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: "Dados inválidos." });
         }
 
-        const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
+        const supplyRes = await client.query('SELECT id, current_quantity, sector FROM supplies WHERE code = $1 FOR UPDATE', [code]);
         if (supplyRes.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: "Insumo não encontrado." });
@@ -405,9 +416,10 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
         
         const qBefore = supplyRes.rows[0].current_quantity;
         const supplyId = supplyRes.rows[0].id;
+        const targetSector = validSector || supplyRes.rows[0].sector || 'tecnica';
 
         await client.query(
-            'UPDATE supplies SET name = $1, category = $2, current_quantity = $3, minimum_quantity = $4, supplier = $5, note = $6, link = $7, unit_price = $8, is_shared = $9 WHERE id = $10',
+            'UPDATE supplies SET name = $1, category = $2, current_quantity = $3, minimum_quantity = $4, supplier = $5, note = $6, link = $7, unit_price = $8, is_shared = $9, sector = $10 WHERE id = $11',
             [
                 validName, 
                 validateString(category, 50), 
@@ -418,6 +430,7 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
                 validateString(link, 255),
                 Number(unit_price) || 0,
                 Boolean(is_shared),
+                targetSector,
                 supplyId
             ]
         );
@@ -426,8 +439,8 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
             const diff = validQty - qBefore;
             // 🚨 Fix: Aplicação do Math.abs() para quantidades no ajuste manual
             await client.query(
-                'INSERT INTO stock_movements (supply_id, user_id, movement_type, quantity, quantity_before, quantity_after, note) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                [supplyId, req.user.id, 'adjustment', Math.abs(diff), qBefore, validQty, "Edição administrativa"]
+                'INSERT INTO stock_movements (supply_id, user_id, movement_type, quantity, quantity_before, quantity_after, note, sector) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+                [supplyId, req.user.id, 'adjustment', Math.abs(diff), qBefore, validQty, "Edição administrativa", targetSector]
             );
         }
 
@@ -445,18 +458,19 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
 // Operations
 app.post("/api/custom-requests", verifyToken, async (req, res, next) => {
     try {
-        const { itemName, quantity, note } = req.body;
+        const { itemName, quantity, note, sector } = req.body;
         const validName = validateString(itemName, 150);
         const validQuantity = validatePositiveInteger(quantity) || 1;
         
         if (!validName) return res.status(400).json({ error: "Nome do insumo solicitado é obrigatório." });
 
-        const supplyRes = await pool.query('SELECT id FROM supplies WHERE LOWER(name) = LOWER($1) OR LOWER(code) = LOWER($1)', [validName]);
+        const supplyRes = await pool.query('SELECT id, sector FROM supplies WHERE LOWER(name) = LOWER($1) OR LOWER(code) = LOWER($1)', [validName]);
         const supplyId = supplyRes.rows.length > 0 ? supplyRes.rows[0].id : null;
+        const itemSector = sector === 'faturamento' ? 'faturamento' : (supplyRes.rows.length > 0 && supplyRes.rows[0].sector ? supplyRes.rows[0].sector : (req.user.sector === 'faturamento' ? 'faturamento' : 'tecnica'));
 
         await pool.query(
-            'INSERT INTO stock_requests (supply_id, user_id, quantity, status, note) VALUES ($1, $2, $3, $4, $5)',
-            [supplyId, req.user.id, validQuantity, 'pending', `[SOLICITAÇÃO DE INSUMO: ${validName}] ${note || ''}`]
+            'INSERT INTO stock_requests (supply_id, user_id, quantity, status, note, sector) VALUES ($1, $2, $3, $4, $5, $6)',
+            [supplyId, req.user.id, validQuantity, 'pending', `[SOLICITAÇÃO DE INSUMO: ${validName}] ${note || ''}`, itemSector]
         );
 
         broadcastUpdate('CUSTOM_REQUEST_CREATED');
@@ -466,18 +480,19 @@ app.post("/api/custom-requests", verifyToken, async (req, res, next) => {
 
 app.post("/api/requests/custom", verifyToken, async (req, res, next) => {
     try {
-        const { itemName, quantity, note } = req.body;
+        const { itemName, quantity, note, sector } = req.body;
         const validName = validateString(itemName, 150);
         const validQuantity = validatePositiveInteger(quantity) || 1;
         
         if (!validName) return res.status(400).json({ error: "Nome do insumo solicitado é obrigatório." });
 
-        const supplyRes = await pool.query('SELECT id FROM supplies WHERE LOWER(name) = LOWER($1) OR LOWER(code) = LOWER($1)', [validName]);
+        const supplyRes = await pool.query('SELECT id, sector FROM supplies WHERE LOWER(name) = LOWER($1) OR LOWER(code) = LOWER($1)', [validName]);
         const supplyId = supplyRes.rows.length > 0 ? supplyRes.rows[0].id : null;
+        const itemSector = sector === 'faturamento' ? 'faturamento' : (supplyRes.rows.length > 0 && supplyRes.rows[0].sector ? supplyRes.rows[0].sector : (req.user.sector === 'faturamento' ? 'faturamento' : 'tecnica'));
 
         await pool.query(
-            'INSERT INTO stock_requests (supply_id, user_id, quantity, status, note) VALUES ($1, $2, $3, $4, $5)',
-            [supplyId, req.user.id, validQuantity, 'pending', `[SOLICITAÇÃO DE INSUMO: ${validName}] ${note || ''}`]
+            'INSERT INTO stock_requests (supply_id, user_id, quantity, status, note, sector) VALUES ($1, $2, $3, $4, $5, $6)',
+            [supplyId, req.user.id, validQuantity, 'pending', `[SOLICITAÇÃO DE INSUMO: ${validName}] ${note || ''}`, itemSector]
         );
 
         broadcastUpdate('CUSTOM_REQUEST_CREATED');
@@ -493,11 +508,11 @@ const withdrawLimiter = rateLimit({
 
 app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, res, next) => {
     try {
-        const { code, destination, quantity, note, technician } = req.body;
+        const { code, destination, quantity, note, technician, sector } = req.body;
         const validQuantity = validatePositiveInteger(quantity);
         if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
         
-        const supplyRes = await pool.query('SELECT id FROM supplies WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1)', [code]);
+        const supplyRes = await pool.query('SELECT id, sector FROM supplies WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1)', [code]);
         const supplyId = supplyRes.rows.length > 0 ? supplyRes.rows[0].id : null;
         
         let destId = null;
@@ -514,11 +529,20 @@ app.post("/api/movements/withdraw", verifyToken, withdrawLimiter, async (req, re
             }
         }
 
+        let itemSector = 'tecnica';
+        if (supplyRes.rows.length > 0 && supplyRes.rows[0].sector) {
+            itemSector = supplyRes.rows[0].sector;
+        } else if (sector === 'faturamento') {
+            itemSector = 'faturamento';
+        } else if (req.user.sector === 'faturamento') {
+            itemSector = 'faturamento';
+        }
+
         const finalNote = supplyId ? validateString(note, 255) : `[SOLICITAÇÃO DE INSUMO NÃO CADASTRADO: ${code}] ${note || ''}`;
 
         await pool.query(
-            'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status, note) VALUES ($1, $2, $3, $4, $5, $6)',
-            [supplyId, targetUserId, destId, validQuantity, 'pending', finalNote]
+            'INSERT INTO stock_requests (supply_id, user_id, destination_id, quantity, status, note, sector) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [supplyId, targetUserId, destId, validQuantity, 'pending', finalNote, itemSector]
         );
 
         broadcastUpdate('WITHDRAW_REQUESTED');
@@ -532,7 +556,7 @@ app.post("/api/requests/:id/approve", verifyAdmin, async (req, res, next) => {
         await client.query('BEGIN');
         const { id } = req.params;
         const requestRes = await client.query(
-            "SELECT supply_id, quantity, user_id, destination_id, note FROM stock_requests WHERE id = $1 AND status = 'pending'",
+            "SELECT sr.supply_id, sr.quantity, sr.user_id, sr.destination_id, sr.note, sr.sector, s.sector as supply_sector FROM stock_requests sr LEFT JOIN supplies s ON sr.supply_id = s.id WHERE sr.id = $1 AND sr.status = 'pending'",
             [id]
         );
         
@@ -569,9 +593,11 @@ app.post("/api/requests/:id/approve", verifyAdmin, async (req, res, next) => {
         
         await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, reqData.supply_id]);
         
+        const itemSector = reqData.sector || reqData.supply_sector || 'tecnica';
+
         await client.query(
-            'INSERT INTO stock_movements (supply_id, user_id, destination_id, movement_type, quantity, quantity_before, quantity_after, note) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-            [reqData.supply_id, reqData.user_id, reqData.destination_id, 'withdrawal', reqData.quantity, qBefore, qAfter, reqData.note]
+            'INSERT INTO stock_movements (supply_id, user_id, destination_id, movement_type, quantity, quantity_before, quantity_after, note, sector) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+            [reqData.supply_id, reqData.user_id, reqData.destination_id, 'withdrawal', reqData.quantity, qBefore, qAfter, reqData.note, itemSector]
         );
             
         await client.query('COMMIT');
@@ -607,7 +633,7 @@ app.post("/api/movements/return", verifyToken, async (req, res, next) => {
         await client.query('BEGIN');
         const userId = req.user.id;
         
-        const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1) FOR UPDATE', [code]);
+        const supplyRes = await client.query('SELECT id, current_quantity, sector FROM supplies WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1) FOR UPDATE', [code]);
         if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
 
         if (userId) {
@@ -626,11 +652,12 @@ app.post("/api/movements/return", verifyToken, async (req, res, next) => {
 
         const qBefore = supplyRes.rows[0].current_quantity;
         const qAfter = qBefore + (validQuantity);
+        const itemSector = supplyRes.rows[0].sector || 'tecnica';
 
         await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, supplyRes.rows[0].id]);
         await client.query(
-            'INSERT INTO stock_movements (supply_id, user_id, movement_type, quantity, quantity_before, quantity_after) VALUES ($1, $2, $3, $4, $5, $6)',
-            [supplyRes.rows[0].id, userId, 'return', validQuantity, qBefore, qAfter]
+            'INSERT INTO stock_movements (supply_id, user_id, movement_type, quantity, quantity_before, quantity_after, sector) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [supplyRes.rows[0].id, userId, 'return', validQuantity, qBefore, qAfter, itemSector]
         );
         
         await client.query('COMMIT');
@@ -653,16 +680,17 @@ app.post("/api/movements/replenish", verifyAdmin, async (req, res, next) => {
     try {
         await client.query('BEGIN');
         
-        const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
+        const supplyRes = await client.query('SELECT id, current_quantity, sector FROM supplies WHERE code = $1 FOR UPDATE', [code]);
         if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
         
         const qBefore = supplyRes.rows[0].current_quantity;
         const qAfter = qBefore + (validQuantity);
+        const itemSector = supplyRes.rows[0].sector || 'tecnica';
 
         await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, supplyRes.rows[0].id]);
         await client.query(
-            'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id) VALUES ($1, $2, $3, $4, $5, $6)',
-            [supplyRes.rows[0].id, 'replenishment', validQuantity, qBefore, qAfter, req.user.id]
+            'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id, sector) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [supplyRes.rows[0].id, 'replenishment', validQuantity, qBefore, qAfter, req.user.id, itemSector]
         );
         
         await client.query('COMMIT');
@@ -687,17 +715,18 @@ app.post("/api/movements/adjust", verifyAdmin, async (req, res, next) => {
     try {
         await client.query('BEGIN');
         
-        const supplyRes = await client.query('SELECT id, current_quantity FROM supplies WHERE code = $1 FOR UPDATE', [code]);
+        const supplyRes = await client.query('SELECT id, current_quantity, sector FROM supplies WHERE code = $1 FOR UPDATE', [code]);
         if (supplyRes.rows.length === 0) throw new Error("Insumo não encontrado.");
         
         const qBefore = supplyRes.rows[0].current_quantity;
         const diff = qAfter - qBefore;
+        const itemSector = supplyRes.rows[0].sector || 'tecnica';
 
         if (diff !== 0) {
             await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, supplyRes.rows[0].id]);
             await client.query(
-                'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id) VALUES ($1, $2, $3, $4, $5, $6)',
-                [supplyRes.rows[0].id, 'adjustment', Math.abs(diff), qBefore, qAfter, req.user.id]
+                'INSERT INTO stock_movements (supply_id, movement_type, quantity, quantity_before, quantity_after, user_id, sector) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                [supplyRes.rows[0].id, 'adjustment', Math.abs(diff), qBefore, qAfter, req.user.id, itemSector]
             );
         }
         

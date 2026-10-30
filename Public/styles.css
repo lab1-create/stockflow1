@@ -325,6 +325,43 @@ body {
     justify-content: space-between;
     align-items: flex-end;
     margin-bottom: 3.5rem;
+    gap: 1.5rem;
+}
+
+/* Sector Switcher (Antigravity Pill) */
+.sector-switcher {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(10, 11, 14, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    padding: 4px;
+    gap: 4px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.sector-btn {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-secondary, #888);
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 6px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sector-btn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sector-btn.active {
+    background: linear-gradient(135deg, #ff2a55 0%, #ff5277 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(255, 42, 85, 0.4);
 }
 
 #view-title {

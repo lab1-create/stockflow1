@@ -27,7 +27,8 @@ let state = {
     items: [],
     history: [],
     requests: [],
-    usageKpis: []
+    usageKpis: [],
+    currentSector: 'tecnica'
 };
 
 let currentUser = null;
@@ -39,6 +40,36 @@ let currentHistoryTab = 'withdrawals';
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+function setSector(sector) {
+    state.currentSector = sector === 'faturamento' ? 'faturamento' : 'tecnica';
+    if (isAdmin()) {
+        localStorage.setItem("stockflow_active_sector", state.currentSector);
+    }
+    updateSectorUI();
+    if (currentView === "withdraw") {
+        withdraw.step = isAdmin() ? 0 : 2;
+        withdraw.technician = isAdmin() ? "" : currentUser.name;
+        withdraw.destination = state.currentSector === 'faturamento' ? "Faturamento" : "Laboratório";
+        renderWithdraw();
+    }
+    renderAll();
+}
+
+function updateSectorUI() {
+    const isFat = state.currentSector === 'faturamento';
+    const btnTec = $("#sector-btn-tecnica");
+    const btnFat = $("#sector-btn-faturamento");
+    if (btnTec) btnTec.classList.toggle("active", !isFat);
+    if (btnFat) btnFat.classList.toggle("active", isFat);
+
+    if ($("#section-eyebrow")) {
+        $("#section-eyebrow").textContent = isFat ? "Faturamento" : "Assistencia tecnica";
+    }
+    if ($("#brand-subtitle")) {
+        $("#brand-subtitle").textContent = isFat ? "Insumos - Faturamento" : "Controle de insumos";
+    }
+}
 
 function getAuthHeaders(extraHeaders = {}) {
     const token = localStorage.getItem("stockflow_token");
@@ -70,6 +101,7 @@ async function bootstrapApp() {
 
         state.items = (supplies || []).map(s => ({
             ...s,
+            sector: s.sector || 'tecnica',
             qty: s.current_quantity || 0,
             min: s.minimum_quantity || 0,
             supplier: s.supplier || "",
@@ -116,7 +148,8 @@ async function bootstrapApp() {
                 qtyAfter: m.quantity_after,
                 destination: m.dest_name || "-",
                 at: m.created_at,
-                note: m.note || ""
+                note: m.note || "",
+                sector: m.sector || 'tecnica'
             };
         });
 
@@ -152,14 +185,17 @@ async function bootstrapApp() {
                 itemName: itemName,
                 isCustom: isCustom,
                 status: r.status,
-                note: r.note || ""
+                note: r.note || "",
+                sector: r.sector || 'tecnica'
             };
         });
         
         state.technicians = (users || []).map(u => ({ 
             name: u.name, 
-            defaultDest: "Laboratório"
+            sector: u.sector || 'tecnica',
+            defaultDest: (u.sector === 'faturamento') ? "Faturamento" : "Laboratório"
         }));
+        state.users = users || [];
         state.pendingUsers = pendingUsrs || [];
         
         if (destinations && destinations.length > 0) {
@@ -181,8 +217,9 @@ function formatDate(value) {
 
 function filteredItems() {
     const query = normalize($("#global-search")?.value || "");
-    if (!query) return state.items;
-    return state.items.filter(item => [item.code, item.name, item.category, item.supplier].some(f => normalize(f).includes(query)));
+    const sectorItems = state.items.filter(item => (item.sector || 'tecnica') === state.currentSector);
+    if (!query) return sectorItems;
+    return sectorItems.filter(item => [item.code, item.name, item.category, item.supplier].some(f => normalize(f).includes(query)));
 }
 
 function filteredHistory(forTable = false) {
@@ -192,6 +229,7 @@ function filteredHistory(forTable = false) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
     return state.history.filter(entry => {
+        const matchesSector = (entry.sector || 'tecnica') === state.currentSector;
         const matchesSearch = !query || [entry.user, entry.type, entry.itemName, entry.itemCode].some(f => normalize(f).includes(query));
         const matchesTech = !technician || entry.user.includes(technician);
         const matchesDate = isAdmin() || new Date(entry.at) >= sevenDaysAgo;
@@ -205,7 +243,7 @@ function filteredHistory(forTable = false) {
             }
         }
         
-        return matchesSearch && matchesTech && matchesDate && matchesTab;
+        return matchesSector && matchesSearch && matchesTech && matchesDate && matchesTab;
     });
 }
 
@@ -221,7 +259,8 @@ function setView(view) {
     if ($("#view-title")) $("#view-title").textContent = titleMap[view] || "Dashboard";
 
     if (view === "withdraw") {
-        withdraw = { step: isAdmin() ? 0 : 2, technician: isAdmin() ? "" : currentUser.name, isManual: false, destination: state.destinations[0], item: null, qty: 1 };
+        const defaultDest = state.currentSector === 'faturamento' ? "Faturamento" : "Laboratório";
+        withdraw = { step: isAdmin() ? 0 : 2, technician: isAdmin() ? "" : currentUser.name, isManual: false, destination: defaultDest, item: null, qty: 1 };
         renderWithdraw();
     }
     renderAll();
@@ -272,13 +311,17 @@ function handleExportHistory() {
 
 function renderAll() {
     renderSearchResults();
-    // NOVA REGRA: <= 1
-    const criticalItems = state.items.filter(i => Number(i.qty) <= 1);
+    
+    const sectorItems = state.items.filter(i => (i.sector || 'tecnica') === state.currentSector);
+    const criticalItems = sectorItems.filter(i => Number(i.qty) <= 1);
+    const sectorHistory = state.history.filter(h => (h.sector || 'tecnica') === state.currentSector);
+    const pendingRequests = state.requests.filter(r => (r.sector || 'tecnica') === state.currentSector && r.status === "pending");
+    const outOfStockItems = sectorItems.filter(i => Number(i.qty) === 0);
 
-    if ($("#metric-total-items")) $("#metric-total-items").textContent = state.items.length;
+    if ($("#metric-total-items")) $("#metric-total-items").textContent = sectorItems.length;
     if ($("#metric-critical")) $("#metric-critical").textContent = criticalItems.length;
-    if ($("#metric-withdrawals")) $("#metric-withdrawals").textContent = state.history.filter(h => h.type === "Retirada").length;
-    if ($("#metric-stock")) $("#metric-stock").textContent = state.items.reduce((acc, i) => acc + Number(i.qty), 0);
+    if ($("#metric-withdrawals")) $("#metric-withdrawals").textContent = sectorHistory.filter(h => h.type === "Retirada").length;
+    if ($("#metric-stock")) $("#metric-stock").textContent = sectorItems.reduce((acc, i) => acc + Number(i.qty), 0);
 
     const critList = $("#critical-list");
     if (critList) {
@@ -287,7 +330,6 @@ function renderAll() {
             : `<p class="muted">Estoque sob controle.</p>`;
     }
 
-    const pendingRequests = state.requests.filter(r => r.status === "pending");
     if ($("#pending-count")) $("#pending-count").textContent = `${pendingRequests.length} pendentes`;
 
     const reqList = $("#pending-requests");
@@ -323,7 +365,6 @@ function renderAll() {
         $$("[data-register-name]").forEach(btn => btn.addEventListener("click", () => openItemDialog(null, btn.dataset.registerName)));
     }
 
-    const outOfStockItems = state.items.filter(i => Number(i.qty) === 0);
     const oosList = $("#out-of-stock-list");
     if (oosList) {
         oosList.innerHTML = outOfStockItems.length
@@ -387,9 +428,14 @@ function renderAll() {
         pendUsersList.innerHTML = state.pendingUsers.length
             ? state.pendingUsers.map(u => {
                 const isReset = !!u.pending_pin_code;
+                const sectorName = u.sector === 'faturamento' ? 'Faturamento' : 'Técnica';
                 return `
                   <div class="compact-row" style="padding: 8px; border:1px solid #444; border-radius:4px; margin-bottom: 5px;">
-                    <span><strong>${escapeHTML(u.name)}</strong>${isReset ? ' <span style="color:#ffa726; font-size:0.8rem;">(Senha)</span>' : ''}</span>
+                    <span>
+                        <strong>${escapeHTML(u.name)}</strong>
+                        <small style="color:#00d2ff; font-size:0.75rem; margin-left:4px;">[${sectorName}]</small>
+                        ${isReset ? ' <span style="color:#ffa726; font-size:0.8rem;">(Senha)</span>' : ''}
+                    </span>
                     <button class="primary-action" data-approve-user="${u.id}" style="padding:4px 8px; font-size:0.8rem;">Aprovar</button>
                   </div>
                 `;
@@ -400,6 +446,20 @@ function renderAll() {
     renderItemsGrid();
     renderHistoryTable();
     renderTechnicianFilter();
+}
+
+function renderTechnicianFilter() {
+    const select = $("#technician-filter");
+    if (!select) return;
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">Todos os Usuários</option>';
+    const sectorTechs = state.technicians.filter(t => (t.sector || 'tecnica') === state.currentSector);
+    sectorTechs.forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t.name; opt.textContent = t.name;
+        if (t.name === currentVal) opt.selected = true;
+        select.appendChild(opt);
+    });
 }
 
 async function approveUser(id) {
@@ -472,10 +532,12 @@ function renderWithdraw() {
     if (!content) return;
 
     if (withdraw.step === 0) {
+        const sectorTechs = state.technicians.filter(t => (t.sector || 'tecnica') === state.currentSector);
+        const sectorTitle = state.currentSector === 'faturamento' ? "Quem vai retirar no Faturamento?" : "Quem vai retirar?";
         content.innerHTML = `
-            <h3>Quem vai retirar?</h3>
+            <h3>${sectorTitle}</h3>
             <div class="form-grid" style="margin-top:10px;">
-                ${state.technicians.map(t => `<button class="primary-action" data-select-tech="${escapeHTML(t.name)}">${escapeHTML(t.name)} </button>`).join("")}
+                ${sectorTechs.length ? sectorTechs.map(t => `<button class="primary-action" data-select-tech="${escapeHTML(t.name)}">${escapeHTML(t.name)} </button>`).join("") : '<p class="muted">Nenhum colaborador cadastrado neste setor.</p>'}
             </div>
             <div style="margin-top: 20px; text-align: center; border-top: 1px solid #444; padding-top: 15px;">
                 <p class="muted" style="margin-bottom: 10px; font-size: 0.9rem;">Retirada para não cadastrados ou visitantes:</p>
@@ -498,7 +560,7 @@ function renderWithdraw() {
     if (withdraw.step === 2) {
         content.innerHTML = `
             <h3>Bipe o Insumo</h3>
-            <p class="muted">Técnico: ${escapeHTML(withdraw.technician)}</p>
+            <p class="muted">Técnico / Colaborador: ${escapeHTML(withdraw.technician)}</p>
             <div class="scan-row" style="margin-top:10px;">
                 <input id="withdraw-code-input" class="scan-input" placeholder="Código do insumo">
                 <button id="withdraw-find-btn" class="primary-action">Identificar</button>
@@ -509,8 +571,9 @@ function renderWithdraw() {
             </div>
         `;
         const findItemAction = () => {
-            const item = state.items.find(i => normalize(i.code) === normalize($("#withdraw-code-input").value));
-            if (!item) return alert("Insumo não encontrado!");
+            const code = normalize($("#withdraw-code-input").value);
+            const item = state.items.find(i => (i.sector || 'tecnica') === state.currentSector && normalize(i.code) === code);
+            if (!item) return alert(`Insumo não encontrado no setor de ${state.currentSector === 'faturamento' ? 'Faturamento' : 'Assistência Técnica'}!`);
             withdraw.item = item; withdraw.step = 3; renderWithdraw();
         };
         $("#withdraw-find-btn").addEventListener("click", findItemAction);
@@ -525,10 +588,10 @@ function renderWithdraw() {
     if (withdraw.step === "request_by_name") {
         content.innerHTML = `
             <h3>Solicitar Insumo (Cadastrado ou Novo)</h3>
-            <p class="muted">Técnico: ${escapeHTML(withdraw.technician)}</p>
+            <p class="muted">Técnico / Colaborador: ${escapeHTML(withdraw.technician)}</p>
             <div style="margin-top:10px;">
                 <label style="display: block; text-align: left;">Digite o nome do produto ou equipamento:
-                    <input id="request-name-input" class="scan-input" placeholder="Ex: Amperímetro, Tela iPhone..." autocomplete="off" style="width: 100%; margin-top: 5px;">
+                    <input id="request-name-input" class="scan-input" placeholder="Ex: Bobina térmica, Fita gomada, Embalagem..." autocomplete="off" style="width: 100%; margin-top: 5px;">
                 </label>
             </div>
             <div id="request-name-results" style="margin-top: 10px; max-height: 180px; overflow-y: auto; text-align: left;"></div>
@@ -548,9 +611,9 @@ function renderWithdraw() {
                 results.innerHTML = "";
                 return;
             }
-            const matchingItems = state.items.filter(i => normalize(i.name).includes(query) || normalize(i.code).includes(query));
+            const matchingItems = state.items.filter(i => (i.sector || 'tecnica') === state.currentSector && (normalize(i.name).includes(query) || normalize(i.code).includes(query)));
             if (matchingItems.length === 0) {
-                results.innerHTML = "<p class='muted' style='padding: 10px;'>Item não encontrado no catálogo. Você pode clicar no botão abaixo para solicitar como item não cadastrado!</p>";
+                results.innerHTML = "<p class='muted' style='padding: 10px;'>Item não encontrado no catálogo deste setor. Você pode clicar no botão abaixo para solicitar como item não cadastrado!</p>";
             } else {
                 results.innerHTML = matchingItems.map(i => `
                     <div style="padding: 10px; border-bottom: 1px solid #444; cursor: pointer; transition: background 0.2s;"
@@ -584,6 +647,8 @@ function renderWithdraw() {
                     body: JSON.stringify({
                         code: nameVal, // Tenta usar o nome como codigo/referencia ou envia insumo basico
                         quantity: qty,
+                        technician: withdraw.technician,
+                        sector: state.currentSector,
                         note: `[SOLICITAÇÃO DE INSUMO: ${nameVal}] (Por ${withdraw.technician}) ${note}`
                     })
                 });
@@ -603,7 +668,8 @@ function renderWithdraw() {
 
     if (withdraw.step === 3) {
         const techInfo = state.technicians.find(t => t.name === withdraw.technician);
-        const destName = withdraw.isManual ? "Laboratório" : (techInfo?.defaultDest || "Laboratório");
+        const defaultDest = state.currentSector === 'faturamento' ? "Faturamento" : "Laboratório";
+        const destName = withdraw.isManual ? defaultDest : (techInfo?.defaultDest || defaultDest);
 
         content.innerHTML = `
             <h3>Confirmar Retirada de ${escapeHTML(withdraw.item.name)}</h3>
@@ -639,7 +705,8 @@ function renderWithdraw() {
                         technician: withdraw.technician, 
                         destination: destName, 
                         quantity: Number($("#withdraw-qty-input").value) || 1,
-                        note: note
+                        note: note,
+                        sector: state.currentSector
                     })
                 });
                 if(!res.ok) { const d = await res.json(); throw new Error(d.error); }
@@ -675,8 +742,8 @@ async function handleReplenish() {
     const code = $("#replenish-code").value;
     const qty = Number($("#replenish-qty").value);
     try {
-        const item = state.items.find(i => normalize(i.code) === normalize(code));
-        if (!item) throw new Error("Insumo não encontrado.");
+        const item = state.items.find(i => (i.sector || 'tecnica') === state.currentSector && normalize(i.code) === normalize(code));
+        if (!item) throw new Error("Insumo não encontrado neste setor.");
 
         const res = await fetch(`${API_BASE_URL}/api/movements/replenish`, {
             method: 'POST', 
@@ -692,9 +759,9 @@ async function handleReplenish() {
 // LOGICA DE CONTAGEM / BALANÇO
 function findCountItem() {
     const code = $("#count-code").value;
-    countItem = state.items.find(i => normalize(i.code) === normalize(code));
+    countItem = state.items.find(i => (i.sector || 'tecnica') === state.currentSector && normalize(i.code) === normalize(code));
     if (!countItem) {
-        $("#count-result").textContent = "Referência não encontrada.";
+        $("#count-result").textContent = "Referência não encontrada neste setor.";
         $("#count-details").style.display = "none";
         return;
     }
@@ -763,6 +830,7 @@ function openItemDialog(code = null, defaultName = null) {
         $("#item-code").value = item.code; 
         $("#item-name").value = item.name; 
         $("#item-category").value = item.category; 
+        if ($("#item-sector")) $("#item-sector").value = item.sector || 'tecnica';
         $("#item-min").value = item.min; 
         $("#item-supplier").value = item.supplier || ""; 
         $("#item-note").value = item.note || "";
@@ -770,6 +838,7 @@ function openItemDialog(code = null, defaultName = null) {
         $("#dialog-title").textContent = "Nova Referência"; 
         form.reset(); 
         $("#item-original-code").value = "";
+        if ($("#item-sector")) $("#item-sector").value = state.currentSector || 'tecnica';
         if (defaultName) {
             $("#item-name").value = defaultName;
         }
@@ -795,6 +864,17 @@ async function handleLogin(e) {
         $("#login-screen").style.display = "none";
         $(".app-shell").style.display = "flex";
         $$("[data-admin-only]").forEach(el => el.style.display = isAdmin() ? "" : "none");
+
+        if (isAdmin()) {
+            if ($("#sector-switcher")) $("#sector-switcher").style.display = "inline-flex";
+            const savedSector = localStorage.getItem("stockflow_active_sector");
+            state.currentSector = savedSector || 'tecnica';
+        } else {
+            if ($("#sector-switcher")) $("#sector-switcher").style.display = "none";
+            state.currentSector = currentUser.sector || 'tecnica';
+        }
+        updateSectorUI();
+
         setView(isAdmin() ? "dashboard" : "withdraw");
         
         bootstrapApp();
@@ -804,6 +884,8 @@ async function handleLogin(e) {
 
 document.addEventListener("DOMContentLoaded", () => {
     $("#login-form")?.addEventListener("submit", handleLogin);
+    $("#sector-btn-tecnica")?.addEventListener("click", () => setSector("tecnica"));
+    $("#sector-btn-faturamento")?.addEventListener("click", () => setSector("faturamento"));
     $("#return-button")?.addEventListener("click", returnItem);
     $("#return-code")?.addEventListener("keydown", (e) => { if (e.key === "Enter") returnItem(); });
     
@@ -817,7 +899,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.key === "Enter") {
             e.preventDefault();
             const code = $("#replenish-code").value;
-            const item = state.items.find(i => normalize(i.code) === normalize(code));
+            const item = state.items.find(i => (i.sector || 'tecnica') === state.currentSector && normalize(i.code) === normalize(code));
             if (item) {
                 const qtyInput = $("#replenish-qty");
                 let current = Number(qtyInput.value) || 0;
@@ -865,7 +947,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch(`${API_BASE_URL}/api/custom-requests`, {
                 method: 'POST',
                 headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-                body: JSON.stringify({ itemName, quantity, note })
+                body: JSON.stringify({ itemName, quantity, note, sector: state.currentSector })
             });
             if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
             alert(`Solicitação do item '${itemName}' enviada com sucesso!`);
@@ -888,6 +970,7 @@ document.addEventListener("DOMContentLoaded", () => {
             code: $("#item-code").value, 
             name: $("#item-name").value, 
             category: $("#item-category").value, 
+            sector: $("#item-sector")?.value || state.currentSector,
             min: Number($("#item-min").value) || 0,
             qty: 0, 
             supplier: $("#item-supplier").value, 
@@ -923,6 +1006,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const body = { 
             name: $("#user-name").value, 
             role: $("#user-role").value, 
+            sector: $("#user-sector")?.value || 'tecnica',
             pin_code: $("#user-pin").value, 
             active: true 
         };
@@ -930,16 +1014,21 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch(`${API_BASE_URL}/api/users`, {
                 method: 'POST', 
                 headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify(body)
-        });
-        if(!res.ok) { const d = await res.json(); throw new Error(d.error); } alert("Usuário adicionado!"); bootstrapApp(); $("#user-dialog").close(); } catch (err) { alert(err.message); }
+                body: JSON.stringify(body)
+            });
+            if(!res.ok) { const d = await res.json(); throw new Error(d.error); } 
+            alert("Usuário adicionado!"); 
+            bootstrapApp(); 
+            $("#user-dialog").close(); 
+        } catch (err) { alert(err.message); }
     });
 
     $("#register-form")?.addEventListener("submit", async (e) => {
         e.preventDefault();
         const body = { 
             name: $("#reg-name").value, 
-            pin: $("#reg-pin").value 
+            pin: $("#reg-pin").value,
+            sector: $("#reg-sector")?.value || 'tecnica'
         };
         try { 
             const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
@@ -1003,7 +1092,7 @@ function renderSearchResults() {
     if (!input || !resultsDiv) return;
     const query = normalize(input.value);
     if (!query) { resultsDiv.style.display = "none"; return; }
-    const matchingItems = state.items.filter(i => normalize(i.name).includes(query) || normalize(i.code).includes(query));
+    const matchingItems = state.items.filter(i => (i.sector || 'tecnica') === state.currentSector && (normalize(i.name).includes(query) || normalize(i.code).includes(query)));
     if (matchingItems.length === 0) {
         resultsDiv.innerHTML = "<div style='padding: 0.5rem 1rem; color: #666;'>Nenhum insumo encontrado.</div>";
     } else {

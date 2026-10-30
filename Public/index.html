@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Outlet do Celular">
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="styles.css?v=2.7">
+    <link rel="stylesheet" href="styles.css?v=2.8">
   </head>
   <body>
     <section id="login-screen" class="login-screen">
@@ -42,7 +42,7 @@
           <img src="icon-red.jpeg" alt="Logo" style="height: 50px; border-radius: 50%;">
           <div>
             <strong>Outlet do Celular</strong>
-            <span>Controle de insumos</span>
+            <span id="brand-subtitle">Controle de insumos</span>
           </div>
         </div>
 
@@ -90,8 +90,12 @@
       <main class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Assistencia tecnica</p>
+            <p class="eyebrow" id="section-eyebrow">Assistencia tecnica</p>
             <h1 id="view-title">Painel Administrativo</h1>
+          </div>
+          <div id="sector-switcher" class="sector-switcher" style="display: none;">
+            <button type="button" class="sector-btn active" data-sector="tecnica" id="sector-btn-tecnica">🔧 Assistência Técnica</button>
+            <button type="button" class="sector-btn" data-sector="faturamento" id="sector-btn-faturamento">📦 Faturamento</button>
           </div>
           <label class="search" style="position: relative;">
             <span>Pesquisar</span>
@@ -341,6 +345,12 @@
           <label>Codigo<input id="item-code" required></label>
           <label>Nome<input id="item-name" required></label>
           <label>Categoria<input id="item-category" required></label>
+          <label>Setor
+            <select id="item-sector" required style="width: 100%; height: 38px; margin-top: 4px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 0 8px;">
+              <option value="tecnica">Assistência Técnica</option>
+              <option value="faturamento">Faturamento</option>
+            </select>
+          </label>
           <label>Quantidade Mínima<input id="item-min" type="number" min="0" value="1"></label>
           <label>Fornecedor<input id="item-supplier"></label>
           <label>Link (URL)<input id="item-link" type="url" placeholder="https://..."></label>
@@ -362,14 +372,13 @@
           <label>Nome do Usuário<input id="user-name" required placeholder="Ex: Luiz"></label>
           <label>Setor
             <select id="user-sector" required style="width: 100%; height: 38px; margin-top: 4px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 0 8px;">
-              <option value="Triagem">Triagem</option>
-              <option value="Técnico">Técnico</option>
-              <option value="Geral">Geral</option>
+              <option value="tecnica">Assistência Técnica</option>
+              <option value="faturamento">Faturamento</option>
             </select>
           </label>
           <label>Função / Cargo
             <select id="user-role" required style="width: 100%; height: 38px; margin-top: 4px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 0 8px;">
-              <option value="tecnico">Técnico</option>
+              <option value="tecnico">Usuário Operacional</option>
               <option value="admin">Administrador</option>
             </select>
           </label>
@@ -390,9 +399,8 @@
           <label>Seu Nome Completo<input id="reg-name" required placeholder="Ex: João da Silva"></label>
           <label>Setor
             <select id="reg-sector" required style="width: 100%; height: 38px; margin-top: 4px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 0 8px;">
-              <option value="Triagem">Triagem</option>
-              <option value="Técnico">Técnico</option>
-              <option value="Geral">Geral</option>
+              <option value="tecnica">Assistência Técnica</option>
+              <option value="faturamento">Faturamento</option>
             </select>
           </label>
           <label class="span-2">Crie sua Senha / PIN<input id="reg-pin" type="password" required placeholder="Digite uma senha"></label>
@@ -417,6 +425,6 @@
     </dialog>
 
 
-    <script src="app.js?v=3.8"></script>
+    <script src="app.js?v=3.9"></script>
   </body>
 </html>
