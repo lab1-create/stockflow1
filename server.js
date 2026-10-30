@@ -76,6 +76,23 @@ const pool = new Pool({
     ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false }
 });
 
+const INITIAL_FATURAMENTO_ITEMS = [
+    { code: 'FAT-001', name: 'Carregador Outlet - Micro USB', category: 'Carregadores', unit: 'un', min: 20, init: 0 },
+    { code: 'FAT-002', name: 'Termo de garantia - 6 meses', category: 'Documentos', unit: 'un', min: 200, init: 0 },
+    { code: 'FAT-003', name: 'Termo de garantia - 3 meses', category: 'Documentos', unit: 'un', min: 300, init: 0 },
+    { code: 'FAT-004', name: 'Caixa para envio', category: 'Embalagem', unit: 'un', min: 100, init: 0 },
+    { code: 'FAT-005', name: 'Fita gomada', category: 'Embalagem', unit: 'rolo', min: 5, init: 0 },
+    { code: 'FAT-006', name: 'Fita transparente', category: 'Embalagem', unit: 'rolo', min: 3, init: 0 },
+    { code: 'FAT-007', name: 'Caixinha Outlet', category: 'Embalagem', unit: 'un', min: 300, init: 0 },
+    { code: 'FAT-008', name: 'Sacola Outlet', category: 'Embalagem', unit: 'un', min: 300, init: 0 },
+    { code: 'FAT-009', name: 'Selo Outlet', category: 'Embalagem', unit: 'milheiro', min: 2, init: 0 },
+    { code: 'FAT-010', name: 'Canguru declaração de conteúdo', category: 'Embalagem', unit: 'un', min: 100, init: 0 },
+    { code: 'FAT-011', name: 'Lacre para malotes', category: 'Embalagem', unit: 'un', min: 200, init: 0 },
+    { code: 'FAT-012', name: 'Chavinha de gaveta de chip (ejetor SIM)', category: 'Ferramentas', unit: 'un', min: 500, init: 0 },
+    { code: 'FAT-013', name: 'Etiqueta térmica 100x150', category: 'Impressão', unit: 'rolo', min: 5, init: 0 },
+    { code: 'FAT-014', name: 'Ribbon 110x91', category: 'Impressão', unit: 'rolo', min: 5, init: 0 }
+];
+
 let schemaInitialized = false;
 async function ensureSchema() {
     if (schemaInitialized) return;
@@ -83,11 +100,25 @@ async function ensureSchema() {
         await pool.query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS sector TEXT NOT NULL DEFAULT 'tecnica';");
         await pool.query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS pending_pin_code TEXT;");
         await pool.query("ALTER TABLE supplies ADD COLUMN IF NOT EXISTS sector TEXT NOT NULL DEFAULT 'tecnica';");
+        await pool.query("ALTER TABLE supplies ADD COLUMN IF NOT EXISTS unit TEXT NOT NULL DEFAULT 'un';");
+        await pool.query("ALTER TABLE supplies ADD COLUMN IF NOT EXISTS initial_quantity INTEGER NOT NULL DEFAULT 0;");
         await pool.query("ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS sector TEXT NOT NULL DEFAULT 'tecnica';");
         await pool.query("ALTER TABLE stock_requests ADD COLUMN IF NOT EXISTS sector TEXT NOT NULL DEFAULT 'tecnica';");
         await pool.query("INSERT INTO destinations (name, active) SELECT 'Faturamento', true WHERE NOT EXISTS (SELECT 1 FROM destinations WHERE LOWER(name) = 'faturamento');");
+
+        for (const item of INITIAL_FATURAMENTO_ITEMS) {
+            await pool.query(
+                `INSERT INTO supplies (code, name, category, unit, minimum_quantity, initial_quantity, current_quantity, sector)
+                 SELECT $1::text, $2::text, $3::text, $4::text, $5::int, $6::int, $6::int, 'faturamento'
+                 WHERE NOT EXISTS (
+                     SELECT 1 FROM supplies WHERE LOWER(code) = LOWER($1::text) OR LOWER(name) = LOWER($2::text)
+                 )`,
+                [item.code, item.name, item.category, item.unit, item.min, item.init]
+            );
+        }
+
         schemaInitialized = true;
-        logger.info("✅ Schema verificado com sucesso.");
+        logger.info("✅ Schema e catálogo do Faturamento verificados com sucesso.");
     } catch (err) {
         logger.error({ err: err.message }, "⚠️ Erro ao verificar schema:");
     }
@@ -151,8 +182,17 @@ function verifyAdmin(req, res, next) {
     });
 }
 
+function verifyControlAccess(req, res, next) {
+    verifyToken(req, res, () => {
+        if (req.user.role !== 'admin' && req.user.sector !== 'faturamento') {
+            return res.status(403).json({ error: "Acesso restrito a administradores ou controle do faturamento." });
+        }
+        next();
+    });
+}
+
 // Buscar estado consolidado (PARALELIZADO PARA PERFORMANCE EXTREMA)
-async function fetchState(page = 0, limit = 100) {
+async function fetchState(page = 0, limit = 300) {
     try {
         await ensureSchema();
         const offset = page * limit;
@@ -160,7 +200,23 @@ async function fetchState(page = 0, limit = 100) {
         const [usersResult, destinationsResult, suppliesResult, movResult, reqResult] = await Promise.all([
             pool.query('SELECT id, name, role, sector, active, pending_pin_code FROM app_users ORDER BY name ASC LIMIT $1 OFFSET $2', [limit, offset]),
             pool.query('SELECT id, name FROM destinations WHERE active = true LIMIT $1 OFFSET $2', [limit, offset]),
-            pool.query('SELECT id, code, name, category, sector, supplier, note, minimum_quantity, current_quantity, link, unit_price, is_shared FROM supplies ORDER BY code ASC LIMIT $1 OFFSET $2', [limit, offset]),
+            pool.query(`
+                SELECT s.id, s.code, s.name, s.category, s.sector, s.unit, s.initial_quantity,
+                       s.supplier, s.note, s.minimum_quantity, s.current_quantity, s.link, s.unit_price, s.is_shared,
+                       COALESCE(agg.entries_total, 0)::int AS entries_total,
+                       COALESCE(agg.exits_total, 0)::int AS exits_total,
+                       agg.last_movement_at
+                FROM supplies s
+                LEFT JOIN (
+                    SELECT supply_id,
+                           SUM(CASE WHEN movement_type IN ('replenishment', 'return') AND COALESCE(note, '') != 'Cadastro inicial' THEN quantity ELSE 0 END) AS entries_total,
+                           SUM(CASE WHEN movement_type = 'withdrawal' THEN quantity ELSE 0 END) AS exits_total,
+                           MAX(created_at) AS last_movement_at
+                    FROM stock_movements
+                    GROUP BY supply_id
+                ) agg ON agg.supply_id = s.id
+                ORDER BY s.code ASC LIMIT $1 OFFSET $2
+            `, [limit, offset]),
             pool.query(`
                 SELECT sm.id, sm.supply_id, sm.user_id, sm.destination_id, sm.movement_type, 
                        sm.quantity, sm.quantity_before, sm.quantity_after, sm.note, sm.created_at,
@@ -208,7 +264,7 @@ function broadcastUpdate(action, payload = null) {
 app.get("/api/bootstrap", verifyToken, async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 0;
-        const limit = parseInt(req.query.limit) || 100;
+        const limit = parseInt(req.query.limit) || 300;
         const data = await fetchState(page, limit);
         res.json(data);
     } catch (error) {
@@ -344,14 +400,16 @@ app.post("/api/auth/reset-password-request", registerLimiter, async (req, res, n
     } catch (error) { next(error); }
 });
 
-app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
+app.post("/api/supplies", verifyControlAccess, async (req, res, next) => {
     try {
-        const { code, name, category, qty, min, supplier, note, link, unit_price, is_shared, sector } = req.body;
-        const validQty = validateNonNegativeInteger(qty);
-        const validMin = validateNonNegativeInteger(min);
+        const { code, name, category, qty, min, supplier, note, link, unit_price, is_shared, sector, unit, initial_quantity } = req.body;
+        const initQty = initial_quantity !== undefined ? validateNonNegativeInteger(initial_quantity) : validateNonNegativeInteger(qty ?? 0);
+        const validQty = qty !== undefined ? validateNonNegativeInteger(qty) : initQty;
+        const validMin = validateNonNegativeInteger(min ?? 0);
         const validCode = validateString(code, 50);
         const validName = validateString(name, 150);
-        const validSector = sector === 'faturamento' ? 'faturamento' : 'tecnica';
+        const validUnit = validateString(unit, 30) || 'un';
+        const validSector = req.user.role !== 'admin' ? 'faturamento' : (sector === 'faturamento' ? 'faturamento' : 'tecnica');
         
         if (validQty === null || validMin === null || !validCode || !validName) {
             return res.status(400).json({ error: "Dados inválidos para o insumo." });
@@ -364,11 +422,13 @@ app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
         }
         
         const inserted = await pool.query(
-            'INSERT INTO supplies (code, name, category, current_quantity, minimum_quantity, supplier, note, link, unit_price, is_shared, sector) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id',
+            'INSERT INTO supplies (code, name, category, unit, initial_quantity, current_quantity, minimum_quantity, supplier, note, link, unit_price, is_shared, sector) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id',
             [
                 validCode, 
                 validName, 
-                validateString(category, 50), 
+                validateString(category, 50) || 'Geral',
+                validUnit,
+                initQty ?? 0,
                 validQty, 
                 validMin, 
                 validateString(supplier, 100), 
@@ -412,38 +472,51 @@ app.post("/api/supplies", verifyAdmin, async (req, res, next) => {
     }
 });
 
-app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
+app.put("/api/supplies/:code", verifyControlAccess, async (req, res, next) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         const { code } = req.params;
-        const { name, category, qty, min, supplier, note, link, unit_price, is_shared, sector } = req.body;
+        const { name, category, qty, min, supplier, note, link, unit_price, is_shared, sector, unit, initial_quantity } = req.body;
         
-        const validQty = validateNonNegativeInteger(qty);
         const validMin = validateNonNegativeInteger(min);
         const validName = validateString(name, 150);
         const validSector = sector === 'faturamento' ? 'faturamento' : (sector === 'tecnica' ? 'tecnica' : null);
         
-        if (validQty === null || validMin === null || !validName) {
+        if (validMin === null || !validName) {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: "Dados inválidos." });
         }
 
-        const supplyRes = await client.query('SELECT id, current_quantity, sector FROM supplies WHERE code = $1 FOR UPDATE', [code]);
+        const supplyRes = await client.query('SELECT id, current_quantity, initial_quantity, unit, sector FROM supplies WHERE code = $1 FOR UPDATE', [code]);
         if (supplyRes.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: "Insumo não encontrado." });
         }
         
         const qBefore = supplyRes.rows[0].current_quantity;
+        const initBefore = supplyRes.rows[0].initial_quantity || 0;
         const supplyId = supplyRes.rows[0].id;
         const targetSector = validSector || supplyRes.rows[0].sector || 'tecnica';
+        const targetUnit = validateString(unit, 30) || supplyRes.rows[0].unit || 'un';
+        const targetInit = initial_quantity !== undefined && validateNonNegativeInteger(initial_quantity) !== null
+            ? validateNonNegativeInteger(initial_quantity)
+            : initBefore;
+
+        let validQty = qty !== undefined ? validateNonNegativeInteger(qty) : null;
+        if (validQty === null) {
+            validQty = Math.max(0, qBefore + (targetInit - initBefore));
+        } else if (initial_quantity !== undefined && targetInit !== initBefore && validQty === qBefore) {
+            validQty = Math.max(0, qBefore + (targetInit - initBefore));
+        }
 
         await client.query(
-            'UPDATE supplies SET name = $1, category = $2, current_quantity = $3, minimum_quantity = $4, supplier = $5, note = $6, link = $7, unit_price = $8, is_shared = $9, sector = $10 WHERE id = $11',
+            'UPDATE supplies SET name = $1, category = $2, unit = $3, initial_quantity = $4, current_quantity = $5, minimum_quantity = $6, supplier = $7, note = $8, link = $9, unit_price = $10, is_shared = $11, sector = $12 WHERE id = $13',
             [
                 validName, 
-                validateString(category, 50), 
+                validateString(category, 50) || 'Geral',
+                targetUnit,
+                targetInit,
                 validQty, 
                 validMin, 
                 validateString(supplier, 100), 
@@ -458,16 +531,133 @@ app.put("/api/supplies/:code", verifyAdmin, async (req, res, next) => {
 
         if (qBefore !== validQty) {
             const diff = validQty - qBefore;
-            // 🚨 Fix: Aplicação do Math.abs() para quantidades no ajuste manual
             await client.query(
                 'INSERT INTO stock_movements (supply_id, user_id, movement_type, quantity, quantity_before, quantity_after, note, sector) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-                [supplyId, req.user.id, 'adjustment', Math.abs(diff), qBefore, validQty, "Edição administrativa", targetSector]
+                [supplyId, req.user.id, 'adjustment', Math.abs(diff), qBefore, validQty, targetInit !== initBefore ? "Ajuste de Estoque Inicial" : "Edição de referência", targetSector]
             );
         }
 
         await client.query('COMMIT');
         broadcastUpdate('SUPPLY_UPDATED', { supplyCode: code });
         res.json({ success: true });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        next(error);
+    } finally {
+        client.release();
+    }
+});
+
+app.patch("/api/faturamento/supplies/:code/cells", verifyControlAccess, async (req, res, next) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { code } = req.params;
+        const { minimum_quantity, initial_quantity } = req.body;
+
+        const supplyRes = await client.query('SELECT id, current_quantity, minimum_quantity, initial_quantity, sector FROM supplies WHERE code = $1 FOR UPDATE', [code]);
+        if (supplyRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: "Item não encontrado." });
+        }
+
+        const item = supplyRes.rows[0];
+        const newMin = minimum_quantity !== undefined ? validateNonNegativeInteger(minimum_quantity) : item.minimum_quantity;
+        const newInit = initial_quantity !== undefined ? validateNonNegativeInteger(initial_quantity) : (item.initial_quantity || 0);
+
+        if (newMin === null || newInit === null) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: "Valores devem ser números inteiros maiores ou iguais a zero." });
+        }
+
+        const initDiff = newInit - (item.initial_quantity || 0);
+        const qBefore = item.current_quantity || 0;
+        const qAfter = Math.max(0, qBefore + initDiff);
+
+        await client.query(
+            'UPDATE supplies SET minimum_quantity = $1, initial_quantity = $2, current_quantity = $3 WHERE id = $4',
+            [newMin, newInit, qAfter, item.id]
+        );
+
+        if (initDiff !== 0) {
+            await client.query(
+                'INSERT INTO stock_movements (supply_id, user_id, movement_type, quantity, quantity_before, quantity_after, note, sector) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+                [item.id, req.user.id, 'adjustment', Math.abs(initDiff), qBefore, qAfter, `Estoque Inicial ajustado (${item.initial_quantity || 0} → ${newInit})`, item.sector || 'faturamento']
+            );
+        }
+
+        await client.query('COMMIT');
+        broadcastUpdate('SUPPLY_UPDATED', { supplyCode: code });
+        res.json({ success: true, current_quantity: qAfter, minimum_quantity: newMin, initial_quantity: newInit });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        next(error);
+    } finally {
+        client.release();
+    }
+});
+
+app.post("/api/faturamento/movement", verifyControlAccess, async (req, res, next) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { code, type, quantity, responsible, note } = req.body;
+        const validQuantity = validatePositiveInteger(quantity);
+        if (!validQuantity) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: "Quantidade inválida. Informe um número inteiro maior que zero." });
+        }
+        if (type !== 'in' && type !== 'out') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: "Tipo de movimentação inválido. Escolha Entrada ou Saída." });
+        }
+
+        const supplyRes = await client.query(
+            'SELECT id, code, name, current_quantity, sector FROM supplies WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1) FOR UPDATE',
+            [String(code || '').trim()]
+        );
+        if (supplyRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: "Insumo não encontrado no catálogo do Faturamento." });
+        }
+
+        const supply = supplyRes.rows[0];
+        const qBefore = supply.current_quantity || 0;
+        const qAfter = type === 'in' ? (qBefore + validQuantity) : (qBefore - validQuantity);
+
+        if (qAfter < 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: `Saldo insuficiente! Estoque atual de "${supply.name}" é ${qBefore}.` });
+        }
+
+        let targetUserId = req.user.id;
+        const respTrimmed = validateString(responsible, 100);
+        if (respTrimmed) {
+            const uRes = await client.query('SELECT id FROM app_users WHERE LOWER(name) = LOWER($1)', [respTrimmed]);
+            if (uRes.rows.length > 0) {
+                targetUserId = uRes.rows[0].id;
+            }
+        }
+
+        const destRes = await client.query("SELECT id FROM destinations WHERE LOWER(name) = 'faturamento' LIMIT 1");
+        const destId = destRes.rows.length > 0 ? destRes.rows[0].id : null;
+
+        await client.query('UPDATE supplies SET current_quantity = $1 WHERE id = $2', [qAfter, supply.id]);
+
+        const movType = type === 'in' ? 'replenishment' : 'withdrawal';
+        const cleanNote = validateString(note, 200) || '';
+        const finalNote = respTrimmed && respTrimmed.toLowerCase() !== String(req.user.name || '').toLowerCase()
+            ? `Para: ${respTrimmed}${cleanNote ? ' - ' + cleanNote : ''}`
+            : (cleanNote || (type === 'in' ? 'Entrada de estoque (Faturamento)' : 'Saída de estoque (Faturamento)'));
+
+        await client.query(
+            'INSERT INTO stock_movements (supply_id, user_id, destination_id, movement_type, quantity, quantity_before, quantity_after, note, sector) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+            [supply.id, targetUserId, destId, movType, validQuantity, qBefore, qAfter, finalNote, supply.sector || 'faturamento']
+        );
+
+        await client.query('COMMIT');
+        broadcastUpdate('FATURAMENTO_MOVEMENT', { supplyCode: supply.code });
+        res.json({ success: true, current_quantity: qAfter });
     } catch (error) {
         await client.query('ROLLBACK');
         next(error);
@@ -692,7 +882,7 @@ app.post("/api/movements/return", verifyToken, async (req, res, next) => {
     }
 });
 
-app.post("/api/movements/replenish", verifyAdmin, async (req, res, next) => {
+app.post("/api/movements/replenish", verifyControlAccess, async (req, res, next) => {
     const { code, quantity } = req.body;
     const validQuantity = validatePositiveInteger(quantity);
     if (!validQuantity) return res.status(400).json({ error: "Quantidade inválida. Deve ser um número inteiro maior que zero." });
@@ -725,7 +915,7 @@ app.post("/api/movements/replenish", verifyAdmin, async (req, res, next) => {
     }
 });
 
-app.post("/api/movements/adjust", verifyAdmin, async (req, res, next) => {
+app.post("/api/movements/adjust", verifyControlAccess, async (req, res, next) => {
     const { code, physicalQty } = req.body;
     const qAfter = validateNonNegativeInteger(physicalQty);
     if (qAfter === null) {

@@ -67,6 +67,29 @@ function updateSectorUI() {
     if (btnTec) btnTec.classList.toggle("active", !isFat);
     if (btnFat) btnFat.classList.toggle("active", isFat);
 
+    const techShell = $(".app-shell");
+    const fatShell = $("#faturamento-shell");
+
+    if (currentUser) {
+        if (isFat) {
+            if (techShell) techShell.style.display = "none";
+            if (fatShell) fatShell.style.display = "flex";
+            if ($("#fat-switch-to-tecnica")) {
+                $("#fat-switch-to-tecnica").style.display = isAdmin() ? "inline-flex" : "none";
+            }
+            if ($("#fat-session-label")) {
+                $("#fat-session-label").textContent = `${currentUser.name} (${isAdmin() ? 'Admin' : 'Faturamento'})`;
+            }
+            const respInput = $("#fat-mov-resp");
+            if (respInput && !respInput.value) {
+                respInput.value = currentUser.name;
+            }
+        } else {
+            if (fatShell) fatShell.style.display = "none";
+            if (techShell) techShell.style.display = "flex";
+        }
+    }
+
     if ($("#section-eyebrow")) {
         $("#section-eyebrow").textContent = isFat ? "Faturamento" : "Assistencia tecnica";
     }
@@ -106,6 +129,11 @@ async function bootstrapApp() {
         state.items = (supplies || []).map(s => ({
             ...s,
             sector: normalizeSector(s.sector),
+            unit: s.unit || 'un',
+            initialQty: Number(s.initial_quantity) || 0,
+            entriesTotal: Number(s.entries_total) || 0,
+            exitsTotal: Number(s.exits_total) || 0,
+            lastMovementAt: s.last_movement_at || null,
             qty: s.current_quantity || 0,
             min: s.minimum_quantity || 0,
             supplier: s.supplier || "",
@@ -453,6 +481,7 @@ function renderAll() {
     renderItemsGrid();
     renderHistoryTable();
     renderTechnicianFilter();
+    renderFaturamentoAll();
 }
 
 function renderTechnicianFilter() {
@@ -1065,8 +1094,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     $("#logout-button")?.addEventListener("click", () => {
-        clearInterval(refreshTimer); currentUser = null; $("#login-form").reset(); $("#login-error").textContent = ""; $("#login-screen").style.display = "flex";
+        clearInterval(refreshTimer); currentUser = null; $("#login-form").reset(); $("#login-error").textContent = "";
+        $(".app-shell").style.display = "none";
+        if ($("#faturamento-shell")) $("#faturamento-shell").style.display = "none";
+        $("#login-screen").style.display = "flex";
     });
+
+    initFaturamentoEvents();
 
     document.addEventListener("click", (e) => {
         if (!e.target.closest(".search")) { const resultsDiv = $("#search-results"); if (resultsDiv) resultsDiv.style.display = "none"; }
@@ -1106,4 +1140,596 @@ function renderSearchResults() {
 
 function copySearchCode(code) {
     navigator.clipboard.writeText(code).then(() => { const resultsDiv = $("#search-results"); if (resultsDiv) resultsDiv.style.display = "none"; alert("Código " + code + " copiado!"); }).catch(err => alert("Erro: " + err));
+}
+
+/* =========================================================================
+   LÓGICA EXCLUSIVA DO SETOR DE FATURAMENTO (PLANILHA DE CONTROLE)
+========================================================================= */
+let currentFatView = "estoque";
+
+function setFatView(viewName) {
+    currentFatView = viewName;
+    $$("[data-fat-view]").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.fatView === viewName);
+    });
+    $$(".fat-view").forEach(sec => {
+        sec.classList.toggle("active", sec.id === `fat-view-${viewName}`);
+    });
+    if (viewName === "referencias" && !$("#fat-ref-orig-code")?.value) {
+        suggestNextFatId();
+    }
+    renderFaturamentoAll();
+}
+
+function getFatItems() {
+    return state.items
+        .filter(i => i.sector === 'faturamento')
+        .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), 'pt-BR', { numeric: true }));
+}
+
+function getFatStatus(item) {
+    const qty = Number(item.qty) || 0;
+    const min = Number(item.min) || 0;
+    if (qty <= min) {
+        return { key: 'REPOR', label: '🔴 REPOR', cls: 'fat-status-repor' };
+    }
+    if (qty <= min * 1.5) {
+        return { key: 'ATENÇÃO', label: '🟡 ATENÇÃO', cls: 'fat-status-atencao' };
+    }
+    return { key: 'OK', label: '🟢 OK', cls: 'fat-status-ok' };
+}
+
+function getFatCatClass(cat) {
+    const c = normalize(cat);
+    if (c.includes("carregador")) return "fat-cat-carregadores";
+    if (c.includes("documento")) return "fat-cat-documentos";
+    if (c.includes("embalagem")) return "fat-cat-embalagem";
+    if (c.includes("ferramenta")) return "fat-cat-ferramentas";
+    if (c.includes("impress")) return "fat-cat-impressao";
+    return "fat-cat-outros";
+}
+
+function suggestNextFatId() {
+    const codeInput = $("#fat-ref-code");
+    if (!codeInput) return;
+    const fatItems = getFatItems();
+    let maxNum = 0;
+    fatItems.forEach(item => {
+        const m = String(item.code || "").match(/FAT-(\d+)/i);
+        if (m) {
+            const n = parseInt(m[1], 10);
+            if (n > maxNum) maxNum = n;
+        }
+    });
+    const nextNum = String(maxNum + 1).padStart(3, "0");
+    codeInput.value = `FAT-${nextNum}`;
+}
+
+function renderFaturamentoAll() {
+    if (!$("#faturamento-shell")) return;
+    renderFatSheet();
+    renderFatMovementsTab();
+    renderFatCountTab();
+    renderFatReferencesTab();
+    renderFatAuditTab();
+}
+
+function renderFatSheet() {
+    const allFat = getFatItems();
+    let countRepor = 0;
+    let countAtencao = 0;
+    let countOk = 0;
+
+    allFat.forEach(item => {
+        const st = getFatStatus(item);
+        if (st.key === 'REPOR') countRepor++;
+        else if (st.key === 'ATENÇÃO') countAtencao++;
+        else countOk++;
+    });
+
+    if ($("#fat-kpi-total")) $("#fat-kpi-total").textContent = allFat.length;
+    if ($("#fat-kpi-repor")) $("#fat-kpi-repor").textContent = countRepor;
+    if ($("#fat-kpi-atencao")) $("#fat-kpi-atencao").textContent = countAtencao;
+    if ($("#fat-kpi-ok")) $("#fat-kpi-ok").textContent = countOk;
+
+    const searchQ = normalize($("#fat-search-input")?.value || "");
+    const catFilter = $("#fat-category-filter")?.value || "";
+    const statusFilter = $("#fat-status-filter")?.value || "";
+
+    const filtered = allFat.filter(item => {
+        const st = getFatStatus(item);
+        const matchSearch = !searchQ || [item.code, item.name, item.category, item.unit].some(f => normalize(f).includes(searchQ));
+        const matchCat = !catFilter || normalize(item.category) === normalize(catFilter);
+        const matchSt = !statusFilter || st.key === statusFilter;
+        return matchSearch && matchCat && matchSt;
+    });
+
+    const tbody = $("#fat-sheet-tbody");
+    if (!tbody) return;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding: 2rem; color:#64748b;">Nenhum insumo encontrado para os filtros selecionados.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(item => {
+        const st = getFatStatus(item);
+        const catCls = getFatCatClass(item.category);
+        const lastMov = item.lastMovementAt ? formatDate(item.lastMovementAt) : "Sem mov.";
+        return `
+            <tr>
+              <td><span class="fat-code-badge">${escapeHTML(item.code)}</span></td>
+              <td><strong>${escapeHTML(item.name)}</strong></td>
+              <td><span class="fat-cat-badge ${catCls}">${escapeHTML(item.category || 'Outros')}</span></td>
+              <td style="color:#475569; font-weight:600;">${escapeHTML(item.unit || 'un')}</td>
+              <td class="fat-cell-yellow">
+                <input type="number" min="0" class="fat-yellow-input" data-fat-cell-init="${escapeHTML(item.code)}" value="${Number(item.initialQty) || 0}" title="Clique ou altere para ajustar o Estoque Inicial">
+              </td>
+              <td style="color:#059669; font-weight:700;">+${Number(item.entriesTotal) || 0}</td>
+              <td style="color:#dc2626; font-weight:700;">-${Number(item.exitsTotal) || 0}</td>
+              <td style="font-size:1rem; font-weight:800; color:#0f172a;">${Number(item.qty) || 0} <small style="font-weight:500; color:#64748b;">${escapeHTML(item.unit || 'un')}</small></td>
+              <td class="fat-cell-yellow">
+                <input type="number" min="0" class="fat-yellow-input" data-fat-cell-min="${escapeHTML(item.code)}" value="${Number(item.min) || 0}" title="Clique ou altere para ajustar o Estoque Mínimo">
+              </td>
+              <td><span class="fat-status-pill ${st.cls}">${st.label}</span></td>
+              <td style="color:#64748b; font-size:0.82rem; white-space:nowrap;">${lastMov}</td>
+              <td>
+                <div class="fat-row-actions">
+                  <button type="button" class="fat-mini-btn in" data-fat-quick-in="${escapeHTML(item.code)}" title="Lançar Entrada">+ Entrada</button>
+                  <button type="button" class="fat-mini-btn out" data-fat-quick-out="${escapeHTML(item.code)}" title="Lançar Saída">- Saída</button>
+                  <button type="button" class="fat-mini-btn" data-fat-quick-edit="${escapeHTML(item.code)}" title="Editar Referência">Editar</button>
+                </div>
+              </td>
+            </tr>
+        `;
+    }).join("");
+}
+
+function renderFatMovementsTab() {
+    const select = $("#fat-mov-item");
+    if (select) {
+        const currentVal = select.value;
+        const allFat = getFatItems();
+        select.innerHTML = `<option value="">-- Selecione o insumo da lista --</option>` +
+            allFat.map(i => `<option value="${escapeHTML(i.code)}">[${escapeHTML(i.code)}] ${escapeHTML(i.name)} (Saldo: ${i.qty} ${escapeHTML(i.unit || 'un')})</option>`).join("");
+        if (currentVal && allFat.some(i => i.code === currentVal)) {
+            select.value = currentVal;
+        }
+    }
+
+    const recentTbody = $("#fat-mov-recent-tbody");
+    if (!recentTbody) return;
+
+    const fatMovs = state.history.filter(h => h.sector === 'faturamento').slice(0, 25);
+    if (fatMovs.length === 0) {
+        recentTbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:#64748b;">Nenhuma movimentação lançada ainda.</td></tr>`;
+        return;
+    }
+
+    recentTbody.innerHTML = fatMovs.map(h => {
+        const isEntry = h.type === 'Reposição' || h.type === 'Devolução' || h.type === 'Cadastro';
+        const isExit = h.type === 'Retirada';
+        const badgeStyle = isEntry
+            ? 'background:#dcfce7; color:#15803d; border:1px solid #86efac;'
+            : (isExit ? 'background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5;' : 'background:#fef3c7; color:#b45309; border:1px solid #fcd34d;');
+        const label = isEntry ? '📥 Entrada' : (isExit ? '📤 Saída' : '📋 Ajuste');
+        return `
+            <tr>
+              <td style="white-space:nowrap; font-size:0.82rem; color:#475569;">${formatDate(h.at)}</td>
+              <td><span class="fat-code-badge">${escapeHTML(h.itemCode)}</span></td>
+              <td><strong>${escapeHTML(h.itemName)}</strong></td>
+              <td><span class="fat-status-pill" style="${badgeStyle}">${label}</span></td>
+              <td style="font-weight:700;">${isEntry ? '+' : (isExit ? '-' : '')}${escapeHTML(String(h.qty))}</td>
+              <td style="color:#64748b; font-size:0.82rem;">${h.qtyBefore ?? '-'} → <strong>${h.qtyAfter ?? '-'}</strong></td>
+              <td>${escapeHTML(h.user)}</td>
+            </tr>
+        `;
+    }).join("");
+}
+
+function renderFatCountTab() {
+    const tbody = $("#fat-count-tbody");
+    if (!tbody) return;
+
+    const q = normalize($("#fat-count-search")?.value || "");
+    const items = getFatItems().filter(i => !q || [i.code, i.name, i.category].some(f => normalize(f).includes(q)));
+
+    if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:1.5rem; color:#64748b;">Nenhum item encontrado.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = items.map(item => {
+        const catCls = getFatCatClass(item.category);
+        return `
+            <tr>
+              <td><span class="fat-code-badge">${escapeHTML(item.code)}</span></td>
+              <td><strong>${escapeHTML(item.name)}</strong></td>
+              <td><span class="fat-cat-badge ${catCls}">${escapeHTML(item.category || 'Outros')}</span></td>
+              <td>${escapeHTML(item.unit || 'un')}</td>
+              <td style="font-weight:700; font-size:0.95rem;">${Number(item.qty) || 0} ${escapeHTML(item.unit || 'un')}</td>
+              <td class="fat-cell-yellow">
+                <input type="number" min="0" class="fat-yellow-input" data-fat-count-input="${escapeHTML(item.code)}" data-sys-qty="${Number(item.qty) || 0}" value="${Number(item.qty) || 0}">
+              </td>
+              <td data-fat-count-diff="${escapeHTML(item.code)}" style="font-weight:700; color:#64748b;">0 (Sem divergência)</td>
+              <td>
+                <button type="button" class="fat-btn fat-btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem;" data-fat-count-save="${escapeHTML(item.code)}">Ajustar Saldo</button>
+              </td>
+            </tr>
+        `;
+    }).join("");
+}
+
+function renderFatReferencesTab() {
+    const tbody = $("#fat-ref-list-tbody");
+    if (!tbody) return;
+    const items = getFatItems();
+
+    tbody.innerHTML = items.map(item => {
+        const catCls = getFatCatClass(item.category);
+        return `
+            <tr>
+              <td><span class="fat-code-badge">${escapeHTML(item.code)}</span></td>
+              <td><strong>${escapeHTML(item.name)}</strong></td>
+              <td><span class="fat-cat-badge ${catCls}">${escapeHTML(item.category || 'Outros')}</span></td>
+              <td>${escapeHTML(item.unit || 'un')}</td>
+              <td style="font-weight:600;">${Number(item.min) || 0}</td>
+              <td style="font-weight:600;">${Number(item.initialQty) || 0}</td>
+              <td style="font-weight:800; color:#059669;">${Number(item.qty) || 0}</td>
+              <td>
+                <button type="button" class="fat-mini-btn" data-fat-ref-edit="${escapeHTML(item.code)}">✏️ Editar</button>
+              </td>
+            </tr>
+        `;
+    }).join("");
+}
+
+function renderFatAuditTab() {
+    const tbody = $("#fat-audit-tbody");
+    if (!tbody) return;
+
+    const searchQ = normalize($("#fat-audit-search")?.value || "");
+    const typeFilter = $("#fat-audit-type")?.value || "";
+
+    const rows = state.history.filter(h => {
+        if (h.sector !== 'faturamento') return false;
+        const matchSearch = !searchQ || [h.itemCode, h.itemName, h.user, h.note, h.type].some(f => normalize(f).includes(searchQ));
+        const matchType = !typeFilter || h.type === typeFilter;
+        return matchSearch && matchType;
+    });
+
+    if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:2rem; color:#64748b;">Nenhum registro de auditoria encontrado no Faturamento.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = rows.map(h => `
+        <tr>
+          <td style="white-space:nowrap; color:#475569;">${formatDate(h.at)}</td>
+          <td><span class="fat-code-badge">${escapeHTML(h.itemCode)}</span></td>
+          <td><strong>${escapeHTML(h.itemName)}</strong></td>
+          <td><strong>${escapeHTML(h.type)}</strong></td>
+          <td style="font-weight:700;">${escapeHTML(String(h.qty))}</td>
+          <td style="color:#475569;">${h.qtyBefore ?? '-'} → <strong>${h.qtyAfter ?? '-'}</strong></td>
+          <td>${escapeHTML(h.user)}</td>
+          <td style="color:#64748b; font-size:0.83rem;">${escapeHTML(h.note || '-')}</td>
+        </tr>
+    `).join("");
+}
+
+function loadFatReferenceForEdit(code) {
+    const item = getFatItems().find(i => i.code === code);
+    if (!item) return;
+    setFatView("referencias");
+    $("#fat-ref-form-title").textContent = `✏️ Editando Referência: ${item.code}`;
+    $("#fat-ref-orig-code").value = item.code;
+    $("#fat-ref-code").value = item.code;
+    $("#fat-ref-code").disabled = true;
+    $("#fat-ref-name").value = item.name;
+    $("#fat-ref-category").value = item.category || "Embalagem";
+    $("#fat-ref-unit").value = item.unit || "un";
+    $("#fat-ref-min").value = Number(item.min) || 0;
+    $("#fat-ref-init").value = Number(item.initialQty) || 0;
+    $("#fat-ref-note").value = item.note || item.supplier || "";
+    $("#fat-ref-submit-btn").textContent = "Atualizar Referência";
+    $("#fat-ref-cancel-edit").style.display = "inline-flex";
+}
+
+function resetFatReferenceForm() {
+    const form = $("#fat-ref-form");
+    if (form) form.reset();
+    if ($("#fat-ref-orig-code")) $("#fat-ref-orig-code").value = "";
+    if ($("#fat-ref-code")) $("#fat-ref-code").disabled = false;
+    if ($("#fat-ref-form-title")) $("#fat-ref-form-title").textContent = "🏷️ Criar Nova Referência / ID";
+    if ($("#fat-ref-submit-btn")) $("#fat-ref-submit-btn").textContent = "Salvar Referência / ID";
+    if ($("#fat-ref-cancel-edit")) $("#fat-ref-cancel-edit").style.display = "none";
+    suggestNextFatId();
+}
+
+function initFaturamentoEvents() {
+    $$("[data-fat-view]").forEach(btn => {
+        btn.addEventListener("click", () => setFatView(btn.dataset.fatView));
+    });
+
+    $("#fat-switch-to-tecnica")?.addEventListener("click", () => setSector("tecnica"));
+
+    $("#fat-logout-btn")?.addEventListener("click", () => {
+        clearInterval(refreshTimer);
+        currentUser = null;
+        $("#login-form")?.reset();
+        if ($("#login-error")) $("#login-error").textContent = "";
+        if ($(".app-shell")) $(".app-shell").style.display = "none";
+        if ($("#faturamento-shell")) $("#faturamento-shell").style.display = "none";
+        if ($("#login-screen")) $("#login-screen").style.display = "flex";
+    });
+
+    $("#fat-search-input")?.addEventListener("input", renderFatSheet);
+    $("#fat-category-filter")?.addEventListener("change", renderFatSheet);
+    $("#fat-status-filter")?.addEventListener("change", renderFatSheet);
+    $("#fat-count-search")?.addEventListener("input", renderFatCountTab);
+    $("#fat-audit-search")?.addEventListener("input", renderFatAuditTab);
+    $("#fat-audit-type")?.addEventListener("change", renderFatAuditTab);
+
+    $("#fat-jump-mov-btn")?.addEventListener("click", () => setFatView("movimentacoes"));
+    $("#fat-jump-ref-btn")?.addEventListener("click", () => {
+        resetFatReferenceForm();
+        setFatView("referencias");
+    });
+
+    $("#fat-generate-id-btn")?.addEventListener("click", suggestNextFatId);
+    $("#fat-ref-cancel-edit")?.addEventListener("click", resetFatReferenceForm);
+
+    // Exportar Planilha Faturamento (CSV)
+    $("#fat-export-sheet-btn")?.addEventListener("click", () => {
+        const headers = ["ID", "Item", "Categoria", "Unidade", "Estoque Inicial", "Entradas", "Saidas", "Estoque Atual", "Estoque Minimo", "Status", "Ultima Movimentacao"];
+        const rows = getFatItems().map(i => {
+            const st = getFatStatus(i);
+            return [
+                `"${i.code}"`,
+                `"${escapeHTML(i.name)}"`,
+                `"${escapeHTML(i.category || '')}"`,
+                `"${escapeHTML(i.unit || 'un')}"`,
+                Number(i.initialQty) || 0,
+                Number(i.entriesTotal) || 0,
+                Number(i.exitsTotal) || 0,
+                Number(i.qty) || 0,
+                Number(i.min) || 0,
+                `"${st.key}"`,
+                `"${i.lastMovementAt ? formatDate(i.lastMovementAt) : ''}"`
+            ];
+        });
+        exportCSV(`planilha_faturamento_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+    });
+
+    // Exportar Auditoria Faturamento (CSV)
+    $("#fat-export-audit-btn")?.addEventListener("click", () => {
+        const headers = ["Data", "ID", "Insumo", "Tipo", "Qtd", "Antes", "Depois", "Responsavel", "Observacao"];
+        const rows = state.history.filter(h => h.sector === 'faturamento').map(h => [
+            `"${formatDate(h.at)}"`,
+            `"${h.itemCode}"`,
+            `"${escapeHTML(h.itemName)}"`,
+            `"${h.type}"`,
+            h.qty,
+            h.qtyBefore ?? '',
+            h.qtyAfter ?? '',
+            `"${escapeHTML(h.user)}"`,
+            `"${escapeHTML(h.note || '')}"`
+        ]);
+        exportCSV(`auditoria_faturamento_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+    });
+
+    // Submissão de Movimentação (Entrada ou Saída)
+    $("#fat-mov-form")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const code = $("#fat-mov-item").value;
+        const type = $("#fat-mov-type").value;
+        const quantity = Number($("#fat-mov-qty").value) || 1;
+        const responsible = $("#fat-mov-resp").value.trim() || currentUser?.name || "Faturamento";
+        const note = $("#fat-mov-note").value.trim();
+        const fb = $("#fat-mov-feedback");
+
+        if (!code) return alert("Selecione um item da lista suspensa.");
+
+        try {
+            if (fb) { fb.style.color = "#475569"; fb.textContent = "Registrando movimentação..."; }
+            const res = await fetch(`${API_BASE_URL}/api/faturamento/movement`, {
+                method: 'POST',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ code, type, quantity, responsible, note })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Erro ao registrar movimentação.");
+
+            if (fb) {
+                fb.style.color = "#059669";
+                fb.textContent = `✅ ${type === 'in' ? 'Entrada' : 'Saída'} registrada com sucesso! Novo saldo: ${data.current_quantity}.`;
+            }
+            $("#fat-mov-qty").value = "1";
+            $("#fat-mov-note").value = "";
+            await bootstrapApp();
+        } catch (err) {
+            if (fb) { fb.style.color = "#dc2626"; fb.textContent = `❌ ${err.message}`; }
+            else alert(err.message);
+        }
+    });
+
+    // Submissão de Criar / Editar Referência e ID
+    $("#fat-ref-form")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const origCode = $("#fat-ref-orig-code").value.trim();
+        const code = $("#fat-ref-code").value.trim().toUpperCase();
+        const name = $("#fat-ref-name").value.trim();
+        const category = $("#fat-ref-category").value;
+        const unit = $("#fat-ref-unit").value;
+        const min = Number($("#fat-ref-min").value) || 0;
+        const initial_quantity = Number($("#fat-ref-init").value) || 0;
+        const note = $("#fat-ref-note").value.trim();
+
+        try {
+            if (origCode) {
+                const existing = getFatItems().find(i => i.code === origCode);
+                const res = await fetch(`${API_BASE_URL}/api/supplies/${encodeURIComponent(origCode)}`, {
+                    method: 'PUT',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({
+                        name,
+                        category,
+                        unit,
+                        min,
+                        initial_quantity,
+                        qty: existing ? existing.qty : initial_quantity,
+                        supplier: note,
+                        note,
+                        sector: 'faturamento'
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Erro ao atualizar referência.");
+                alert(`Referência ${origCode} atualizada com sucesso!`);
+            } else {
+                const res = await fetch(`${API_BASE_URL}/api/supplies`, {
+                    method: 'POST',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({
+                        code,
+                        name,
+                        category,
+                        unit,
+                        min,
+                        initial_quantity,
+                        qty: initial_quantity,
+                        supplier: note,
+                        note,
+                        sector: 'faturamento'
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Erro ao criar referência.");
+                alert(`Referência ${code} (${name}) criada com sucesso!`);
+            }
+            resetFatReferenceForm();
+            await bootstrapApp();
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+
+    // Delegated events inside #faturamento-shell
+    const fatShell = $("#faturamento-shell");
+    if (fatShell) {
+        fatShell.addEventListener("change", async (e) => {
+            const initInput = e.target.closest("[data-fat-cell-init]");
+            if (initInput) {
+                const code = initInput.dataset.fatCellInit;
+                const val = Number(initInput.value);
+                if (isNaN(val) || val < 0) return;
+                try {
+                    const res = await fetch(`${API_BASE_URL}/api/faturamento/supplies/${encodeURIComponent(code)}/cells`, {
+                        method: 'PATCH',
+                        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                        body: JSON.stringify({ initial_quantity: val })
+                    });
+                    if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+                    await bootstrapApp();
+                } catch (err) { alert(err.message); bootstrapApp(); }
+            }
+
+            const minInput = e.target.closest("[data-fat-cell-min]");
+            if (minInput) {
+                const code = minInput.dataset.fatCellMin;
+                const val = Number(minInput.value);
+                if (isNaN(val) || val < 0) return;
+                try {
+                    const res = await fetch(`${API_BASE_URL}/api/faturamento/supplies/${encodeURIComponent(code)}/cells`, {
+                        method: 'PATCH',
+                        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                        body: JSON.stringify({ minimum_quantity: val })
+                    });
+                    if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+                    await bootstrapApp();
+                } catch (err) { alert(err.message); bootstrapApp(); }
+            }
+        });
+
+        fatShell.addEventListener("input", (e) => {
+            const countInput = e.target.closest("[data-fat-count-input]");
+            if (countInput) {
+                const code = countInput.dataset.fatCountInput;
+                const sysQty = Number(countInput.dataset.sysQty) || 0;
+                const physQty = Number(countInput.value) || 0;
+                const diff = physQty - sysQty;
+                const diffCell = fatShell.querySelector(`[data-fat-count-diff="${code}"]`);
+                if (diffCell) {
+                    if (diff === 0) {
+                        diffCell.style.color = "#64748b";
+                        diffCell.textContent = "0 (Sem divergência)";
+                    } else if (diff > 0) {
+                        diffCell.style.color = "#059669";
+                        diffCell.textContent = `+${diff} (Sobra física)`;
+                    } else {
+                        diffCell.style.color = "#dc2626";
+                        diffCell.textContent = `${diff} (Falta física)`;
+                    }
+                }
+            }
+        });
+
+        fatShell.addEventListener("click", async (e) => {
+            const quickIn = e.target.closest("[data-fat-quick-in]");
+            if (quickIn) {
+                const code = quickIn.dataset.fatQuickIn;
+                setFatView("movimentacoes");
+                if ($("#fat-mov-item")) $("#fat-mov-item").value = code;
+                if ($("#fat-mov-type")) $("#fat-mov-type").value = "in";
+                $("#fat-mov-qty")?.focus();
+                return;
+            }
+
+            const quickOut = e.target.closest("[data-fat-quick-out]");
+            if (quickOut) {
+                const code = quickOut.dataset.fatQuickOut;
+                setFatView("movimentacoes");
+                if ($("#fat-mov-item")) $("#fat-mov-item").value = code;
+                if ($("#fat-mov-type")) $("#fat-mov-type").value = "out";
+                $("#fat-mov-qty")?.focus();
+                return;
+            }
+
+            const quickEdit = e.target.closest("[data-fat-quick-edit]");
+            if (quickEdit) {
+                loadFatReferenceForEdit(quickEdit.dataset.fatQuickEdit);
+                return;
+            }
+
+            const refEdit = e.target.closest("[data-fat-ref-edit]");
+            if (refEdit) {
+                loadFatReferenceForEdit(refEdit.dataset.fatRefEdit);
+                return;
+            }
+
+            const countSave = e.target.closest("[data-fat-count-save]");
+            if (countSave) {
+                const code = countSave.dataset.fatCountSave;
+                const input = fatShell.querySelector(`[data-fat-count-input="${code}"]`);
+                if (!input) return;
+                const physicalQty = Number(input.value);
+                if (isNaN(physicalQty) || physicalQty < 0) return alert("Informe uma quantidade física válida.");
+                countSave.disabled = true;
+                try {
+                    const res = await fetch(`${API_BASE_URL}/api/movements/adjust`, {
+                        method: 'POST',
+                        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                        body: JSON.stringify({ code, physicalQty })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Erro ao ajustar contagem.");
+                    await bootstrapApp();
+                } catch (err) {
+                    alert(err.message);
+                } finally {
+                    countSave.disabled = false;
+                }
+            }
+        });
+    }
 }

@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Outlet do Celular">
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="styles.css?v=2.8">
+    <link rel="stylesheet" href="styles.css?v=4.1">
   </head>
   <body>
     <section id="login-screen" class="login-screen">
@@ -333,6 +333,437 @@
       </main>
     </div>
 
+    <!-- =========================================================================
+         TELA EXCLUSIVA DO SETOR DE FATURAMENTO (DESIGN PLANILHA / ERP CONTROL)
+    ========================================================================== -->
+    <div id="faturamento-shell" class="fat-shell" style="display: none;">
+      <header class="fat-header">
+        <div class="fat-header-brand">
+          <div class="fat-logo-badge">📦</div>
+          <div>
+            <div class="fat-badge-row">
+              <span class="fat-sector-tag">SETOR DE FATURAMENTO</span>
+              <span class="fat-live-pill">● Controle Ativo</span>
+            </div>
+            <h1>Controle de Insumos — Setor de Faturamento</h1>
+            <p>Modelo de controle de estoque para termos de garantia, embalagens e materiais de expedição</p>
+          </div>
+        </div>
+        <div class="fat-header-actions">
+          <button type="button" id="fat-switch-to-tecnica" class="fat-btn-switch" style="display: none;">
+            🔧 Alternar para Assistência Técnica
+          </button>
+          <div class="fat-user-chip">
+            <span class="fat-user-avatar">👤</span>
+            <span id="fat-session-label">Operador Faturamento</span>
+          </div>
+          <button type="button" id="fat-logout-btn" class="fat-btn-logout" title="Sair do sistema">
+            Sair ↪
+          </button>
+        </div>
+      </header>
+
+      <nav class="fat-tabs-bar" aria-label="Abas do Faturamento">
+        <button type="button" class="fat-tab active" data-fat-view="estoque">
+          📊 Aba Estoque (Painel Principal)
+        </button>
+        <button type="button" class="fat-tab" data-fat-view="movimentacoes">
+          🔄 Aba Movimentações (Entrada / Saída)
+        </button>
+        <button type="button" class="fat-tab" data-fat-view="contagem">
+          📋 Contagem / Balanço
+        </button>
+        <button type="button" class="fat-tab" data-fat-view="referencias">
+          🏷️ Criar Referência e/ou ID
+        </button>
+        <button type="button" class="fat-tab" data-fat-view="auditoria">
+          🔍 Auditoria Completa
+        </button>
+        <button type="button" class="fat-tab" data-fat-view="guia">
+          📖 Como Usar esta Planilha
+        </button>
+      </nav>
+
+      <main class="fat-main">
+        <!-- ABA 1: PAINEL DE ESTOQUE (PLANILHA) -->
+        <section id="fat-view-estoque" class="fat-view active">
+          <div class="fat-kpi-row">
+            <div class="fat-kpi-card">
+              <span class="fat-kpi-label">Total de Referências</span>
+              <strong id="fat-kpi-total">0</strong>
+              <small>Itens monitorados na planilha</small>
+            </div>
+            <div class="fat-kpi-card fat-kpi-red">
+              <span class="fat-kpi-label">🔴 Status: REPOR</span>
+              <strong id="fat-kpi-repor">0</strong>
+              <small>No mínimo ou abaixo</small>
+            </div>
+            <div class="fat-kpi-card fat-kpi-yellow">
+              <span class="fat-kpi-label">🟡 Status: ATENÇÃO</span>
+              <strong id="fat-kpi-atencao">0</strong>
+              <small>Perto do mínimo (até +50%)</small>
+            </div>
+            <div class="fat-kpi-card fat-kpi-green">
+              <span class="fat-kpi-label">🟢 Status: OK</span>
+              <strong id="fat-kpi-ok">0</strong>
+              <small>Estoque saudável</small>
+            </div>
+          </div>
+
+          <div class="fat-card">
+            <div class="fat-toolbar">
+              <div class="fat-toolbar-left">
+                <input type="search" id="fat-search-input" class="fat-input" placeholder="🔎 Buscar por ID (FAT-001), item ou categoria...">
+                <select id="fat-category-filter" class="fat-select">
+                  <option value="">Todas as Categorias</option>
+                  <option value="Carregadores">🟣 Carregadores</option>
+                  <option value="Documentos">🔵 Documentos</option>
+                  <option value="Embalagem">🟠 Embalagem</option>
+                  <option value="Ferramentas">🟢 Ferramentas</option>
+                  <option value="Impressão">🩷 Impressão</option>
+                </select>
+                <select id="fat-status-filter" class="fat-select">
+                  <option value="">Todos os Status</option>
+                  <option value="REPOR">🔴 REPOR</option>
+                  <option value="ATENÇÃO">🟡 ATENÇÃO</option>
+                  <option value="OK">🟢 OK</option>
+                </select>
+              </div>
+              <div class="fat-toolbar-right">
+                <button type="button" id="fat-export-sheet-btn" class="fat-btn fat-btn-outline">📥 Exportar Planilha (CSV)</button>
+                <button type="button" id="fat-jump-mov-btn" class="fat-btn fat-btn-secondary">🔄 Lançar Entrada/Saída</button>
+                <button type="button" id="fat-jump-ref-btn" class="fat-btn fat-btn-primary">+ Nova Referência / ID</button>
+              </div>
+            </div>
+
+            <div class="fat-legend-banner">
+              <span>💡 <strong>Regra da Planilha:</strong> O <strong>Estoque Atual</strong> e o <strong>Status</strong> são calculados sozinhos a partir das Movimentações. Você pode editar diretamente as células em amarelo (<strong>Estoque Mínimo</strong> e <strong>Estoque Inicial</strong>).</span>
+              <div class="fat-status-legend">
+                <span>🔴 <strong>REPOR</strong> = no mínimo ou abaixo</span>
+                <span>🟡 <strong>ATENÇÃO</strong> = até 50% acima do mínimo</span>
+                <span>🟢 <strong>OK</strong> = estoque saudável</span>
+              </div>
+            </div>
+
+            <div class="fat-table-wrap">
+              <table class="fat-sheet-table">
+                <thead>
+                  <tr>
+                    <th>ID / Ref</th>
+                    <th>Item</th>
+                    <th>Categoria</th>
+                    <th>Unidade</th>
+                    <th class="fat-th-yellow" title="Quantidade que você tinha em mãos quando começou a usar a planilha">Estoque Inicial ✏️</th>
+                    <th>Entradas</th>
+                    <th>Saídas</th>
+                    <th>Estoque Atual</th>
+                    <th class="fat-th-yellow" title="A partir de quanto o item deve soar o alerta de reposição">Estoque Mínimo ✏️</th>
+                    <th>Status</th>
+                    <th>Última Movimentação</th>
+                    <th>Ações Rápidas</th>
+                  </tr>
+                </thead>
+                <tbody id="fat-sheet-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ABA 2: MOVIMENTAÇÕES (ENTRADA / SAÍDA) -->
+        <section id="fat-view-movimentacoes" class="fat-view">
+          <div class="fat-two-col">
+            <div class="fat-card">
+              <div class="fat-card-header">
+                <h2>🔄 Lançar Movimentação (Entrada ou Saída)</h2>
+                <p>Toda vez que você <strong>RECEBER</strong> um insumo novo (compra/reposição) ou <strong>USAR</strong> um insumo (saída), lance uma linha aqui.</p>
+              </div>
+              <form id="fat-mov-form" class="fat-form">
+                <label>
+                  <span>Item (Escolha da Lista Suspensa) *</span>
+                  <select id="fat-mov-item" class="fat-select" required></select>
+                </label>
+                <div class="fat-form-row">
+                  <label>
+                    <span>Tipo de Movimentação *</span>
+                    <select id="fat-mov-type" class="fat-select" required>
+                      <option value="in">📥 Entrada (Compra / Reposição)</option>
+                      <option value="out">📤 Saída (Uso / Expedição)</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Quantidade *</span>
+                    <input type="number" id="fat-mov-qty" class="fat-input" min="1" value="1" required>
+                  </label>
+                </div>
+                <div class="fat-form-row">
+                  <label>
+                    <span>Responsável *</span>
+                    <input type="text" id="fat-mov-resp" class="fat-input" required placeholder="Nome do responsável">
+                  </label>
+                  <label>
+                    <span>Observação / Lote / NF (Opcional)</span>
+                    <input type="text" id="fat-mov-note" class="fat-input" placeholder="Ex: NF 4510, Expedição manhã...">
+                  </label>
+                </div>
+                <button type="submit" class="fat-btn fat-btn-primary fat-btn-wide">Registrar na Planilha</button>
+                <div id="fat-mov-feedback" class="fat-feedback"></div>
+              </form>
+            </div>
+
+            <div class="fat-card">
+              <div class="fat-card-header">
+                <h2>📋 Últimos Lançamentos na Aba Movimentações</h2>
+                <p>Histórico imediato das entradas e saídas lançadas no Faturamento.</p>
+              </div>
+              <div class="fat-table-wrap">
+                <table class="fat-sheet-table">
+                  <thead>
+                    <tr>
+                      <th>Data / Hora</th>
+                      <th>ID</th>
+                      <th>Item</th>
+                      <th>Tipo</th>
+                      <th>Qtd</th>
+                      <th>Saldo</th>
+                      <th>Responsável</th>
+                    </tr>
+                  </thead>
+                  <tbody id="fat-mov-recent-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ABA 3: CONTAGEM / BALANÇO -->
+        <section id="fat-view-contagem" class="fat-view">
+          <div class="fat-card">
+            <div class="fat-card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+              <div>
+                <h2>📋 Contagem Física e Balanço de Estoque</h2>
+                <p>Confira a quantidade física real na prateleira do Faturamento e ajuste o saldo do sistema com registro automático na auditoria.</p>
+              </div>
+              <div style="display:flex; gap:10px; align-items:center;">
+                <input type="search" id="fat-count-search" class="fat-input" placeholder="🔎 Filtrar item para contagem...">
+              </div>
+            </div>
+
+            <div class="fat-table-wrap">
+              <table class="fat-sheet-table">
+                <thead>
+                  <tr>
+                    <th>ID / Ref</th>
+                    <th>Item</th>
+                    <th>Categoria</th>
+                    <th>Unidade</th>
+                    <th>Saldo Atual no Sistema</th>
+                    <th class="fat-th-yellow">Contagem Física Real ✏️</th>
+                    <th>Diferença</th>
+                    <th>Ação</th>
+                  </tr>
+                </thead>
+                <tbody id="fat-count-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ABA 4: CRIAR REFERÊNCIA E/OU ID -->
+        <section id="fat-view-referencias" class="fat-view">
+          <div class="fat-two-col">
+            <div class="fat-card">
+              <div class="fat-card-header">
+                <h2 id="fat-ref-form-title">🏷️ Criar Nova Referência / ID</h2>
+                <p>Adicione um novo insumo ao catálogo do Faturamento ou edite uma referência existente.</p>
+              </div>
+              <form id="fat-ref-form" class="fat-form">
+                <input type="hidden" id="fat-ref-orig-code">
+                <div class="fat-form-row">
+                  <label>
+                    <span>ID / Código da Referência *</span>
+                    <div style="display:flex; gap:6px;">
+                      <input type="text" id="fat-ref-code" class="fat-input" required placeholder="Ex: FAT-015" style="flex:1;">
+                      <button type="button" id="fat-generate-id-btn" class="fat-btn fat-btn-outline" title="Gerar próximo ID automático">Gerar ID</button>
+                    </div>
+                  </label>
+                  <label>
+                    <span>Unidade de Medida *</span>
+                    <select id="fat-ref-unit" class="fat-select" required>
+                      <option value="un">un (Unidade)</option>
+                      <option value="rolo">rolo (Rolo)</option>
+                      <option value="milheiro">milheiro (Milheiro)</option>
+                      <option value="pacote">pacote (Pacote)</option>
+                      <option value="caixa">caixa (Caixa)</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label>
+                  <span>Nome do Insumo *</span>
+                  <input type="text" id="fat-ref-name" class="fat-input" required placeholder="Ex: Etiqueta térmica 100x150">
+                </label>
+
+                <label>
+                  <span>Categoria *</span>
+                  <select id="fat-ref-category" class="fat-select" required>
+                    <option value="Embalagem">🟠 Embalagem</option>
+                    <option value="Documentos">🔵 Documentos</option>
+                    <option value="Impressão">🩷 Impressão</option>
+                    <option value="Carregadores">🟣 Carregadores</option>
+                    <option value="Ferramentas">🟢 Ferramentas</option>
+                    <option value="Outros">⚪ Outros</option>
+                  </select>
+                </label>
+
+                <div class="fat-form-row">
+                  <label class="fat-yellow-field">
+                    <span>Estoque Mínimo (Alerta) *</span>
+                    <input type="number" id="fat-ref-min" class="fat-input" min="0" value="10" required>
+                  </label>
+                  <label class="fat-yellow-field">
+                    <span>Estoque Inicial (Em mãos) *</span>
+                    <input type="number" id="fat-ref-init" class="fat-input" min="0" value="0" required>
+                  </label>
+                </div>
+
+                <label>
+                  <span>Fornecedor / Observação (Opcional)</span>
+                  <input type="text" id="fat-ref-note" class="fat-input" placeholder="Fornecedor ou detalhe da referência">
+                </label>
+
+                <div style="display:flex; gap:10px;">
+                  <button type="submit" class="fat-btn fat-btn-primary" style="flex:1;" id="fat-ref-submit-btn">Salvar Referência / ID</button>
+                  <button type="button" id="fat-ref-cancel-edit" class="fat-btn fat-btn-outline" style="display:none;">Cancelar Edição</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="fat-card">
+              <div class="fat-card-header">
+                <h2>📦 Catálogo de Referências e IDs Cadastrados</h2>
+                <p>Clique em "Editar" em qualquer linha para alterar nome, categoria, unidade ou estoque mínimo/inicial.</p>
+              </div>
+              <div class="fat-table-wrap">
+                <table class="fat-sheet-table">
+                  <thead>
+                    <tr>
+                      <th>ID / Ref</th>
+                      <th>Item</th>
+                      <th>Categoria</th>
+                      <th>Unid.</th>
+                      <th>Mínimo</th>
+                      <th>Inicial</th>
+                      <th>Atual</th>
+                      <th>Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody id="fat-ref-list-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ABA 5: AUDITORIA COMPLETA -->
+        <section id="fat-view-auditoria" class="fat-view">
+          <div class="fat-card">
+            <div class="fat-toolbar">
+              <div class="fat-toolbar-left">
+                <input type="search" id="fat-audit-search" class="fat-input" placeholder="🔎 Pesquisar item, ID, responsável ou observação...">
+                <select id="fat-audit-type" class="fat-select">
+                  <option value="">Todos os Tipos</option>
+                  <option value="Reposição">📥 Entradas (Compra/Reposição)</option>
+                  <option value="Retirada">📤 Saídas (Uso/Expedição)</option>
+                  <option value="Ajuste/Contagem">📋 Contagem / Ajustes</option>
+                  <option value="Cadastro">🏷️ Cadastro Inicial</option>
+                </select>
+              </div>
+              <div class="fat-toolbar-right">
+                <button type="button" id="fat-export-audit-btn" class="fat-btn fat-btn-primary">📥 Baixar Auditoria (CSV)</button>
+              </div>
+            </div>
+
+            <div class="fat-table-wrap">
+              <table class="fat-sheet-table">
+                <thead>
+                  <tr>
+                    <th>Data / Hora</th>
+                    <th>ID / Ref</th>
+                    <th>Insumo</th>
+                    <th>Tipo de Operação</th>
+                    <th>Qtd Movimentada</th>
+                    <th>Saldo Antes → Depois</th>
+                    <th>Responsável</th>
+                    <th>Observação / Detalhe</th>
+                  </tr>
+                </thead>
+                <tbody id="fat-audit-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ABA 6: COMO USAR ESTA PLANILHA -->
+        <section id="fat-view-guia" class="fat-view">
+          <div class="fat-card">
+            <div class="fat-card-header">
+              <h2>📖 COMO USAR ESTA PLANILHA DE CONTROLE — SETOR DE FATURAMENTO</h2>
+              <p>Guia oficial de operação do controle de insumos para termos de garantia, embalagens e materiais de expedição.</p>
+            </div>
+            <div class="fat-guide-grid">
+              <div class="fat-guide-step">
+                <span class="fat-step-num">1</span>
+                <div>
+                  <h3>Aba "Movimentações"</h3>
+                  <p>Toda vez que você <strong>RECEBER</strong> um insumo novo (compra/reposição) ou <strong>USAR</strong> um insumo (saída), lance uma linha aqui: data, item, tipo (<strong>Entrada</strong> ou <strong>Saída</strong>), quantidade e responsável.</p>
+                </div>
+              </div>
+              <div class="fat-guide-step">
+                <span class="fat-step-num">2</span>
+                <div>
+                  <h3>Aba "Estoque" (Painel Principal)</h3>
+                  <p>É o painel principal. Ele é calculado automaticamente a partir da aba "Movimentações" — você não precisa digitar o estoque atual manualmente nas movimentações do dia a dia, ele soma e subtrai sozinho.</p>
+                </div>
+              </div>
+              <div class="fat-guide-step">
+                <span class="fat-step-num">3</span>
+                <div>
+                  <h3>Células em Amarelo (Editáveis)</h3>
+                  <p>Preencha manualmente na aba "Estoque" as células destacadas em amarelo:<br>
+                  • <strong>Estoque Mínimo:</strong> a partir de quanto o item deve soar o alerta de reposição.<br>
+                  • <strong>Estoque Inicial:</strong> quantidade que você tinha em mãos no dia em que começou a usar a planilha.</p>
+                </div>
+              </div>
+              <div class="fat-guide-step">
+                <span class="fat-step-num">4</span>
+                <div>
+                  <h3>Coluna "Status" Automática</h3>
+                  <p>A coluna Status muda sozinha, com cor e ícone:<br>
+                  🔴 <strong>REPOR</strong> = está no mínimo ou abaixo<br>
+                  🟡 <strong>ATENÇÃO</strong> = está perto do mínimo (até 50% acima)<br>
+                  🟢 <strong>OK</strong> = estoque saudável</p>
+                </div>
+              </div>
+              <div class="fat-guide-step">
+                <span class="fat-step-num">5</span>
+                <div>
+                  <h3>Cores por Categoria</h3>
+                  <p>Cada categoria de item (<em>Carregadores, Documentos, Embalagem, Ferramentas, Impressão</em>) possui uma cor própria na aba Estoque para facilitar a leitura visual imediata.</p>
+                </div>
+              </div>
+              <div class="fat-guide-step">
+                <span class="fat-step-num">6</span>
+                <div>
+                  <h3>Adicionar Novo Insumo / Contagem</h3>
+                  <p>Use a aba <strong>"Criar Referência e/ou ID"</strong> para cadastrar novos itens (as fórmulas de Entradas, Saídas, Estoque Atual, Status e Última Movimentação são aplicadas automaticamente) e a aba <strong>"Contagem / Balanço"</strong> para conferências físicas de prateleira.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
     <!-- Modals -->
     <dialog id="item-dialog">
       <form id="item-form" class="dialog-body">
@@ -425,6 +856,6 @@
     </dialog>
 
 
-    <script src="app.js?v=4.0"></script>
+    <script src="app.js?v=4.1"></script>
   </body>
 </html>

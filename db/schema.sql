@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS supplies (
     name TEXT UNIQUE NOT NULL,
     category TEXT,
     sector TEXT NOT NULL DEFAULT 'tecnica',
+    unit TEXT NOT NULL DEFAULT 'un',
+    initial_quantity INTEGER NOT NULL DEFAULT 0,
     supplier TEXT,
     note TEXT,
     minimum_quantity INTEGER NOT NULL DEFAULT 0,
