@@ -597,8 +597,10 @@ label {
 
 input, select {
     width: 100%;
-    background: rgba(12, 5, 8, 0.85) !important;
+    background: #120609 !important;
+    background-color: #120609 !important;
     color: var(--text-primary) !important;
+    color-scheme: dark;
     padding: 0.78rem 1rem;
     margin-top: 0.3rem;
     border: 1px solid rgba(220, 38, 38, 0.25) !important;
@@ -612,8 +614,15 @@ input, select {
 input:focus, select:focus {
     border-color: #ef4444 !important;
     outline: none;
-    background: rgba(20, 7, 11, 0.95) !important;
+    background: #18080c !important;
+    background-color: #18080c !important;
     box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2) !important;
+}
+
+select option {
+    background: #18080c !important;
+    background-color: #18080c !important;
+    color: #faf5f6 !important;
 }
 
 button {
@@ -1095,18 +1104,44 @@ dialog::backdrop {
     flex-wrap: wrap;
 }
 
-.fat-input, .fat-select {
+.fat-input,
+.fat-select,
+#faturamento-shell .fat-input,
+#faturamento-shell .fat-select,
+#faturamento-shell select {
     background: #ffffff !important;
+    background-color: #ffffff !important;
     color: #0f172a !important;
     border: 1px solid #cbd5e1 !important;
     border-radius: 8px !important;
     padding: 0.55rem 0.85rem !important;
     font-size: 0.9rem !important;
     box-shadow: none !important;
+    color-scheme: light !important;
 }
-.fat-input:focus, .fat-select:focus {
+.fat-input:focus,
+.fat-select:focus,
+.fat-input:active,
+.fat-select:active,
+#faturamento-shell .fat-input:focus,
+#faturamento-shell .fat-select:focus,
+#faturamento-shell select:focus,
+#faturamento-shell select:active {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
     border-color: #10b981 !important;
     outline: 2px solid rgba(16, 185, 129, 0.2) !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
+    color-scheme: light !important;
+}
+.fat-select option,
+.fat-shell select option,
+#faturamento-shell select option {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    font-weight: 500;
 }
 
 #fat-search-input {

@@ -1,9 +1,9 @@
-const CACHE_NAME = 'stockflow-cache-v6';
+const CACHE_NAME = 'stockflow-cache-v8';
 const urlsToCache = [
   './',
   './index.html',
   './app.js?v=4.2',
-  './styles.css?v=4.2',
+  './styles.css?v=4.4',
   './manifest.json'
 ];
 
