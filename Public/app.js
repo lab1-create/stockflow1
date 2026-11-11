@@ -301,9 +301,21 @@ function setView(view) {
     renderAll();
 }
 
+function formatCSVCell(val) {
+    if (val === null || val === undefined) return '""';
+    if (typeof val === 'number') return String(val);
+    let str = String(val);
+    if (str.startsWith('"') && str.endsWith('"') && str.length >= 2) {
+        str = str.slice(1, -1);
+    }
+    return `"${str.replace(/"/g, '""')}"`;
+}
+
 function exportCSV(filename, headers, rows) {
-    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const formattedHeaders = headers.map(formatCSVCell).join(";");
+    const formattedRows = rows.map(r => r.map(formatCSVCell).join(";"));
+    const csvContent = formattedHeaders + "\r\n" + formattedRows.join("\r\n") + "\r\n";
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     if (link.download !== undefined) {
         const url = URL.createObjectURL(blob);
@@ -313,33 +325,30 @@ function exportCSV(filename, headers, rows) {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 }
 
 function handleExportCritical() {
     const criticalItems = state.items.filter(i => Number(i.qty) <= 1);
     const headers = ["LISTA DE INSUMOS", "QUANTIDADE"];
-    const rows = criticalItems.map(i => {
-        // Exportando vazio na quantidade para preenchimento manual, e uma fórmula simples para o Excel (ex: =B2*D2)
-        // Mas como a fórmula varia por idioma (C2*D2) e csv escapa coisas, melhor deixar o TOTAL em branco ou sem fórmula complexa.
-        return [`"${escapeHTML(i.name)}"`, ""];
-    });
+    const rows = criticalItems.map(i => [i.name, ""]);
     exportCSV(`pedido_insumos_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
 }
 
 function handleExportHistory() {
-    const headers = ["Data", "Tipo", "Operador", "Codigo", "Insumo", "Qtd", "Antes", "Depois", "Destino", "Obs"];
+    const headers = ["Data", "Tipo", "Operador", "Código", "Insumo", "Qtd", "Antes", "Depois", "Destino", "Obs"];
     const rows = state.history.map(h => [
-        `"${formatDate(h.at)}"`,
+        formatDate(h.at),
         h.type,
-        `"${h.user}"`,
+        h.user,
         h.itemCode,
-        `"${h.itemName}"`,
+        h.itemName,
         h.qty,
-        h.qtyBefore,
-        h.qtyAfter,
-        `"${escapeHTML(h.destination)}"`,
-        `"${escapeHTML(h.note)}"`
+        h.qtyBefore ?? '',
+        h.qtyAfter ?? '',
+        h.destination || '',
+        h.note || ''
     ]);
     exportCSV(`auditoria_estoque_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
 }
@@ -1579,21 +1588,21 @@ function initFaturamentoEvents() {
 
     // Exportar Planilha Faturamento (CSV)
     $("#fat-export-sheet-btn")?.addEventListener("click", () => {
-        const headers = ["ID", "Item", "Categoria", "Unidade", "Estoque Inicial", "Entradas", "Saidas", "Estoque Atual", "Estoque Minimo", "Status", "Ultima Movimentacao"];
+        const headers = ["ID", "Item", "Categoria", "Unidade", "Estoque Inicial", "Entradas", "Saídas", "Estoque Atual", "Estoque Mínimo", "Status", "Última Movimentação"];
         const rows = getFatItems().map(i => {
             const st = getFatStatus(i);
             return [
-                `"${i.code}"`,
-                `"${escapeHTML(i.name)}"`,
-                `"${escapeHTML(i.category || '')}"`,
-                `"${escapeHTML(i.unit || 'un')}"`,
+                i.code,
+                i.name,
+                i.category || '',
+                i.unit || 'un',
                 Number(i.initialQty) || 0,
                 Number(i.entriesTotal) || 0,
                 Number(i.exitsTotal) || 0,
                 Number(i.qty) || 0,
                 Number(i.min) || 0,
-                `"${st.key}"`,
-                `"${i.lastMovementAt ? formatDate(i.lastMovementAt) : ''}"`
+                st.key,
+                i.lastMovementAt ? formatDate(i.lastMovementAt) : ''
             ];
         });
         exportCSV(`planilha_faturamento_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
@@ -1601,17 +1610,17 @@ function initFaturamentoEvents() {
 
     // Exportar Auditoria Faturamento (CSV)
     $("#fat-export-audit-btn")?.addEventListener("click", () => {
-        const headers = ["Data", "ID", "Insumo", "Tipo", "Qtd", "Antes", "Depois", "Responsavel", "Observacao"];
+        const headers = ["Data", "ID", "Insumo", "Tipo", "Qtd", "Antes", "Depois", "Responsável", "Observação"];
         const rows = state.history.filter(h => h.sector === 'faturamento').map(h => [
-            `"${formatDate(h.at)}"`,
-            `"${h.itemCode}"`,
-            `"${escapeHTML(h.itemName)}"`,
-            `"${h.type}"`,
+            formatDate(h.at),
+            h.itemCode,
+            h.itemName,
+            h.type,
             h.qty,
             h.qtyBefore ?? '',
             h.qtyAfter ?? '',
-            `"${escapeHTML(h.user)}"`,
-            `"${escapeHTML(h.note || '')}"`
+            h.user,
+            h.note || ''
         ]);
         exportCSV(`auditoria_faturamento_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
     });
