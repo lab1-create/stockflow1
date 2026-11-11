@@ -15,6 +15,9 @@ function escapeHTML(str) {
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
         navigator.serviceWorker.register("./sw.js")
+            .then(reg => {
+                reg.update();
+            })
             .catch(err => console.error("SW Registration failed:", err));
     });
 }
@@ -311,6 +314,35 @@ function formatCSVCell(val) {
     return `"${str.replace(/"/g, '""')}"`;
 }
 
+function exportSpreadsheet(filename, sheetName, headers, rows) {
+    if (window.XLSX) {
+        try {
+            const data = [headers, ...rows];
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            
+            // Auto-ajustar largura das colunas
+            const colWidths = headers.map((h, i) => {
+                let maxLen = String(h).length;
+                rows.forEach(r => {
+                    const len = String(r[i] ?? '').length;
+                    if (len > maxLen) maxLen = len;
+                });
+                return { wch: Math.min(Math.max(maxLen + 3, 10), 60) };
+            });
+            ws['!cols'] = colWidths;
+
+            XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Planilha');
+            const cleanName = filename.replace(/\.(csv|xlsx)$/i, '') + '.xlsx';
+            XLSX.writeFile(wb, cleanName);
+            return;
+        } catch (err) {
+            console.error("Erro ao gerar XLSX, usando fallback CSV:", err);
+        }
+    }
+    exportCSV(filename.replace(/\.xlsx$/i, '.csv'), headers, rows);
+}
+
 function exportCSV(filename, headers, rows) {
     const formattedHeaders = headers.map(formatCSVCell).join(";");
     const formattedRows = rows.map(r => r.map(formatCSVCell).join(";"));
@@ -333,7 +365,7 @@ function handleExportCritical() {
     const criticalItems = state.items.filter(i => Number(i.qty) <= 1);
     const headers = ["LISTA DE INSUMOS", "QUANTIDADE"];
     const rows = criticalItems.map(i => [i.name, ""]);
-    exportCSV(`pedido_insumos_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
+    exportSpreadsheet(`pedido_insumos_${new Date().toISOString().slice(0,10)}.xlsx`, "Estoque Crítico", headers, rows);
 }
 
 function handleExportHistory() {
@@ -350,7 +382,7 @@ function handleExportHistory() {
         h.destination || '',
         h.note || ''
     ]);
-    exportCSV(`auditoria_estoque_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
+    exportSpreadsheet(`auditoria_estoque_${new Date().toISOString().slice(0,10)}.xlsx`, "Auditoria Geral", headers, rows);
 }
 
 function renderAll() {
@@ -1586,8 +1618,7 @@ function initFaturamentoEvents() {
     $("#fat-generate-id-btn")?.addEventListener("click", suggestNextFatId);
     $("#fat-ref-cancel-edit")?.addEventListener("click", resetFatReferenceForm);
 
-    // Exportar Planilha Faturamento (CSV)
-    $("#fat-export-sheet-btn")?.addEventListener("click", () => {
+    function getFatExportData() {
         const headers = ["ID", "Item", "Categoria", "Unidade", "Estoque Inicial", "Entradas", "Saídas", "Estoque Atual", "Estoque Mínimo", "Status", "Última Movimentação"];
         const rows = getFatItems().map(i => {
             const st = getFatStatus(i);
@@ -1605,11 +1636,10 @@ function initFaturamentoEvents() {
                 i.lastMovementAt ? formatDate(i.lastMovementAt) : ''
             ];
         });
-        exportCSV(`planilha_faturamento_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
-    });
+        return { headers, rows };
+    }
 
-    // Exportar Auditoria Faturamento (CSV)
-    $("#fat-export-audit-btn")?.addEventListener("click", () => {
+    function getFatAuditExportData() {
         const headers = ["Data", "ID", "Insumo", "Tipo", "Qtd", "Antes", "Depois", "Responsável", "Observação"];
         const rows = state.history.filter(h => h.sector === 'faturamento').map(h => [
             formatDate(h.at),
@@ -1622,6 +1652,30 @@ function initFaturamentoEvents() {
             h.user,
             h.note || ''
         ]);
+        return { headers, rows };
+    }
+
+    // Exportar Planilha Faturamento (Excel)
+    $("#fat-export-sheet-btn")?.addEventListener("click", () => {
+        const { headers, rows } = getFatExportData();
+        exportSpreadsheet(`planilha_faturamento_${new Date().toISOString().slice(0, 10)}.xlsx`, "Estoque Faturamento", headers, rows);
+    });
+
+    // Exportar Planilha Faturamento (CSV)
+    $("#fat-export-csv-btn")?.addEventListener("click", () => {
+        const { headers, rows } = getFatExportData();
+        exportCSV(`planilha_faturamento_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+    });
+
+    // Exportar Auditoria Faturamento (Excel)
+    $("#fat-export-audit-btn")?.addEventListener("click", () => {
+        const { headers, rows } = getFatAuditExportData();
+        exportSpreadsheet(`auditoria_faturamento_${new Date().toISOString().slice(0, 10)}.xlsx`, "Auditoria Faturamento", headers, rows);
+    });
+
+    // Exportar Auditoria Faturamento (CSV)
+    $("#fat-export-audit-csv-btn")?.addEventListener("click", () => {
+        const { headers, rows } = getFatAuditExportData();
         exportCSV(`auditoria_faturamento_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
     });
 

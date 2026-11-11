@@ -172,7 +172,7 @@
             <section class="panel">
               <div class="panel-head">
                 <h2>Alerta: Estoque Crítico</h2>
-                <button id="export-critical-btn" class="primary-action" style="padding: 0.4rem 1rem; font-size: 0.85rem;">Exportar Pedido (CSV)</button>
+                <button id="export-critical-btn" class="primary-action" style="padding: 0.4rem 1rem; font-size: 0.85rem;">Exportar Pedido (Excel)</button>
               </div>
               <p class="muted" style="margin-bottom: 10px; font-size: 0.85rem;">Insumos com apenas 1 unidade ou zerados.</p>
               <div id="critical-list" class="compact-list" style="max-height: 300px; overflow-y: auto;"></div>
@@ -369,7 +369,7 @@
                   <select id="technician-filter" data-admin-only>
                     <option value="">Todos os tecnicos</option>
                   </select>
-                  <button id="export-history-btn" class="primary-action">Baixar Planilha</button>
+                  <button id="export-history-btn" class="primary-action">Baixar Planilha (Excel)</button>
                 </div>
               </div>
               <div class="tabs" style="display: flex; gap: 10px; margin-top: 5px; border-bottom: 1px solid #444;">
@@ -480,7 +480,8 @@
                 </select>
               </div>
               <div class="fat-toolbar-right">
-                <button type="button" id="fat-export-sheet-btn" class="fat-btn fat-btn-outline">📥 Exportar Planilha (CSV)</button>
+                <button type="button" id="fat-export-sheet-btn" class="fat-btn fat-btn-primary" title="Exportar no formato nativo do Excel">📥 Exportar Planilha (Excel)</button>
+                <button type="button" id="fat-export-csv-btn" class="fat-btn fat-btn-outline" title="Exportar em formato texto CSV">📄 CSV</button>
                 <button type="button" id="fat-jump-mov-btn" class="fat-btn fat-btn-secondary">🔄 Lançar Entrada/Saída</button>
                 <button type="button" id="fat-jump-ref-btn" class="fat-btn fat-btn-primary">+ Nova Referência / ID</button>
               </div>
@@ -729,7 +730,8 @@
                 </select>
               </div>
               <div class="fat-toolbar-right">
-                <button type="button" id="fat-export-audit-btn" class="fat-btn fat-btn-primary">📥 Baixar Auditoria (CSV)</button>
+                <button type="button" id="fat-export-audit-btn" class="fat-btn fat-btn-primary" title="Exportar no formato nativo do Excel">📥 Baixar Auditoria (Excel)</button>
+                <button type="button" id="fat-export-audit-csv-btn" class="fat-btn fat-btn-outline" title="Exportar em formato texto CSV">📄 CSV</button>
               </div>
             </div>
 
@@ -906,6 +908,7 @@
     </dialog>
 
 
-    <script src="app.js?v=4.5"></script>
+    <script src="xlsx.full.min.js"></script>
+    <script src="app.js?v=4.6"></script>
   </body>
 </html>
