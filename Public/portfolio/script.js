@@ -1,63 +1,39 @@
 const DEFAULT_PROJECTS = [
   {
     id: "datasys-automove-rpa",
-    title: "DataSys AutoMove RPA — Automação de Movimentação por IMEI",
+    title: "Robô DataSys AutoMove — Movimentação Automática por IMEI",
     category: "automacao",
-    categoryLabel: "Automação RPA · Python",
-    status: "🟢 Em Operação",
+    categoryLabel: "Robô de Automação (Python)",
+    status: "🟢 Em Uso na Operação",
     description:
-      "Aplicação RPA completa para conferência e movimentação em lote de aparelhos no sistema DataSys ERP. Inclui download automatizado do Relatório de Estoque de Seriais via Playwright, sanitização rigorosa de planilhas com Pandas/openpyxl (preservando 15 dígitos e zeros à esquerda), validação de duplicidades, modo Dry-Run, pausa inteligente Human-in-the-Loop e terminal de logs em tempo real via WebSocket.",
-    tags: ["Python 3.12+", "FastAPI", "Playwright RPA", "WebSockets", "Pandas & openpyxl", "SQLite", "Tailwind CSS"],
-    link: "#case-stockflow",
-    linkLabel: "Testar Simulador RPA Acima ↑"
-  },
-  {
-    id: "painel-triadores-rpa",
-    title: "Painel de Triagem & Automação de Transferências",
-    category: "automacao",
-    categoryLabel: "Automação & Auditoria",
-    status: "🟢 Em Operação",
-    description:
-      "Sistema operacional em Python para automação de transferências do setor de Triagem, com geração automática de logs de auditoria detalhados e módulo integrado de disparo de notificações por e-mail.",
-    tags: ["Python", "Automação de Processos", "Logs de Auditoria", "Notificação E-mail"],
-    link: "#case-stockflow",
-    linkLabel: "Ver Ecossistema RPA ↑"
+      "Robô que faz sozinho a transferência de centenas de celulares por código IMEI dentro do sistema DataSys. O operador apenas cola a lista de códigos e o robô abre o navegador, baixa a base de estoque, protege códigos com zero inicial e transfere tudo em segundos gerando uma planilha Excel no final.",
+    tags: ["Python", "Automação de Navegador", "Planilhas Excel", "Painel Web"],
+    link: "#video-robo",
+    linkLabel: "🎬 Assistir Vídeo do Robô Acima ↑"
   },
   {
     id: "stockflow-core",
-    title: "StockFlow — Sistema Integrado de Estoque & Laboratório",
+    title: "StockFlow — Controle de Peças da Assistência Técnica",
     category: "fullstack",
-    categoryLabel: "Full-Stack · Produção",
-    status: "🟢 Em Produção",
+    categoryLabel: "Sistema Web",
+    status: "🟢 Online em Produção",
     description:
-      "Sistema web completo desenvolvido para controle de insumos técnicos com interface Vermelho Dark Sofisticado, fila de aprovação de retiradas em tempo real, rastreabilidade por técnico e bancada, devoluções e balanço físico auditável.",
-    tags: ["Node.js", "PostgreSQL", "Supabase", "Express", "PWA", "Firebase Hosting"],
+      "Sistema com visual Vermelho Dark Sofisticado para o laboratório técnico. Cada técnico solicita ou devolve peças pelo próprio login, o administrador libera com 1 clique, faz a contagem física da prateleira e sabe exatamente com quem está cada insumo.",
+    tags: ["Node.js", "Banco de Dados", "Celular & Computador"],
     link: "https://stockflow-outlet.web.app",
-    linkLabel: "Acessar Sistema ↗"
+    linkLabel: "Abrir Sistema Online ↗"
   },
   {
     id: "stockflow-faturamento",
-    title: "Módulo ERP Faturamento — Planilha Inteligente Web",
+    title: "StockFlow Faturamento — Planilha Automática na Web",
     category: "automacao",
-    categoryLabel: "Automação & ERP",
-    status: "🟢 Em Produção",
+    categoryLabel: "Controle de Expedição",
+    status: "🟢 Online em Produção",
     description:
-      "Transformação de planilha manual de controle de termos de garantia, embalagens e materiais de expedição em uma aplicação web com cálculo automático de entradas/saídas e alertas visuais (REPOR, ATENÇÃO, OK).",
-    tags: ["JavaScript ES6+", "SQL Aggregations", "Automação de Estoque", "Exportação CSV"],
+      "Tela criada especialmente para o setor de Faturamento controlar caixas, sacolas, etiquetas e termos de garantia. Soma entradas e saídas sozinha e muda o alerta automaticamente com cores (🔴 REPOR, 🟡 ATENÇÃO e 🟢 OK).",
+    tags: ["JavaScript", "Alertas Automáticos", "Exportação Excel/CSV"],
     link: "https://stockflow-outlet.web.app",
-    linkLabel: "Ver Módulo em Produção ↗"
-  },
-  {
-    id: "stockflow-api",
-    title: "API RESTful Multi-Setor & Motor de Auditoria ACID",
-    category: "backend",
-    categoryLabel: "Backend & Segurança",
-    status: "🟢 Em Produção",
-    description:
-      "Arquitetura backend com autenticação JWT + Cookies HttpOnly, hash Bcrypt, auto-migração de schema no boot, bloqueio de linha (FOR UPDATE) para evitar concorrência de saldo e rate-limiting.",
-    tags: ["Node.js", "Express", "JWT", "Bcrypt", "PostgreSQL ACID", "Render Cloud"],
-    link: "https://github.com/lab1-create/stockflow1",
-    linkLabel: "Ver Arquitetura ↗"
+    linkLabel: "Ver Sistema Online ↗"
   }
 ];
 
@@ -149,11 +125,11 @@ function renderSimulatorTable() {
   }).join("");
 }
 
-function renderProjects(filter = "all") {
+function renderProjects() {
   const grid = document.getElementById("projects-grid");
   if (!grid) return;
 
-  const projects = getAllProjects().filter(p => filter === "all" || p.category === filter);
+  const projects = getAllProjects();
 
   grid.innerHTML = projects.map(p => `
     <article class="project-card">
@@ -170,137 +146,84 @@ function renderProjects(filter = "all") {
           ${(p.tags || []).map(t => `<span>${t}</span>`).join("")}
         </div>
         <div class="proj-links">
-          <a href="${p.link || '#'}" ${String(p.link || '').startsWith('http') ? 'target="_blank" rel="noopener"' : ''} class="proj-link">${p.linkLabel || 'Ver Detalhes ↗'}</a>
+          <a href="${p.link || '#'}" ${String(p.link || '').startsWith('http') ? 'target="_blank" rel="noopener"' : ''} class="proj-link">${p.linkLabel || 'Ver Projeto ↗'}</a>
         </div>
       </div>
     </article>
   `).join("");
 }
 
-// Simulador DataSys AutoMove RPA
-let rpaSimRunning = false;
+// =========================================================================
+// PLAYER DE VÍDEO ANIMADO DO ROBÔ DATASYS (4 CENAS AUTOMÁTICAS)
+// =========================================================================
+let currentVideoScene = 0;
+const totalVideoScenes = 4;
+let isVideoPlaying = true;
+let videoTimer = null;
 
-function parseImeis() {
-  const raw = document.getElementById("rpa-imei-input")?.value || "";
-  const lines = raw.split(/\r?\n/).map(l => l.trim().replace(/^'/, "").replace(/\.0$/, "")).filter(Boolean);
-  const valid = [];
-  const invalid = [];
-  const seen = new Set();
-  const duplicates = [];
+function showVideoScene(index) {
+  currentVideoScene = (index + totalVideoScenes) % totalVideoScenes;
 
-  lines.forEach(imei => {
-    if (!/^\d{15}$/.test(imei)) {
-      invalid.push(imei);
-    } else if (seen.has(imei)) {
-      duplicates.push(imei);
-    } else {
-      seen.add(imei);
-      valid.push(imei);
-    }
+  document.querySelectorAll(".v-scene").forEach(sc => {
+    sc.classList.toggle("active", Number(sc.dataset.scene) === currentVideoScene);
   });
-  return { valid, invalid, duplicates };
+
+  document.querySelectorAll("[data-goto-scene]").forEach(btn => {
+    btn.classList.toggle("active", Number(btn.dataset.gotoScene) === currentVideoScene);
+  });
+
+  const fill = document.getElementById("video-progress-fill");
+  if (fill) {
+    fill.style.width = `${((currentVideoScene + 1) / totalVideoScenes) * 100}%`;
+  }
+
+  const label = document.getElementById("video-scene-indicator");
+  if (label) {
+    label.textContent = `Passo ${currentVideoScene + 1} de ${totalVideoScenes}`;
+  }
 }
 
-function updateImeiCounter() {
-  const counter = document.getElementById("rpa-imei-counter");
-  if (!counter) return;
-  const { valid, invalid, duplicates } = parseImeis();
-  counter.textContent = `${valid.length} válidos (15 dígitos)` +
-    (invalid.length ? ` · ${invalid.length} inválidos` : "") +
-    (duplicates.length ? ` · ${duplicates.length} duplicados` : "");
-}
-
-function appendRpaLog(text, cls = "log-info") {
-  const box = document.getElementById("rpa-console-logs");
-  if (!box) return;
-  const ts = new Date().toLocaleTimeString("pt-BR");
-  const div = document.createElement("div");
-  div.className = `log-line ${cls}`;
-  div.textContent = `[${ts}] ${text}`;
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-}
-
-async function runRpaSimulation() {
-  if (rpaSimRunning) return;
-  const { valid, invalid, duplicates } = parseImeis();
-  const dest = document.getElementById("rpa-dest-select")?.value || "TRIAGEM";
-  const pill = document.getElementById("rpa-state-pill");
-  const runBtn = document.getElementById("rpa-run-btn");
-
-  rpaSimRunning = true;
-  if (runBtn) runBtn.disabled = true;
-  if (pill) {
-    pill.className = "rpa-pill-running";
-    pill.textContent = "⚡ EXECUTANDO RPA";
-  }
-
-  const box = document.getElementById("rpa-console-logs");
-  if (box) box.innerHTML = "";
-
-  const wait = (ms) => new Promise(r => setTimeout(r, ms));
-
-  appendRpaLog(`[WS-CONNECTED] Iniciando job de movimentação no DataSys ERP (Empresa: OUTLETDOCELULAR)...`, "log-info");
-  await wait(450);
-
-  if (invalid.length > 0) {
-    appendRpaLog(`[VALIDATOR] ⚠️ ${invalid.length} serial(is) ignorado(s) por não terem 15 dígitos: ${invalid.join(", ")}`, "log-warn");
-    await wait(400);
-  }
-  if (duplicates.length > 0) {
-    appendRpaLog(`[VALIDATOR] ⚠️ ${duplicates.length} duplicidade(s) removida(s) automaticamente.`, "log-warn");
-    await wait(400);
-  }
-
-  if (valid.length === 0) {
-    appendRpaLog(`[ERROR] Nenhum IMEI válido de 15 dígitos para processar.`, "log-err");
-    rpaSimRunning = false;
-    if (runBtn) runBtn.disabled = false;
-    if (pill) { pill.className = "rpa-pill-idle"; pill.textContent = "● PRONTO"; }
-    return;
-  }
-
-  appendRpaLog(`[PLAYWRIGHT] Navegando: Administrativo -> Relatórios -> Estoque -> Estoque de Seriais...`, "log-info");
-  await wait(550);
-  appendRpaLog(`[PANDAS] Sanitizando planilha (Coluna B texto 15 dígitos, Coluna D Produto, Coluna P Estoque Atual)...`, "log-info");
-  await wait(550);
-
-  const sampleProducts = ["IPHONE 13 128GB MIDNIGHT", "IPHONE 11 64GB BRANCO", "GALAXY S22 128GB PRETO", "IPHONE 12 128GB AZUL"];
-  const sampleOrigins = ["ESTOQUE GERAL", "LABORATÓRIO", "ASSISTÊNCIA", "QUARENTENA"];
-
-  for (let i = 0; i < valid.length; i++) {
-    const imei = valid[i];
-    const prod = sampleProducts[i % sampleProducts.length];
-    const orig = sampleOrigins[i % sampleOrigins.length];
-    appendRpaLog(`[PLAYWRIGHT] (${i + 1}/${valid.length}) IMEI ${imei} localizado: ${prod} | Origem: ${orig} ➔ Destino: ${dest}`, "log-ok");
-    await wait(450);
-  }
-
-  appendRpaLog(`[SQLITE & EXCEL] ✅ Lote finalizado! ${valid.length}/${valid.length} aparelhos movimentados para "${dest}". Relatório .xlsx gerado.`, "log-ok");
-
-  rpaSimRunning = false;
-  if (runBtn) runBtn.disabled = false;
-  if (pill) {
-    pill.className = "rpa-pill-idle";
-    pill.textContent = "✅ CONCLUÍDO";
-  }
+function startVideoLoop() {
+  clearInterval(videoTimer);
+  videoTimer = setInterval(() => {
+    if (isVideoPlaying) {
+      showVideoScene(currentVideoScene + 1);
+    }
+  }, 4200);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   renderSimulatorTable();
-  renderProjects("all");
-  updateImeiCounter();
+  renderProjects();
+  showVideoScene(0);
+  startVideoLoop();
 
-  document.getElementById("rpa-imei-input")?.addEventListener("input", updateImeiCounter);
-  document.getElementById("rpa-run-btn")?.addEventListener("click", runRpaSimulation);
-  document.getElementById("rpa-reset-btn")?.addEventListener("click", () => {
-    const box = document.getElementById("rpa-console-logs");
-    if (box) {
-      box.innerHTML = `<div class="log-line log-info">[SYSTEM] Console limpo. Pronto para nova execução RPA.</div>`;
-    }
+  // Botões de cena do vídeo
+  document.querySelectorAll("[data-goto-scene]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      showVideoScene(Number(btn.dataset.gotoScene));
+      startVideoLoop();
+    });
   });
 
-  // Interactive simulator cells
+  // Botão Play / Pause do vídeo
+  const playPauseBtn = document.getElementById("video-play-pause-btn");
+  playPauseBtn?.addEventListener("click", () => {
+    isVideoPlaying = !isVideoPlaying;
+    playPauseBtn.textContent = isVideoPlaying ? "⏸ Pausar Vídeo" : "▶ Continuar Vídeo";
+  });
+
+  // Clique na barra de progresso do vídeo
+  const track = document.getElementById("video-progress-track");
+  track?.addEventListener("click", (e) => {
+    const rect = track.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    const targetScene = Math.min(totalVideoScenes - 1, Math.max(0, Math.floor(pct * totalVideoScenes)));
+    showVideoScene(targetScene);
+    startVideoLoop();
+  });
+
+  // Células amarelas da planilha de faturamento
   const simTbody = document.getElementById("sim-fat-tbody");
   simTbody?.addEventListener("input", (e) => {
     const initInput = e.target.closest("[data-sim-init]");
@@ -322,7 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Simulator tabs
+  // Abas do StockFlow
   document.querySelectorAll("[data-sim-tab]").forEach(btn => {
     btn.addEventListener("click", () => {
       const target = btn.dataset.simTab;
@@ -331,15 +254,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Project filter pills
-  document.querySelectorAll("[data-filter]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll("[data-filter]").forEach(b => b.classList.toggle("active", b === btn));
-      renderProjects(btn.dataset.filter);
-    });
-  });
-
-  // Copy LinkedIn post buttons
+  // Copiar Posts do LinkedIn
   document.querySelectorAll("[data-copy-post]").forEach(btn => {
     btn.addEventListener("click", () => {
       const postId = btn.dataset.copyPost;
@@ -353,7 +268,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Copy Portfolio Link button
+  // Copiar Link do Portfólio
   const copyLinkBtn = document.getElementById("copy-portfolio-link-btn");
   copyLinkBtn?.addEventListener("click", () => {
     const url = window.location.href.startsWith("http")
@@ -366,7 +281,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Add New Project Modal
+  // Modal Adicionar Novo Projeto
   const dialog = document.getElementById("add-project-dialog");
   const openBtn = document.getElementById("open-add-project-btn");
   const closeBtn = document.getElementById("close-project-dialog");
@@ -385,9 +300,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const link = document.getElementById("proj-link").value.trim() || "https://stockflow-outlet.web.app";
 
     const catMap = {
-      fullstack: "Full-Stack Web",
-      automacao: "Automação & RPA",
-      backend: "Backend & API"
+      fullstack: "Sistema Web",
+      automacao: "Robô / Automação"
     };
 
     saveCustomProject({
@@ -404,6 +318,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     form.reset();
     dialog?.close();
-    renderProjects("all");
+    renderProjects();
   });
 });
