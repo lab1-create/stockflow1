@@ -1,323 +1,411 @@
-const DEFAULT_PROJECTS = [
-  {
-    id: "datasys-automove-rpa",
-    title: "Robô DataSys AutoMove — Movimentação Automática por IMEI",
-    category: "automacao",
-    categoryLabel: "Robô de Automação (Python)",
-    status: "🟢 Em Uso na Operação",
-    description:
-      "Robô que faz sozinho a transferência de centenas de celulares por código IMEI dentro do sistema DataSys. O operador apenas cola a lista de códigos e o robô abre o navegador, baixa a base de estoque, protege códigos com zero inicial e transfere tudo em segundos gerando uma planilha Excel no final.",
-    tags: ["Python", "Automação de Navegador", "Planilhas Excel", "Painel Web"],
-    link: "#video-robo",
-    linkLabel: "🎬 Assistir Vídeo do Robô Acima ↑"
-  },
-  {
-    id: "stockflow-core",
-    title: "StockFlow — Controle de Peças da Assistência Técnica",
-    category: "fullstack",
-    categoryLabel: "Sistema Web",
-    status: "🟢 Online em Produção",
-    description:
-      "Sistema com visual Vermelho Dark Sofisticado para o laboratório técnico. Cada técnico solicita ou devolve peças pelo próprio login, o administrador libera com 1 clique, faz a contagem física da prateleira e sabe exatamente com quem está cada insumo.",
-    tags: ["Node.js", "Banco de Dados", "Celular & Computador"],
-    link: "https://stockflow-outlet.web.app",
-    linkLabel: "Abrir Sistema Online ↗"
-  },
-  {
-    id: "stockflow-faturamento",
-    title: "StockFlow Faturamento — Planilha Automática na Web",
-    category: "automacao",
-    categoryLabel: "Controle de Expedição",
-    status: "🟢 Online em Produção",
-    description:
-      "Tela criada especialmente para o setor de Faturamento controlar caixas, sacolas, etiquetas e termos de garantia. Soma entradas e saídas sozinha e muda o alerta automaticamente com cores (🔴 REPOR, 🟡 ATENÇÃO e 🟢 OK).",
-    tags: ["JavaScript", "Alertas Automáticos", "Exportação Excel/CSV"],
-    link: "https://stockflow-outlet.web.app",
-    linkLabel: "Ver Sistema Online ↗"
-  }
-];
-
-const SIMULATOR_ITEMS = [
-  { code: "FAT-001", name: "Carregador Outlet - Micro USB", category: "Carregadores", unit: "un", init: 25, entries: 15, exits: 5, min: 20 },
-  { code: "FAT-002", name: "Termo de garantia - 6 meses", category: "Documentos", unit: "un", init: 200, entries: 100, exits: 80, min: 200 },
-  { code: "FAT-004", name: "Caixa para envio", category: "Embalagem", unit: "un", init: 80, entries: 40, exits: 55, min: 100 },
-  { code: "FAT-005", name: "Fita gomada", category: "Embalagem", unit: "rolo", init: 8, entries: 4, exits: 2, min: 5 },
-  { code: "FAT-012", name: "Chavinha de gaveta de chip (ejetor SIM)", category: "Ferramentas", unit: "un", init: 600, entries: 200, exits: 120, min: 500 },
-  { code: "FAT-013", name: "Etiqueta térmica 100x150", category: "Impressão", unit: "rolo", init: 4, entries: 3, exits: 2, min: 5 }
-];
-
-const CATEGORY_COLORS = {
-  Carregadores: "background:#ede9fe; color:#6d28d9; border:1px solid #c4b5fd;",
-  Documentos: "background:#dbeafe; color:#1d4ed8; border:1px solid #93c5fd;",
-  Embalagem: "background:#ffedd5; color:#c2410c; border:1px solid #fdba74;",
-  Ferramentas: "background:#ccfbf1; color:#0f766e; border:1px solid #5eead4;",
-  Impressão: "background:#fce7f3; color:#be185d; border:1px solid #f9a8d4;"
-};
-
-function getCustomProjects() {
-  try {
-    const raw = localStorage.getItem("luiz_portfolio_custom_projects");
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveCustomProject(proj) {
-  const list = getCustomProjects();
-  list.unshift(proj);
-  localStorage.setItem("luiz_portfolio_custom_projects", JSON.stringify(list));
-}
-
-function getAllProjects() {
-  return [...getCustomProjects(), ...DEFAULT_PROJECTS];
-}
-
-function computeStatus(qty, min) {
-  if (qty <= min) {
-    return {
-      label: "🔴 REPOR",
-      style: "background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5;"
-    };
-  }
-  if (qty <= min * 1.5) {
-    return {
-      label: "🟡 ATENÇÃO",
-      style: "background:#fef3c7; color:#b45309; border:1px solid #fcd34d;"
-    };
-  }
-  return {
-    label: "🟢 OK",
-    style: "background:#dcfce7; color:#15803d; border:1px solid #86efac;"
-  };
-}
-
-function renderSimulatorTable() {
-  const tbody = document.getElementById("sim-fat-tbody");
-  if (!tbody) return;
-
-  tbody.innerHTML = SIMULATOR_ITEMS.map((item, idx) => {
-    const currentQty = Math.max(0, Number(item.init) + Number(item.entries) - Number(item.exits));
-    const st = computeStatus(currentQty, Number(item.min));
-    const catStyle = CATEGORY_COLORS[item.category] || "background:#e2e8f0; color:#334155;";
-    return `
-      <tr>
-        <td><code style="background:#f1f5f9; padding:2px 6px; border-radius:4px; font-weight:700;">${item.code}</code></td>
-        <td><strong>${item.name}</strong></td>
-        <td><span style="padding:3px 9px; border-radius:999px; font-size:0.74rem; font-weight:700; ${catStyle}">${item.category}</span></td>
-        <td>${item.unit}</td>
-        <td class="sim-yellow-cell">
-          <input type="number" min="0" class="sim-yellow-input" data-sim-init="${idx}" value="${item.init}">
-        </td>
-        <td style="color:#059669; font-weight:700;">+${item.entries}</td>
-        <td style="color:#dc2626; font-weight:700;">-${item.exits}</td>
-        <td style="font-weight:800; font-size:0.95rem;">${currentQty} ${item.unit}</td>
-        <td class="sim-yellow-cell">
-          <input type="number" min="0" class="sim-yellow-input" data-sim-min="${idx}" value="${item.min}">
-        </td>
-        <td>
-          <span style="padding:4px 10px; border-radius:999px; font-size:0.76rem; font-weight:700; display:inline-block; ${st.style}">
-            ${st.label}
-          </span>
-        </td>
-      </tr>
-    `;
-  }).join("");
-}
-
-function renderProjects() {
-  const grid = document.getElementById("projects-grid");
-  if (!grid) return;
-
-  const projects = getAllProjects();
-
-  grid.innerHTML = projects.map(p => `
-    <article class="project-card">
-      <div>
-        <div class="proj-top">
-          <span class="proj-cat">${p.categoryLabel}</span>
-          <span class="proj-status">${p.status}</span>
-        </div>
-        <h3>${p.title}</h3>
-        <p>${p.description}</p>
-      </div>
-      <div>
-        <div class="tag-list">
-          ${(p.tags || []).map(t => `<span>${t}</span>`).join("")}
-        </div>
-        <div class="proj-links">
-          <a href="${p.link || '#'}" ${String(p.link || '').startsWith('http') ? 'target="_blank" rel="noopener"' : ''} class="proj-link">${p.linkLabel || 'Ver Projeto ↗'}</a>
-        </div>
-      </div>
-    </article>
-  `).join("");
-}
-
-// =========================================================================
-// PLAYER DE VÍDEO ANIMADO DO ROBÔ DATASYS (4 CENAS AUTOMÁTICAS)
-// =========================================================================
-let currentVideoScene = 0;
-const totalVideoScenes = 4;
-let isVideoPlaying = true;
-let videoTimer = null;
-
-function showVideoScene(index) {
-  currentVideoScene = (index + totalVideoScenes) % totalVideoScenes;
-
-  document.querySelectorAll(".v-scene").forEach(sc => {
-    sc.classList.toggle("active", Number(sc.dataset.scene) === currentVideoScene);
-  });
-
-  document.querySelectorAll("[data-goto-scene]").forEach(btn => {
-    btn.classList.toggle("active", Number(btn.dataset.gotoScene) === currentVideoScene);
-  });
-
-  const fill = document.getElementById("video-progress-fill");
-  if (fill) {
-    fill.style.width = `${((currentVideoScene + 1) / totalVideoScenes) * 100}%`;
-  }
-
-  const label = document.getElementById("video-scene-indicator");
-  if (label) {
-    label.textContent = `Passo ${currentVideoScene + 1} de ${totalVideoScenes}`;
-  }
-}
-
-function startVideoLoop() {
-  clearInterval(videoTimer);
-  videoTimer = setInterval(() => {
-    if (isVideoPlaying) {
-      showVideoScene(currentVideoScene + 1);
-    }
-  }, 4200);
-}
-
 document.addEventListener("DOMContentLoaded", () => {
-  renderSimulatorTable();
-  renderProjects();
-  showVideoScene(0);
-  startVideoLoop();
-
-  // Botões de cena do vídeo
-  document.querySelectorAll("[data-goto-scene]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      showVideoScene(Number(btn.dataset.gotoScene));
-      startVideoLoop();
+  // Copiar post do LinkedIn
+  const copyPostBtn = document.getElementById("copy-post-btn");
+  const linkedinText = document.getElementById("linkedin-text");
+  copyPostBtn?.addEventListener("click", () => {
+    if (!linkedinText) return;
+    navigator.clipboard.writeText(linkedinText.textContent).then(() => {
+      const orig = copyPostBtn.textContent;
+      copyPostBtn.textContent = "✓ Copiado!";
+      setTimeout(() => { copyPostBtn.textContent = orig; }, 2200);
     });
   });
 
-  // Botão Play / Pause do vídeo
-  const playPauseBtn = document.getElementById("video-play-pause-btn");
-  playPauseBtn?.addEventListener("click", () => {
-    isVideoPlaying = !isVideoPlaying;
-    playPauseBtn.textContent = isVideoPlaying ? "⏸ Pausar Vídeo" : "▶ Continuar Vídeo";
-  });
-
-  // Clique na barra de progresso do vídeo
-  const track = document.getElementById("video-progress-track");
-  track?.addEventListener("click", (e) => {
-    const rect = track.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
-    const targetScene = Math.min(totalVideoScenes - 1, Math.max(0, Math.floor(pct * totalVideoScenes)));
-    showVideoScene(targetScene);
-    startVideoLoop();
-  });
-
-  // Células amarelas da planilha de faturamento
-  const simTbody = document.getElementById("sim-fat-tbody");
-  simTbody?.addEventListener("input", (e) => {
-    const initInput = e.target.closest("[data-sim-init]");
-    if (initInput) {
-      const idx = Number(initInput.dataset.simInit);
-      SIMULATOR_ITEMS[idx].init = Math.max(0, Number(initInput.value) || 0);
-      renderSimulatorTable();
-      const refocused = simTbody.querySelector(`[data-sim-init="${idx}"]`);
-      refocused?.focus();
-    }
-
-    const minInput = e.target.closest("[data-sim-min]");
-    if (minInput) {
-      const idx = Number(minInput.dataset.simMin);
-      SIMULATOR_ITEMS[idx].min = Math.max(0, Number(minInput.value) || 0);
-      renderSimulatorTable();
-      const refocused = simTbody.querySelector(`[data-sim-min="${idx}"]`);
-      refocused?.focus();
-    }
-  });
-
-  // Abas do StockFlow
-  document.querySelectorAll("[data-sim-tab]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const target = btn.dataset.simTab;
-      document.querySelectorAll("[data-sim-tab]").forEach(b => b.classList.toggle("active", b === btn));
-      document.querySelectorAll(".sim-panel").forEach(p => p.classList.toggle("active", p.id === `sim-panel-${target}`));
-    });
-  });
-
-  // Copiar Posts do LinkedIn
-  document.querySelectorAll("[data-copy-post]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const postId = btn.dataset.copyPost;
-      const pre = document.getElementById(postId);
-      if (!pre) return;
-      navigator.clipboard.writeText(pre.textContent).then(() => {
-        const originalText = btn.textContent;
-        btn.textContent = "✅ Copiado para o LinkedIn!";
-        setTimeout(() => { btn.textContent = originalText; }, 2500);
-      });
-    });
-  });
-
-  // Copiar Link do Portfólio
-  const copyLinkBtn = document.getElementById("copy-portfolio-link-btn");
-  copyLinkBtn?.addEventListener("click", () => {
+  // Copiar URL do portfólio
+  const copyUrlBtn = document.getElementById("copy-url-btn");
+  copyUrlBtn?.addEventListener("click", () => {
     const url = window.location.href.startsWith("http")
       ? window.location.href
       : "https://stockflow-outlet.web.app/portfolio/";
     navigator.clipboard.writeText(url).then(() => {
-      const orig = copyLinkBtn.textContent;
-      copyLinkBtn.textContent = "✅ Link Copiado!";
-      setTimeout(() => { copyLinkBtn.textContent = orig; }, 2500);
+      const orig = copyUrlBtn.textContent;
+      copyUrlBtn.textContent = "✓ Link copiado!";
+      setTimeout(() => { copyUrlBtn.textContent = orig; }, 2200);
     });
   });
 
-  // Modal Adicionar Novo Projeto
-  const dialog = document.getElementById("add-project-dialog");
-  const openBtn = document.getElementById("open-add-project-btn");
-  const closeBtn = document.getElementById("close-project-dialog");
-  const form = document.getElementById("add-project-form");
+  // =========================================================================
+  // VÍDEO EM CANVAS 60FPS — GRAVAÇÃO SIMULADA DA TELA DO ROBÔ DATASYS
+  // =========================================================================
+  const canvas = document.getElementById("rpa-video-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
 
-  openBtn?.addEventListener("click", () => dialog?.showModal());
-  closeBtn?.addEventListener("click", () => dialog?.close());
+  const toggleBtn = document.getElementById("v-toggle-btn");
+  const timeline = document.getElementById("v-timeline");
+  const progressEl = document.getElementById("v-timeline-progress");
+  const timerEl = document.getElementById("v-timer");
+  const wrapper = document.getElementById("video-canvas-wrapper");
 
-  form?.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const title = document.getElementById("proj-title").value.trim();
-    const category = document.getElementById("proj-category").value;
-    const status = document.getElementById("proj-status").value.trim();
-    const description = document.getElementById("proj-desc").value.trim();
-    const tags = document.getElementById("proj-tags").value.split(",").map(s => s.trim()).filter(Boolean);
-    const link = document.getElementById("proj-link").value.trim() || "https://stockflow-outlet.web.app";
+  const DURATION = 14.0; // 14 segundos de vídeo contínuo
+  let currentTime = 0;
+  let isPlaying = true;
+  let lastFrameTs = performance.now();
 
-    const catMap = {
-      fullstack: "Sistema Web",
-      automacao: "Robô / Automação"
-    };
+  const IMEI_LIST = [
+    { imei: "358912049182731", model: "iPhone 13 128GB", from: "ESTOQUE GERAL" },
+    { imei: "354091827364519", model: "iPhone 11 64GB", from: "LABORATÓRIO" },
+    { imei: "013948172635490", model: "Galaxy S22 128GB", from: "ASSISTÊNCIA" },
+    { imei: "359981726354112", model: "iPhone 12 128GB", from: "QUARENTENA" }
+  ];
 
-    saveCustomProject({
-      id: "proj-" + Date.now(),
-      title,
-      category,
-      categoryLabel: catMap[category] || "Projeto",
-      status: "🟢 " + status,
-      description,
-      tags,
-      link,
-      linkLabel: "Acessar Projeto ↗"
-    });
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+  }
 
-    form.reset();
-    dialog?.close();
-    renderProjects();
+  function lerp(a, b, t) {
+    const clamped = Math.max(0, Math.min(1, t));
+    return a + (b - a) * clamped;
+  }
+
+  function drawCursor(x, y, clicking = false) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (clicking) {
+      ctx.beginPath();
+      ctx.arc(4, 4, 16, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, 18);
+    ctx.lineTo(5, 14);
+    ctx.lineTo(9, 21);
+    ctx.lineTo(12, 19);
+    ctx.lineTo(8, 12);
+    ctx.lineTo(14, 12);
+    ctx.closePath();
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.strokeStyle = "#09090b";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function renderFrame(t) {
+    const W = canvas.width;
+    const H = canvas.height;
+
+    // Fundo da área de trabalho
+    ctx.fillStyle = "#07090e";
+    ctx.fillRect(0, 0, W, H);
+
+    // =========================================================
+    // JANELA ESQUERDA: PAINEL DO ROBÔ DATASYS AUTOMOVE RPA
+    // =========================================================
+    const lx = 24, ly = 22, lw = 380, lh = 395;
+    roundRect(lx, ly, lw, lh, 10);
+    ctx.fillStyle = "#0f1420";
+    ctx.fill();
+    ctx.strokeStyle = "#1e293b";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Cabeçalho janela esquerda
+    roundRect(lx, ly, lw, 36, [10, 10, 0, 0]);
+    ctx.fillStyle = "#161f30";
+    ctx.fill();
+
+    ctx.fillStyle = "#38bdf8";
+    ctx.font = "bold 12.5px Inter, sans-serif";
+    ctx.fillText("🤖 DataSys AutoMove RPA", lx + 14, ly + 22);
+
+    // Status pill no topo do robô
+    const isRobotActive = t >= 3.2 && t < 12.2;
+    const isRobotDone = t >= 12.2;
+    roundRect(lx + lw - 105, ly + 8, 92, 20, 10);
+    ctx.fillStyle = isRobotDone ? "rgba(16,185,129,0.2)" : (isRobotActive ? "rgba(56,189,248,0.2)" : "#1e293b");
+    ctx.fill();
+    ctx.fillStyle = isRobotDone ? "#34d399" : (isRobotActive ? "#38bdf8" : "#94a3b8");
+    ctx.font = "bold 10px JetBrains Mono, monospace";
+    ctx.fillText(isRobotDone ? "● CONCLUÍDO" : (isRobotActive ? "● RODANDO" : "● PRONTO"), lx + lw - 95, ly + 21);
+
+    // Campo Depósito de Destino
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "500 11px Inter, sans-serif";
+    ctx.fillText("1. Depósito de Destino no DataSys:", lx + 16, ly + 60);
+
+    roundRect(lx + 16, ly + 68, lw - 32, 32, 6);
+    ctx.fillStyle = "#090d14";
+    ctx.fill();
+    ctx.strokeStyle = "#334155";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = "bold 12px Inter, sans-serif";
+    ctx.fillText("📦 TRIAGEM (OUTLETDOCELULAR)", lx + 26, ly + 88);
+
+    // Campo Lista de IMEIs
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "500 11px Inter, sans-serif";
+    ctx.fillText("2. Lista de IMEIs colada pelo operador:", lx + 16, ly + 122);
+
+    roundRect(lx + 16, ly + 130, lw - 32, 130, 6);
+    ctx.fillStyle = "#090d14";
+    ctx.fill();
+    ctx.strokeStyle = t >= 0.8 && t < 2.8 ? "#38bdf8" : "#334155";
+    ctx.stroke();
+
+    // IMEIs sendo colados entre t=1.0s e t=2.2s
+    const visibleImeis = t < 1.0 ? 0 : (t < 1.4 ? 2 : 4);
+    for (let i = 0; i < visibleImeis; i++) {
+      const rowY = ly + 152 + i * 26;
+      ctx.fillStyle = "#e2e8f0";
+      ctx.font = "12px JetBrains Mono, monospace";
+      ctx.fillText(IMEI_LIST[i].imei, lx + 28, rowY);
+
+      // Tag 15 dígitos OK
+      roundRect(lx + lw - 125, rowY - 12, 95, 17, 4);
+      ctx.fillStyle = "rgba(16, 185, 129, 0.16)";
+      ctx.fill();
+      ctx.fillStyle = "#34d399";
+      ctx.font = "bold 9.5px Inter, sans-serif";
+      ctx.fillText("✓ 15 dígitos OK", lx + lw - 118, rowY);
+    }
+
+    // Botão Iniciar Movimentação
+    const btnClicked = t >= 2.9 && t <= 3.4;
+    roundRect(lx + 16, ly + 275, lw - 32, 38, 7);
+    ctx.fillStyle = btnClicked ? "#0284c7" : (t >= 3.2 ? "#1e293b" : "#0ea5e9");
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 12.5px Inter, sans-serif";
+    ctx.fillText(
+      isRobotDone ? "✓ Movimentação Finalizada" : (t >= 3.2 ? "⚡ Robô Trabalhando..." : "▶ Iniciar Movimentação Automática"),
+      lx + 72,
+      ly + 298
+    );
+
+    // Barra de Progresso dentro do Robô
+    const movedCount = t < 6.5 ? 0 : Math.min(4, Math.floor((t - 6.0) / 1.3));
+    const pct = t < 6.0 ? 0 : Math.min(100, Math.round(((t - 6.0) / 5.2) * 100));
+
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "11px Inter, sans-serif";
+    ctx.fillText(`Progresso do lote: ${movedCount} de 4 aparelhos`, lx + 16, ly + 338);
+    ctx.fillText(`${pct}%`, lx + lw - 44, ly + 338);
+
+    roundRect(lx + 16, ly + 346, lw - 32, 10, 5);
+    ctx.fillStyle = "#1e293b";
+    ctx.fill();
+    if (pct > 0) {
+      roundRect(lx + 16, ly + 346, ((lw - 32) * pct) / 100, 10, 5);
+      ctx.fillStyle = "#10b981";
+      ctx.fill();
+    }
+
+    // =========================================================
+    // JANELA DIREITA: GOOGLE CHROME — SISTEMA DATASYS ERP
+    // =========================================================
+    const rx = 424, ry = 22, rw = 472, rh = 395;
+    roundRect(rx, ry, rw, rh, 10);
+    ctx.fillStyle = "#0f1420";
+    ctx.fill();
+    ctx.strokeStyle = isRobotActive ? "#38bdf8" : "#1e293b";
+    ctx.lineWidth = isRobotActive ? 2 : 1.5;
+    ctx.stroke();
+
+    // Cabeçalho do navegador Chrome
+    roundRect(rx, ry, rw, 36, [10, 10, 0, 0]);
+    ctx.fillStyle = "#161f30";
+    ctx.fill();
+
+    ctx.fillStyle = "#e2e8f0";
+    ctx.font = "bold 12px Inter, sans-serif";
+    ctx.fillText("🌐 Google Chrome — DataSys ERP (Controlado pelo Robô)", rx + 14, ry + 22);
+
+    if (t < 3.4) {
+      // Aguardando início
+      ctx.fillStyle = "#64748b";
+      ctx.font = "13px Inter, sans-serif";
+      ctx.fillText("Aguardando comando do painel ao lado...", rx + 115, ry + 210);
+    } else if (t < 6.0) {
+      // Etapa de login e download automático da planilha
+      roundRect(rx + 24, ry + 64, rw - 48, 70, 8);
+      ctx.fillStyle = "#090d14";
+      ctx.fill();
+      ctx.strokeStyle = "#10b981";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = "#34d399";
+      ctx.font = "bold 12.5px Inter, sans-serif";
+      ctx.fillText("✓ 1. Login automático realizado no DataSys (OUTLETDOCELULAR)", rx + 38, ry + 92);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "11.5px Inter, sans-serif";
+      ctx.fillText("Robô acessou Administrativo ➔ Relatórios ➔ Estoque de Seriais", rx + 38, ry + 114);
+
+      if (t >= 4.5) {
+        roundRect(rx + 24, ry + 150, rw - 48, 75, 8);
+        ctx.fillStyle = "#090d14";
+        ctx.fill();
+        ctx.strokeStyle = "#38bdf8";
+        ctx.stroke();
+        ctx.fillStyle = "#38bdf8";
+        ctx.font = "bold 12.5px Inter, sans-serif";
+        ctx.fillText("⚡ 2. Planilha de estoque baixada e limpa com Pandas", rx + 38, ry + 178);
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "11.5px Inter, sans-serif";
+        ctx.fillText("4 aparelhos localizados. Iniciando transferência automática...", rx + 38, ry + 200);
+      }
+    } else {
+      // Tabela do DataSys transferindo cada aparelho ao vivo
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "bold 11px Inter, sans-serif";
+      ctx.fillText("TRANSFERÊNCIA AUTOMÁTICA DE ESTOQUE NO DATASYS:", rx + 20, ry + 62);
+
+      for (let i = 0; i < 4; i++) {
+        const item = IMEI_LIST[i];
+        const cardY = ry + 76 + i * 64;
+        const itemStart = 6.0 + i * 1.3;
+        const isDone = t >= itemStart + 0.9;
+        const isCurrent = t >= itemStart && !isDone;
+
+        roundRect(rx + 20, cardY, rw - 40, 54, 8);
+        ctx.fillStyle = isDone ? "rgba(16, 185, 129, 0.08)" : (isCurrent ? "rgba(56, 189, 248, 0.12)" : "#090d14");
+        ctx.fill();
+        ctx.strokeStyle = isDone ? "rgba(16, 185, 129, 0.4)" : (isCurrent ? "#38bdf8" : "#1e293b");
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = "#f8fafc";
+        ctx.font = "bold 12px Inter, sans-serif";
+        ctx.fillText(`${item.model}`, rx + 34, cardY + 22);
+
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "11px JetBrains Mono, monospace";
+        ctx.fillText(`IMEI: ${item.imei}`, rx + 34, cardY + 40);
+
+        // Status da linha
+        if (isDone) {
+          roundRect(rx + rw - 175, cardY + 15, 142, 24, 6);
+          ctx.fillStyle = "rgba(16, 185, 129, 0.2)";
+          ctx.fill();
+          ctx.fillStyle = "#34d399";
+          ctx.font = "bold 11px Inter, sans-serif";
+          ctx.fillText("✓ Movido p/ TRIAGEM", rx + rw - 165, cardY + 31);
+        } else if (isCurrent) {
+          roundRect(rx + rw - 175, cardY + 15, 142, 24, 6);
+          ctx.fillStyle = "rgba(56, 189, 248, 0.2)";
+          ctx.fill();
+          ctx.fillStyle = "#38bdf8";
+          ctx.font = "bold 11px Inter, sans-serif";
+          ctx.fillText("⚡ Transferindo...", rx + rw - 155, cardY + 31);
+        } else {
+          ctx.fillStyle = "#64748b";
+          ctx.font = "11px Inter, sans-serif";
+          ctx.fillText(`Origem: ${item.from}`, rx + rw - 170, cardY + 31);
+        }
+      }
+
+      // Banner final de Excel gerado
+      if (t >= 11.8) {
+        roundRect(rx + 20, ry + 338, rw - 40, 42, 8);
+        ctx.fillStyle = "#064e3b";
+        ctx.fill();
+        ctx.strokeStyle = "#10b981";
+        ctx.stroke();
+        ctx.fillStyle = "#ecfdf5";
+        ctx.font = "bold 12px Inter, sans-serif";
+        ctx.fillText("🎉 Concluído! Planilha 'resultado_datasys.xlsx' gerada com sucesso.", rx + 34, ry + 363);
+      }
+    }
+
+    // =========================================================
+    // LEGENDA EXPLICATIVA NA PARTE INFERIOR DO VÍDEO
+    // =========================================================
+    roundRect(24, 428, W - 48, 38, 8);
+    ctx.fillStyle = "#111827";
+    ctx.fill();
+
+    let caption = "PASSO 1: O operador cola os códigos IMEI de 15 dígitos no painel do robô.";
+    if (t >= 2.6 && t < 4.0) {
+      caption = "PASSO 2: Com 1 clique em 'Iniciar Movimentação', o robô assume o trabalho.";
+    } else if (t >= 4.0 && t < 6.2) {
+      caption = "PASSO 3: O robô abre o Chrome sozinho, entra no DataSys e baixa o estoque.";
+    } else if (t >= 6.2 && t < 11.8) {
+      caption = "PASSO 4: O robô transfere cada aparelho automaticamente para o setor TRIAGEM.";
+    } else if (t >= 11.8) {
+      caption = "RESULTADO: 100% dos aparelhos transferidos em segundos e relatório Excel salvo!";
+    }
+
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = "500 13px Inter, sans-serif";
+    ctx.fillText(caption, 42, 452);
+
+    // =========================================================
+    // CURSOR DO MOUSE ANIMADO (NOS PRIMEIROS 3.5 SEGUNDOS)
+    // =========================================================
+    if (t < 3.6) {
+      let cx = 200, cy = 200, clicking = false;
+      if (t < 1.0) {
+        cx = lerp(320, lx + 120, t / 1.0);
+        cy = lerp(100, ly + 180, t / 1.0);
+      } else if (t < 1.3) {
+        cx = lx + 120;
+        cy = ly + 180;
+        clicking = true;
+      } else if (t < 2.8) {
+        cx = lerp(lx + 120, lx + 180, (t - 1.3) / 1.5);
+        cy = lerp(ly + 180, ly + 295, (t - 1.3) / 1.5);
+      } else {
+        cx = lx + 180;
+        cy = ly + 295;
+        clicking = t >= 2.85 && t <= 3.25;
+      }
+      drawCursor(cx, cy, clicking);
+    }
+  }
+
+  function formatSec(s) {
+    const sec = Math.floor(s);
+    return `0:${String(sec).padStart(2, "0")}`;
+  }
+
+  function updateControlsUI() {
+    if (progressEl) {
+      progressEl.style.width = `${(currentTime / DURATION) * 100}%`;
+    }
+    if (timerEl) {
+      timerEl.textContent = `${formatSec(currentTime)} / 0:14`;
+    }
+  }
+
+  function loop(now) {
+    const dt = (now - lastFrameTs) / 1000;
+    lastFrameTs = now;
+
+    if (isPlaying) {
+      currentTime += dt;
+      if (currentTime >= DURATION) {
+        currentTime = 0;
+      }
+      updateControlsUI();
+    }
+
+    renderFrame(currentTime);
+    requestAnimationFrame(loop);
+  }
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    if (toggleBtn) {
+      toggleBtn.textContent = isPlaying ? "⏸" : "▶";
+    }
+  }
+
+  toggleBtn?.addEventListener("click", togglePlay);
+  wrapper?.addEventListener("click", togglePlay);
+
+  timeline?.addEventListener("click", (e) => {
+    const rect = timeline.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    currentTime = pct * DURATION;
+    updateControlsUI();
+    renderFrame(currentTime);
   });
+
+  requestAnimationFrame(loop);
 });

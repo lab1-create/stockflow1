@@ -3,532 +3,165 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Luiz | Portfólio de Sistemas & Automação</title>
-    <meta name="description" content="Portfólio de Luiz — Desenvolvedor de Sistemas Web e Robôs de Automação que economizam horas de trabalho manual.">
-    <meta property="og:title" content="Luiz — Criador de Sistemas Web & Robôs de Automação">
-    <meta property="og:description" content="Veja em vídeo como meus sistemas e robôs automatizam estoques, faturamento e movimentação de aparelhos.">
+    <title>Luiz — Sistemas Web & Automação</title>
+    <meta name="description" content="Portfólio minimalista de Luiz — Desenvolvedor de Sistemas Web e Automação.">
+    <meta property="og:title" content="Luiz — Sistemas Web & Automação">
+    <meta property="og:description" content="Projetos desenvolvidos para automatizar processos e gerenciar estoques em produção.">
     <meta property="og:type" content="website">
-    <meta name="theme-color" content="#07080c">
+    <meta name="theme-color" content="#09090b">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <div class="ambient-glow glow-crimson" aria-hidden="true"></div>
-    <div class="ambient-glow glow-emerald" aria-hidden="true"></div>
-
-    <header class="site-header">
-      <div class="container header-inner">
-        <a href="#top" class="brand-mark">
-          <span class="brand-dot"></span>
-          <span class="brand-name">LUIZ</span>
-          <span class="brand-tag">// PORTFÓLIO</span>
-        </a>
-
-        <nav class="main-nav" aria-label="Navegação principal">
-          <a href="#video-robo">🎬 Vídeo do Robô</a>
-          <a href="#case-stockflow">📦 Sistema de Estoque</a>
-          <a href="#projetos">Meus Projetos</a>
-          <a href="#linkedin-kit">Postar no LinkedIn</a>
+    <header class="header">
+      <div class="container header-bar">
+        <a href="#top" class="logo">Luiz<span>.dev</span></a>
+        <nav class="nav">
+          <a href="#projetos">Projetos</a>
+          <a href="#linkedin">LinkedIn</a>
+          <a href="https://stockflow-outlet.web.app" target="_blank" rel="noopener" class="nav-cta">StockFlow Ao Vivo ↗</a>
         </nav>
-
-        <div class="header-cta">
-          <span class="availability-pill">
-            <span class="pulse-dot"></span>
-            Projetos Reais em Uso
-          </span>
-          <a href="https://stockflow-outlet.web.app" target="_blank" rel="noopener" class="btn btn-sm btn-outline">
-            Abrir Sistema StockFlow ↗
-          </a>
-        </div>
       </div>
     </header>
 
-    <main id="top">
-      <!-- HERO SECTION (SIMPLES E DIRETO) -->
-      <section class="hero-section">
-        <div class="container hero-grid">
-          <div class="hero-copy">
-            <div class="eyebrow-badge">
-              <span class="mono-code">OLÁ, EU SOU O LUIZ 👋</span>
-            </div>
-            <h1>
-              Eu crio <span class="text-gradient">sistemas e robôs</span> que fazem o trabalho pesado da operação em segundos.
-            </h1>
-            <p class="hero-lead">
-              Transformo tarefas demoradas — como transferir centenas de celulares no sistema ou controlar estoques em planilhas manuais — em <strong>aplicações automáticas, rápidas e fáceis de usar</strong>.
-            </p>
-
-            <div class="hero-actions">
-              <a href="#video-robo" class="btn btn-primary">
-                ▶ Assistir Vídeo do Robô
-              </a>
-              <a href="#case-stockflow" class="btn btn-secondary">
-                📦 Ver Sistema de Estoque
-              </a>
-              <a href="#linkedin-kit" class="btn btn-ghost">
-                📋 Copiar Post para LinkedIn
-              </a>
-            </div>
-
-            <div class="hero-metrics">
-              <div class="metric-item">
-                <strong class="mono-num">-90% Tempo</strong>
-                <span>Tarefas de horas feitas em segundos</span>
-              </div>
-              <div class="metric-item">
-                <strong class="mono-num">Zero Erros</strong>
-                <span>Fim de erros de digitação manual</span>
-              </div>
-              <div class="metric-item">
-                <strong class="mono-num">100% Real</strong>
-                <span>Sistemas usados todos os dias</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- RESUMO VISUAL RÁPIDO DOS 3 PROJETOS -->
-          <div class="hero-showcase">
-            <div class="terminal-window">
-              <div class="terminal-bar">
-                <div class="terminal-dots">
-                  <span class="dot-red"></span>
-                  <span class="dot-amber"></span>
-                  <span class="dot-green"></span>
-                </div>
-                <span class="terminal-title">O que eu já desenvolvi na prática</span>
-                <span class="terminal-status">EM USO ●</span>
-              </div>
-              <div class="terminal-body">
-                <div class="arch-node">
-                  <div class="node-head">
-                    <span class="node-tag tag-blue">1. ROBÔ DATASYS (RPA)</span>
-                    <span class="mono-small">Automação Automática</span>
-                  </div>
-                  <p>Move centenas de aparelhos por IMEI sozinho dentro do sistema DataSys. O que levava horas digitando um por um, o robô faz sozinho no navegador.</p>
-                </div>
-
-                <div class="arch-node">
-                  <div class="node-head">
-                    <span class="node-tag tag-crimson">2. STOCKFLOW — LABORATÓRIO</span>
-                    <span class="mono-small">Controle de Peças e Técnicos</span>
-                  </div>
-                  <p>Sistema onde cada técnico solicita peças, o administrador aprova com 1 clique e tudo fica registrado no nome de quem retirou.</p>
-                </div>
-
-                <div class="arch-node">
-                  <div class="node-head">
-                    <span class="node-tag tag-emerald">3. STOCKFLOW — FATURAMENTO</span>
-                    <span class="mono-small">Planilha Inteligente na Web</span>
-                  </div>
-                  <p>Controla caixas, termos de garantia e etiquetas. Avisa sozinho com cores quando um material está acabando (🔴 Repor, 🟡 Atenção, 🟢 OK).</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+    <main id="top" class="container">
+      <!-- HERO MINIMALISTA -->
+      <section class="hero">
+        <span class="tag">Desenvolvedor Full-Stack & Automação</span>
+        <h1>Crio sistemas web e robôs que eliminam trabalho manual.</h1>
+        <p class="subtitle">
+          Focado em transformar processos lentos do dia a dia — como movimentação manual em ERPs e planilhas de estoque — em softwares rápidos, simples e confiáveis.
+        </p>
       </section>
 
-      <!-- SEÇÃO 1: VÍDEO DEMONSTRATIVO DO ROBÔ EM AÇÃO -->
-      <section id="video-robo" class="section-block">
-        <div class="container">
-          <div class="section-header">
-            <div>
-              <span class="section-eyebrow">PROJETO 1 · VEJA FUNCIONANDO</span>
-              <h2>🎬 Vídeo: Robô DataSys Movimentando Aparelhos Sozinho</h2>
-              <p class="section-sub">Aperte o Play abaixo para assistir como o robô faz sozinho o trabalho que antes era feito manualmente aparelho por aparelho.</p>
+      <!-- PROJETOS -->
+      <section id="projetos" class="projects-section">
+        <!-- PROJETO 01: ROBÔ DATASYS -->
+        <article class="project-block">
+          <div class="project-meta">
+            <span class="project-num">01 / AUTOMAÇÃO RPA</span>
+            <div class="tech-pills">
+              <span>Python</span>
+              <span>FastAPI</span>
+              <span>Playwright</span>
+              <span>Pandas</span>
             </div>
           </div>
 
-          <!-- PLAYER DE VÍDEO ANIMADO DO ROBÔ -->
-          <div class="video-player-card">
-            <div class="video-topbar">
-              <div class="video-topbar-left">
-                <span class="rec-dot"></span>
-                <strong>Demonstração: DataSys AutoMove RPA em Ação</strong>
-              </div>
-              <div class="video-steps-pills">
-                <button type="button" class="v-step-pill active" data-goto-scene="0">1. Colar IMEIs</button>
-                <button type="button" class="v-step-pill" data-goto-scene="1">2. Robô Abre o Sistema</button>
-                <button type="button" class="v-step-pill" data-goto-scene="2">3. Transferindo Sozinho</button>
-                <button type="button" class="v-step-pill" data-goto-scene="3">4. Pronto em Segundos</button>
-              </div>
-            </div>
-
-            <!-- TELA DO VÍDEO -->
-            <div class="video-stage" id="robot-video-stage">
-              <!-- CENA 1: COLAR IMEIS -->
-              <div class="v-scene active" data-scene="0">
-                <div class="v-caption-badge">PASSO 1 DE 4 · O OPERADOR SÓ COLA A LISTA DE IMEIS</div>
-                <div class="v-window">
-                  <div class="v-win-head">🤖 Painel do Robô DataSys — Escolhendo para onde enviar</div>
-                  <div class="v-win-body v-grid-2">
-                    <div class="v-card">
-                      <span class="v-label">1. Para qual setor os aparelhos vão?</span>
-                      <div class="v-fake-select">📦 Depósito Destino: <strong>TRIAGEM</strong></div>
-                      <span class="v-label" style="margin-top:10px;">2. O robô confere se todos têm 15 dígitos:</span>
-                      <div class="v-check-ok">✅ 4 aparelhos prontos e sem códigos repetidos</div>
-                    </div>
-                    <div class="v-card">
-                      <span class="v-label">Lista de IMEIs colada pelo operador:</span>
-                      <div class="v-imei-list" id="v-scene1-imeis">
-                        <div class="v-imei-item">📱 358912049182731 <span class="v-tag-ok">15 dígitos OK</span></div>
-                        <div class="v-imei-item">📱 354091827364519 <span class="v-tag-ok">15 dígitos OK</span></div>
-                        <div class="v-imei-item">📱 013948172635490 <span class="v-tag-ok">Zero à esquerda protegido</span></div>
-                        <div class="v-imei-item">📱 359981726354112 <span class="v-tag-ok">15 dígitos OK</span></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- CENA 2: ROBÔ ABRINDO O NAVEGADOR E BAIXANDO ESTOQUE -->
-              <div class="v-scene" data-scene="1">
-                <div class="v-caption-badge">PASSO 2 DE 4 · O ROBÔ ABRE O CHROME E BUSCA OS APARELHOS SOZINHO</div>
-                <div class="v-window">
-                  <div class="v-win-head">🌐 Google Chrome (Controlado Automaticamente pelo Robô)</div>
-                  <div class="v-win-body">
-                    <div class="v-browser-steps">
-                      <div class="v-b-step done">
-                        <span class="v-b-icon">🔐</span>
-                        <div>
-                          <strong>Login Automático no DataSys ERP</strong>
-                          <p>O robô preenche usuário, senha e empresa (OUTLETDOCELULAR) sozinho.</p>
-                        </div>
-                        <span class="v-b-status">Concluído ✓</span>
-                      </div>
-                      <div class="v-b-step done">
-                        <span class="v-b-icon">📂</span>
-                        <div>
-                          <strong>Baixando Relatório de Estoque de Seriais</strong>
-                          <p>Acessa Administrativo ➔ Relatórios ➔ Estoque de Seriais e baixa a planilha.</p>
-                        </div>
-                        <span class="v-b-status">Concluído ✓</span>
-                      </div>
-                      <div class="v-b-step active-pulse">
-                        <span class="v-b-icon">🧹</span>
-                        <div>
-                          <strong>Limpando e Corrigindo a Planilha Automaticamente</strong>
-                          <p>Garante que nenhum código IMEI perca o zero inicial nem vire número quebrado no Excel.</p>
-                        </div>
-                        <span class="v-b-status">Processando...</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- CENA 3: MOVIMENTANDO OS APARELHOS -->
-              <div class="v-scene" data-scene="2">
-                <div class="v-caption-badge">PASSO 3 DE 4 · TRANSFERINDO CADA APARELHO AUTOMATICAMENTE</div>
-                <div class="v-window">
-                  <div class="v-win-head">⚡ Movimentação Automática em Andamento — Destino: TRIAGEM</div>
-                  <div class="v-win-body">
-                    <div class="v-transfer-rows">
-                      <div class="v-t-row">
-                        <span>📱 <strong>iPhone 13 128GB</strong> (358912049182731)</span>
-                        <span class="v-t-route">Estoque Geral ➔ <strong>TRIAGEM</strong></span>
-                        <span class="v-t-badge ok">✅ Transferido</span>
-                      </div>
-                      <div class="v-t-row">
-                        <span>📱 <strong>iPhone 11 64GB</strong> (354091827364519)</span>
-                        <span class="v-t-route">Laboratório ➔ <strong>TRIAGEM</strong></span>
-                        <span class="v-t-badge ok">✅ Transferido</span>
-                      </div>
-                      <div class="v-t-row">
-                        <span>📱 <strong>Galaxy S22 128GB</strong> (013948172635490)</span>
-                        <span class="v-t-route">Assistência ➔ <strong>TRIAGEM</strong></span>
-                        <span class="v-t-badge ok">✅ Transferido</span>
-                      </div>
-                      <div class="v-t-row">
-                        <span>📱 <strong>iPhone 12 128GB</strong> (359981726354112)</span>
-                        <span class="v-t-route">Quarentena ➔ <strong>TRIAGEM</strong></span>
-                        <span class="v-t-badge ok">✅ Transferido</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- CENA 4: RESULTADO FINAL -->
-              <div class="v-scene" data-scene="3">
-                <div class="v-caption-badge">PASSO 4 DE 4 · TRABALHO CONCLUÍDO E RELATÓRIO EXCEL GERADO</div>
-                <div class="v-window">
-                  <div class="v-win-head">🎉 Resultado da Automação</div>
-                  <div class="v-win-body v-final-summary">
-                    <div class="v-big-check">✅</div>
-                    <h3>100% dos Aparelhos Movimentados Sem Erro!</h3>
-                    <p>O que levaria horas procurando e transferindo código por código foi concluído automaticamente, gerando uma planilha Excel pronta para conferência.</p>
-                    <div class="v-summary-pills">
-                      <span>⚡ Velocidade: Segundos</span>
-                      <span>📊 Relatório Excel (.xlsx) Salvo</span>
-                      <span>🛡️ Histórico Gravado no Banco</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- CONTROLES DO VÍDEO (PLAY / PAUSE / BARRA DE TEMPO) -->
-            <div class="video-controls">
-              <button type="button" id="video-play-pause-btn" class="v-ctrl-btn">
-                ⏸ Pausar Vídeo
-              </button>
-              <div class="v-progress-track" id="video-progress-track">
-                <div class="v-progress-fill" id="video-progress-fill"></div>
-              </div>
-              <span class="v-time-label" id="video-scene-indicator">Cena 1 de 4</span>
+          <div class="project-head">
+            <div>
+              <h2>DataSys AutoMove RPA</h2>
+              <p>
+                Robô que automatiza a transferência de aparelhos por código IMEI no sistema DataSys. Em vez de um funcionário digitar centenas de códigos um por um, ele cola a lista no painel e o robô controla o navegador sozinho até gerar o relatório final em Excel.
+              </p>
             </div>
           </div>
-        </div>
-      </section>
 
-      <!-- SEÇÃO 2: SISTEMA STOCKFLOW (FÁCIL DE ENTENDER) -->
-      <section id="case-stockflow" class="section-block">
-        <div class="container">
-          <div class="section-header">
-            <div>
-              <span class="section-eyebrow">PROJETO 2 · SISTEMA WEB EM PRODUÇÃO</span>
-              <h2>StockFlow — Controle de Estoque para 2 Setores da Empresa</h2>
-              <p class="section-sub">Um único sistema com duas telas totalmente diferentes: uma para a <strong>Assistência Técnica</strong> e outra para o <strong>Faturamento</strong>.</p>
+          <!-- VÍDEO REALISTA EM CANVAS 60FPS -->
+          <div class="video-box">
+            <div class="canvas-wrapper" id="video-canvas-wrapper">
+              <canvas id="rpa-video-canvas" width="920" height="480" aria-label="Demonstração em vídeo do robô DataSys AutoMove RPA"></canvas>
             </div>
-            <a href="https://stockflow-outlet.web.app" target="_blank" rel="noopener" class="btn btn-primary">
-              Abrir Site do StockFlow ↗
+            <div class="video-bar">
+              <button type="button" id="v-toggle-btn" class="v-btn" aria-label="Pausar ou reproduzir">⏸</button>
+              <div class="v-timeline" id="v-timeline">
+                <div class="v-timeline-progress" id="v-timeline-progress"></div>
+              </div>
+              <span class="v-timer" id="v-timer">0:00 / 0:14</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- PROJETO 02: STOCKFLOW -->
+        <article class="project-block">
+          <div class="project-meta">
+            <span class="project-num">02 / SISTEMA WEB EM PRODUÇÃO</span>
+            <div class="tech-pills">
+              <span>Node.js</span>
+              <span>PostgreSQL</span>
+              <span>JavaScript</span>
+              <span>Firebase</span>
+            </div>
+          </div>
+
+          <div class="project-head">
+            <div>
+              <h2>StockFlow — Controle de Estoque Multi-Setor</h2>
+              <p>
+                Sistema web em produção que gerencia dois setores na mesma plataforma: um painel escuro para a <strong>Assistência Técnica</strong> (solicitação de peças por técnico, aprovação e balanço físico) e uma planilha automatizada para o <strong>Faturamento</strong> (com alertas automáticos de estoque baixo).
+              </p>
+            </div>
+            <a href="https://stockflow-outlet.web.app" target="_blank" rel="noopener" class="btn-outline">
+              Acessar Sistema ↗
             </a>
           </div>
 
-          <div class="simulator-frame">
-            <div class="simulator-tabs" role="tablist">
-              <button type="button" class="sim-tab active" data-sim-tab="faturamento">
-                📦 Tela 1: Planilha Automática do Faturamento
-              </button>
-              <button type="button" class="sim-tab" data-sim-tab="tecnica">
-                🔧 Tela 2: Painel dos Técnicos (Vermelho Dark)
-              </button>
-            </div>
-
-            <!-- ABA 1: FATURAMENTO -->
-            <div id="sim-panel-faturamento" class="sim-panel active">
-              <div class="sim-banner sim-banner-emerald">
-                <div>
-                  <strong>Substituiu a Planilha Manual do Faturamento</strong>
-                  <p>Controla caixas, sacolas, termos de garantia e etiquetas. Quando o estoque baixa, o sistema avisa sozinho com cores: <strong>🔴 REPOR</strong>, <strong>🟡 ATENÇÃO</strong> ou <strong>🟢 OK</strong>.</p>
-                </div>
-                <span class="sim-badge-emerald">Visual da Tela de Faturamento</span>
+          <!-- PREVIEW MINIMALISTA DAS 2 TELAS DO STOCKFLOW -->
+          <div class="dual-preview">
+            <div class="preview-card preview-dark">
+              <div class="p-head">
+                <span class="p-dot dot-crimson"></span>
+                <strong>Setor 1: Assistência Técnica</strong>
               </div>
-
-              <div class="sim-sheet-wrap">
-                <table class="sim-sheet-table">
-                  <thead>
-                    <tr>
-                      <th>Código</th>
-                      <th>Material do Faturamento</th>
-                      <th>Categoria</th>
-                      <th>Unidade</th>
-                      <th class="th-yellow">Estoque Inicial</th>
-                      <th>Entradas</th>
-                      <th>Saídas</th>
-                      <th>Estoque Atual</th>
-                      <th class="th-yellow">Mínimo</th>
-                      <th>Alerta Automático</th>
-                    </tr>
-                  </thead>
-                  <tbody id="sim-fat-tbody"></tbody>
-                </table>
+              <p>Retirada e devolução de peças vinculadas ao nome do técnico, aprovação rápida pelo administrador e contagem física de prateleira.</p>
+              <div class="p-mini-ui dark-ui">
+                <div class="p-row"><span>Tela iPhone 13</span><span>Técnico: Cauã</span><span class="badge-crimson">Aprovado</span></div>
+                <div class="p-row"><span>Bateria iPhone 11</span><span>Técnico: Bruno</span><span class="badge-crimson">Em Uso</span></div>
+                <div class="p-row"><span>Cola B7000</span><span>Contagem Física</span><span class="badge-neutral">18 un</span></div>
               </div>
             </div>
 
-            <!-- ABA 2: ASSISTÊNCIA TÉCNICA -->
-            <div id="sim-panel-tecnica" class="sim-panel">
-              <div class="sim-banner sim-banner-crimson">
-                <div>
-                  <strong>Tela da Assistência Técnica (Vermelho Dark Sofisticado)</strong>
-                  <p>Cada técnico tem seu login para retirar ou devolver peças. O administrador vê na hora quem retirou cada peça, aprova pedidos e faz a contagem física da prateleira.</p>
-                </div>
-                <span class="sim-badge-crimson">Visual da Tela Técnica</span>
+            <div class="preview-card preview-light">
+              <div class="p-head">
+                <span class="p-dot dot-emerald"></span>
+                <strong>Setor 2: Planilha Web do Faturamento</strong>
               </div>
-
-              <div class="sim-tech-preview">
-                <div class="sim-tech-sidebar">
-                  <div class="sim-tech-brand">
-                    <span class="sim-crimson-circle">OC</span>
-                    <div>
-                      <strong>Outlet do Celular</strong>
-                      <small>Assistência Técnica</small>
-                    </div>
-                  </div>
-                  <div class="sim-tech-nav">
-                    <span class="active">🏠 Painel Geral</span>
-                    <span>➖ Retirar Insumo</span>
-                    <span>➕ Devolver Insumo</span>
-                    <span>📋 Contagem / Auditoria</span>
-                    <span>📦 Catálogo de Insumos</span>
-                    <span>🕒 Histórico Completo</span>
-                  </div>
-                </div>
-
-                <div class="sim-tech-content">
-                  <div class="sim-tech-kpis">
-                    <div class="sim-tech-kpi">
-                      <span>PEÇAS CADASTRADAS</span>
-                      <strong>25</strong>
-                    </div>
-                    <div class="sim-tech-kpi danger">
-                      <span>ACABANDO (≤ 1 UN)</span>
-                      <strong>4</strong>
-                    </div>
-                    <div class="sim-tech-kpi">
-                      <span>RETIRADAS REGISTRADAS</span>
-                      <strong>100+</strong>
-                    </div>
-                  </div>
-
-                  <div class="sim-tech-cards">
-                    <div class="sim-tech-card">
-                      <h4>📋 Contagem da Prateleira</h4>
-                      <p>Permite conferir se a quantidade física na prateleira bate com o sistema e corrige o saldo em 1 clique.</p>
-                    </div>
-                    <div class="sim-tech-card">
-                      <h4>👤 Nome do Técnico Registrado</h4>
-                      <p>Toda retirada mostra exatamente o nome do técnico e para qual bancada a peça foi entregue.</p>
-                    </div>
-                  </div>
-                </div>
+              <p>Controla termos de garantia, caixas e etiquetas. Calcula entradas e saídas sozinho e muda o status automaticamente.</p>
+              <div class="p-mini-ui light-ui">
+                <div class="p-row"><span>FAT-004 · Caixa envio</span><span>65 / mín 100</span><span class="badge-red">🔴 REPOR</span></div>
+                <div class="p-row"><span>FAT-002 · Termo 6 meses</span><span>220 / mín 200</span><span class="badge-amber">🟡 ATENÇÃO</span></div>
+                <div class="p-row"><span>FAT-005 · Fita gomada</span><span>10 / mín 5</span><span class="badge-green">🟢 OK</span></div>
               </div>
             </div>
           </div>
-        </div>
+        </article>
       </section>
 
-      <!-- VITRINE DE PROJETOS -->
-      <section id="projetos" class="section-block">
-        <div class="container">
-          <div class="section-header">
-            <div>
-              <span class="section-eyebrow">RESUMO DOS PROJETOS</span>
-              <h2>O Que Eu Construí</h2>
-            </div>
-            <button type="button" id="open-add-project-btn" class="btn btn-sm btn-outline">
-              + Adicionar Outro Projeto
-            </button>
+      <!-- SEÇÃO LINKEDIN MINIMALISTA -->
+      <section id="linkedin" class="linkedin-block">
+        <div class="linkedin-header">
+          <div>
+            <span class="project-num">COMPARTILHAR</span>
+            <h2>Texto pronto para postar no LinkedIn</h2>
           </div>
-
-          <div id="projects-grid" class="projects-grid"></div>
+          <button type="button" id="copy-post-btn" class="btn-primary">
+            Copiar texto do post
+          </button>
         </div>
-      </section>
 
-      <!-- KIT PRONTO PARA LINKEDIN -->
-      <section id="linkedin-kit" class="section-block linkedin-section">
-        <div class="container">
-          <div class="section-header">
-            <div>
-              <span class="section-eyebrow">PRONTO PARA POSTAR</span>
-              <h2>Textos Prontos para o seu LinkedIn</h2>
-              <p class="section-sub">Clique em <strong>Copiar Post</strong>, cole no seu LinkedIn e publique!</p>
-            </div>
-          </div>
+        <pre id="linkedin-text" class="linkedin-box">Desenvolvi dois sistemas focados em eliminar trabalho manual e organizar a operação no dia a dia:
 
-          <div class="linkedin-grid">
-            <article class="linkedin-card">
-              <div class="linkedin-card-head">
-                <span class="li-badge">Post 1 · Mostrando o Robô + Sistema de Estoque</span>
-                <button type="button" class="btn btn-sm btn-primary" data-copy-post="post-1">📋 Copiar Post</button>
-              </div>
-              <pre id="post-1" class="linkedin-post-text">🚀 Como estou usando programação e automação para transformar tarefas de horas em poucos segundos!
+1. DataSys AutoMove RPA (Python + FastAPI + Playwright)
+Um robô que automatiza a transferência de centenas de aparelhos por código IMEI dentro do ERP. O que antes exigia horas digitando código por código, o robô executa sozinho no navegador em segundos e gera o relatório final em Excel.
 
-Desenvolvi dois projetos práticos focados em resolver problemas reais do dia a dia na operação:
+2. StockFlow (Node.js + PostgreSQL + Firebase)
+Um sistema web de controle de estoque para dois setores:
+• Assistência Técnica: controle de retirada de peças por técnico, aprovação e contagem física;
+• Faturamento: planilha web automatizada para embalagens e termos de garantia com alertas visuais (🔴 REPOR, 🟡 ATENÇÃO, 🟢 OK).
 
-🤖 1. Robô DataSys AutoMove (Automação com Python):
-• Antes, transferir centenas de aparelhos por código IMEI no sistema exigia digitação manual item por item;
-• Criei um robô com painel web que valida os códigos de 15 dígitos, abre o navegador sozinho, baixa e corrige a planilha de estoque e transfere todos os aparelhos automaticamente para o setor certo, gerando um relatório final em Excel.
+Veja a demonstração dos projetos no meu portfólio:
+https://stockflow-outlet.web.app/portfolio/
 
-📦 2. StockFlow — Sistema Web de Estoque (Assistência Técnica & Faturamento):
-• Painel para os técnicos solicitarem e devolverem insumos com tudo registrado por nome e bancada;
-• Tela exclusiva para o Faturamento que substituiu a planilha manual por um controle automático com alertas visuais (🔴 REPOR, 🟡 ATENÇÃO e 🟢 OK), contagem física e auditoria.
-
-🎬 Criei um site de portfólio com um vídeo demonstrativo do robô funcionando na prática!
-
-👉 Veja aqui: https://stockflow-outlet.web.app/portfolio/
-
-#DesenvolvimentoWeb #Python #Automacao #RPA #NodeJS #JavaScript #Tecnologia #Portfolio #Sistemas</pre>
-            </article>
-
-            <article class="linkedin-card">
-              <div class="linkedin-card-head">
-                <span class="li-badge">Post 2 · Focado no Robô de Automação (RPA)</span>
-                <button type="button" class="btn btn-sm btn-primary" data-copy-post="post-2">📋 Copiar Post</button>
-              </div>
-              <pre id="post-2" class="linkedin-post-text">🤖 Criei um robô em Python que faz sozinho no sistema o trabalho que antes levava horas!
-
-Sabe aquela tarefa repetitiva de conferir planilhas e movimentar centenas de produtos código por código dentro do ERP? Desenvolvi o DataSys AutoMove RPA para automatizar 100% desse processo:
-
-✅ O operador apenas cola a lista de IMEIs e escolhe o setor de destino;
-✅ O robô abre o Google Chrome sozinho, baixa a base atualizada e protege códigos com zero à esquerda;
-✅ Faz todas as transferências automaticamente mostrando o progresso ao vivo na tela e salva o relatório pronto em Excel.
-
-Coloquei uma demonstração em vídeo desse projeto lá no meu portfólio:
-👉 https://stockflow-outlet.web.app/portfolio/
-
-#Python #Automacao #RPA #Produtividade #Desenvolvedor #Tech #Portfolio</pre>
-            </article>
-          </div>
-        </div>
+#Python #NodeJS #DesenvolvimentoWeb #Automacao #RPA #FullStack #PostgreSQL #Portfolio</pre>
       </section>
     </main>
 
-    <footer class="site-footer">
-      <div class="container footer-inner">
-        <span>&copy; 2026 <strong>Luiz</strong> — Criador de Sistemas Web & Robôs de Automação.</span>
-        <button type="button" id="copy-portfolio-link-btn" class="btn btn-sm btn-primary">
-          🔗 Copiar Link deste Portfólio
-        </button>
-      </div>
+    <footer class="footer container">
+      <span>&copy; 2026 Luiz · Desenvolvedor Full-Stack & Automação</span>
+      <button type="button" id="copy-url-btn" class="link-btn">Copiar link do portfólio</button>
     </footer>
-
-    <!-- MODAL PARA ADICIONAR NOVO PROJETO -->
-    <dialog id="add-project-dialog" class="portfolio-dialog">
-      <form id="add-project-form">
-        <div class="dialog-header">
-          <h3>+ Adicionar Projeto ao Portfólio</h3>
-          <button type="button" id="close-project-dialog" class="dialog-close" aria-label="Fechar">✕</button>
-        </div>
-        <div class="dialog-fields">
-          <label>
-            <span>Nome do Projeto *</span>
-            <input type="text" id="proj-title" required placeholder="Ex: Sistema de Vendas">
-          </label>
-          <div class="field-row">
-            <label>
-              <span>Tipo *</span>
-              <select id="proj-category" required>
-                <option value="automacao">Robô / Automação</option>
-                <option value="fullstack">Sistema Web</option>
-              </select>
-            </label>
-            <label>
-              <span>Status *</span>
-              <input type="text" id="proj-status" value="Em Uso" required>
-            </label>
-          </div>
-          <label>
-            <span>Explicação Simples do que ele faz *</span>
-            <textarea id="proj-desc" rows="3" required placeholder="Explique de forma simples o problema que ele resolve..."></textarea>
-          </label>
-          <label>
-            <span>Tecnologias (separadas por vírgula) *</span>
-            <input type="text" id="proj-tags" required placeholder="Ex: Python, Node.js, Excel">
-          </label>
-          <label>
-            <span>Link (Opcional)</span>
-            <input type="url" id="proj-link" placeholder="https://...">
-          </label>
-        </div>
-        <div class="dialog-actions">
-          <button type="submit" class="btn btn-primary" style="flex:1;">Salvar Projeto</button>
-        </div>
-      </form>
-    </dialog>
 
     <script src="script.js"></script>
   </body>
