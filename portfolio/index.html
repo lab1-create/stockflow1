@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Luiz | Desenvolvedor Full-Stack & Criador de Sistemas Web</title>
+    <meta name="description" content="Portfólio oficial de Luiz — Desenvolvedor Full-Stack especializado em sistemas web em produção, automação de processos, Node.js, PostgreSQL e interfaces de alta performance.">
+    <meta property="og:title" content="Luiz — Desenvolvedor Full-Stack & Criador de Sistemas Web">
+    <meta property="og:description" content="Conheça meus projetos em produção, incluindo o sistema StockFlow (Controle de Estoque, Auditoria e ERP de Faturamento).">
+    <meta property="og:type" content="website">
+    <meta name="theme-color" content="#07080c">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="ambient-glow glow-crimson" aria-hidden="true"></div>
+    <div class="ambient-glow glow-emerald" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a href="#top" class="brand-mark">
+          <span class="brand-dot"></span>
+          <span class="brand-name">LUIZ</span>
+          <span class="brand-tag">// FULL-STACK.DEV</span>
+        </a>
+
+        <nav class="main-nav" aria-label="Navegação principal">
+          <a href="#case-stockflow">Case StockFlow</a>
+          <a href="#projetos">Projetos</a>
+          <a href="#arquitetura">Stack & Arquitetura</a>
+          <a href="#linkedin-kit">Postar no LinkedIn</a>
+          <a href="#contato">Contato</a>
+        </nav>
+
+        <div class="header-cta">
+          <span class="availability-pill">
+            <span class="pulse-dot"></span>
+            Projetos em Produção
+          </span>
+          <a href="https://stockflow-outlet.web.app" target="_blank" rel="noopener" class="btn btn-sm btn-outline">
+            Ver App Ao Vivo ↗
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main id="top">
+      <!-- HERO SECTION -->
+      <section class="hero-section">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <div class="eyebrow-badge">
+              <span class="mono-code">PORTFÓLIO DE ENGENHARIA DE SOFTWARE</span>
+            </div>
+            <h1>
+              Transformo operações reais em <span class="text-gradient">sistemas web</span> rápidos, auditáveis e sob medida.
+            </h1>
+            <p class="hero-lead">
+              Olá, eu sou o <strong>Luiz</strong> — Desenvolvedor Full-Stack e criador de sistemas operacionais para empresas. Desenvolvo desde o banco de dados relacional e APIs seguras até interfaces customizadas para cada setor do negócio.
+            </p>
+
+            <div class="hero-actions">
+              <a href="#case-stockflow" class="btn btn-primary">
+                Explorar Estudo de Caso
+              </a>
+              <a href="#linkedin-kit" class="btn btn-secondary">
+                📋 Kit Pronto para LinkedIn
+              </a>
+              <button type="button" id="open-add-project-btn" class="btn btn-ghost">
+                + Novo Projeto
+              </button>
+            </div>
+
+            <div class="hero-metrics">
+              <div class="metric-item">
+                <strong class="mono-num">100%</strong>
+                <span>Em Produção na Nuvem</span>
+              </div>
+              <div class="metric-item">
+                <strong class="mono-num">2 Setores</strong>
+                <span>Assistência Técnica & Faturamento</span>
+              </div>
+              <div class="metric-item">
+                <strong class="mono-num">Full-Stack</strong>
+                <span>Node.js · PostgreSQL · Cloud</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- HERO LIVE TERMINAL / ARCHITECTURE CARD -->
+          <div class="hero-showcase">
+            <div class="terminal-window">
+              <div class="terminal-bar">
+                <div class="terminal-dots">
+                  <span class="dot-red"></span>
+                  <span class="dot-amber"></span>
+                  <span class="dot-green"></span>
+                </div>
+                <span class="terminal-title">stockflow-production — arquitetura ativa</span>
+                <span class="terminal-status">ONLINE ●</span>
+              </div>
+              <div class="terminal-body">
+                <div class="arch-node node-client">
+                  <div class="node-head">
+                    <span class="node-tag tag-crimson">FRONTEND DUAL-UI</span>
+                    <span class="mono-small">Firebase Hosting · PWA</span>
+                  </div>
+                  <p>Duas interfaces independentes no mesmo ecossistema: <strong>Vermelho Dark Sofisticado</strong> para Laboratório Técnico e <strong>Planilha ERP</strong> para Faturamento.</p>
+                </div>
+
+                <div class="arch-connector">
+                  <span>⇅ HTTPS / JWT Bearer + Cookies HttpOnly · Rate Limiting</span>
+                </div>
+
+                <div class="arch-node node-api">
+                  <div class="node-head">
+                    <span class="node-tag tag-blue">BACKEND API</span>
+                    <span class="mono-small">Node.js · Express · Render Cloud</span>
+                  </div>
+                  <p>Controle de transações ACID, autenticação Bcrypt, auto-migração de schema e cálculo em tempo real de entradas, saídas e alertas.</p>
+                </div>
+
+                <div class="arch-connector">
+                  <span>⇅ Pool SSL · Row Level Security (RLS) · SQL Aggregations</span>
+                </div>
+
+                <div class="arch-node node-db">
+                  <div class="node-head">
+                    <span class="node-tag tag-emerald">DATABASE</span>
+                    <span class="mono-small">PostgreSQL · Supabase</span>
+                  </div>
+                  <p>Tabelas normalizadas (<code>app_users</code>, <code>supplies</code>, <code>stock_movements</code>, <code>stock_requests</code>, <code>destinations</code>) com rastreabilidade completa.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FEATURED CASE STUDY: STOCKFLOW SIMULATOR -->
+      <section id="case-stockflow" class="section-block">
+        <div class="container">
+          <div class="section-header">
+            <div>
+              <span class="section-eyebrow">ESTUDO DE CASO EM DESTAQUE</span>
+              <h2>StockFlow — Sistema Integrado de Estoque, Laboratório & Faturamento</h2>
+            </div>
+            <a href="https://stockflow-outlet.web.app" target="_blank" rel="noopener" class="btn btn-primary">
+              Acessar Sistema em Produção ↗
+            </a>
+          </div>
+
+          <p class="case-intro">
+            Desenvolvido para resolver um desafio real de operação na <strong>Outlet do Celular</strong>: unificar o controle de insumos da <strong>Assistência Técnica</strong> (com aprovação de retiradas por técnico, devoluções e balanço físico) e o controle de expedição do <strong>Setor de Faturamento</strong> (transformando uma planilha complexa de termos de garantia e embalagens em um painel web automatizado).
+          </p>
+
+          <!-- INTERACTIVE SIMULATOR TABS -->
+          <div class="simulator-frame">
+            <div class="simulator-tabs" role="tablist">
+              <button type="button" class="sim-tab active" data-sim-tab="faturamento">
+                📦 Visão 1: Planilha ERP do Faturamento
+              </button>
+              <button type="button" class="sim-tab" data-sim-tab="tecnica">
+                🔧 Visão 2: Assistência Técnica (Dark Crimson)
+              </button>
+              <button type="button" class="sim-tab" data-sim-tab="codigo">
+                🗄️ Visão 3: Engenharia & Banco de Dados
+              </button>
+            </div>
+
+            <!-- TAB 1: FATURAMENTO PREVIEW -->
+            <div id="sim-panel-faturamento" class="sim-panel active">
+              <div class="sim-banner sim-banner-emerald">
+                <div>
+                  <strong>De Planilha Manual para ERP Web Automatizado</strong>
+                  <p>O sistema calcula automaticamente Entradas, Saídas, Estoque Atual e muda o Status sozinho com cor e ícone (🔴 REPOR, 🟡 ATENÇÃO, 🟢 OK). Experimente alterar o <strong>Estoque Inicial</strong> ou <strong>Mínimo</strong> abaixo:</p>
+                </div>
+                <span class="sim-badge-emerald">Interativo — Teste Abaixo</span>
+              </div>
+
+              <div class="sim-sheet-wrap">
+                <table class="sim-sheet-table">
+                  <thead>
+                    <tr>
+                      <th>ID / Ref</th>
+                      <th>Item do Faturamento</th>
+                      <th>Categoria</th>
+                      <th>Unid.</th>
+                      <th class="th-yellow">Estoque Inicial ✏️</th>
+                      <th>Entradas</th>
+                      <th>Saídas</th>
+                      <th>Estoque Atual</th>
+                      <th class="th-yellow">Estoque Mínimo ✏️</th>
+                      <th>Status Automático</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sim-fat-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- TAB 2: ASSISTÊNCIA TÉCNICA PREVIEW -->
+            <div id="sim-panel-tecnica" class="sim-panel">
+              <div class="sim-banner sim-banner-crimson">
+                <div>
+                  <strong>Interface Vermelho Dark Sofisticado — Assistência Técnica</strong>
+                  <p>Painel dedicado para controle de laboratório: retiradas vinculadas ao nome real do técnico, fila de aprovação em tempo real, alerta de estoque crítico (≤ 1 un) e tela de Contagem / Auditoria física.</p>
+                </div>
+                <span class="sim-badge-crimson">Tema Dark Crimson</span>
+              </div>
+
+              <div class="sim-tech-preview">
+                <div class="sim-tech-sidebar">
+                  <div class="sim-tech-brand">
+                    <span class="sim-crimson-circle">OC</span>
+                    <div>
+                      <strong>Outlet do Celular</strong>
+                      <small>Assistência Técnica</small>
+                    </div>
+                  </div>
+                  <div class="sim-tech-nav">
+                    <span class="active">🏠 Painel Geral</span>
+                    <span>➖ Retirar Insumo</span>
+                    <span>➕ Devolver Insumo</span>
+                    <span>📋 Contagem / Auditoria</span>
+                    <span>📦 Catálogo de Insumos</span>
+                    <span>🕒 Auditoria / Histórico</span>
+                  </div>
+                </div>
+
+                <div class="sim-tech-content">
+                  <div class="sim-tech-kpis">
+                    <div class="sim-tech-kpi">
+                      <span>TOTAL DE INSUMOS</span>
+                      <strong>25</strong>
+                    </div>
+                    <div class="sim-tech-kpi danger">
+                      <span>CRÍTICO (≤ 1 UN)</span>
+                      <strong>4</strong>
+                    </div>
+                    <div class="sim-tech-kpi">
+                      <span>RETIRADAS AUDITADAS</span>
+                      <strong>100+</strong>
+                    </div>
+                  </div>
+
+                  <div class="sim-tech-cards">
+                    <div class="sim-tech-card">
+                      <h4> Contagem / Balanço Físico Corrigido</h4>
+                      <p>Seleção por lista suspensa ou leitor de código de barras, comparando o saldo do sistema com a contagem física na prateleira e gravando divergências na auditoria.</p>
+                    </div>
+                    <div class="sim-tech-card">
+                      <h4>👤 Rastreabilidade por Técnico</h4>
+                      <p>Quando o administrador retira ou aprova um insumo para um técnico, o histórico registra exatamente o nome do técnico responsável e a bancada de destino.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 3: ENGENHARIA & BANCO DE DADOS -->
+            <div id="sim-panel-codigo" class="sim-panel">
+              <div class="sim-code-grid">
+                <div class="code-card">
+                  <div class="code-card-head">
+                    <span class="mono-code">PostgreSQL + Auto-Migration (server.js)</span>
+                  </div>
+                  <pre><code>// Cálculo consolidado de Entradas, Saídas e Saldo por Setor
+SELECT s.code, s.name, s.category, s.sector, s.unit,
+       s.initial_quantity, s.minimum_quantity, s.current_quantity,
+       COALESCE(agg.entries_total, 0)::int AS entries_total,
+       COALESCE(agg.exits_total, 0)::int AS exits_total,
+       agg.last_movement_at
+FROM supplies s
+LEFT JOIN (
+  SELECT supply_id,
+         SUM(CASE WHEN movement_type IN ('replenishment','return')
+                  THEN quantity ELSE 0 END) AS entries_total,
+         SUM(CASE WHEN movement_type = 'withdrawal'
+                  THEN quantity ELSE 0 END) AS exits_total,
+         MAX(created_at) AS last_movement_at
+  FROM stock_movements GROUP BY supply_id
+) agg ON agg.supply_id = s.id;</code></pre>
+                </div>
+
+                <div class="code-card">
+                  <div class="code-card-head">
+                    <span class="mono-code">Destaques Técnicos Implementados</span>
+                  </div>
+                  <ul class="eng-list">
+                    <li><strong>Isolamento Multi-Setor Inteligente:</strong> Login único que identifica automaticamente o setor do usuário (<code>tecnica</code> ou <code>faturamento</code>) e carrega a interface correspondente.</li>
+                    <li><strong>Segurança de Produção:</strong> Senhas criptografadas com <code>bcrypt</code>, sessões <code>JWT</code>, proteção contra XSS, <code>express-rate-limit</code> e transações PostgreSQL (<code>BEGIN / COMMIT / ROLLBACK</code> com <code>FOR UPDATE</code>).</li>
+                    <li><strong>PWA & Service Worker Network-First:</strong> Instalável no celular ou desktop com atualização instantânea de cache.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROJECTS GRID SECTION -->
+      <section id="projetos" class="section-block">
+        <div class="container">
+          <div class="section-header">
+            <div>
+              <span class="section-eyebrow">VITRINE DE PROJETOS</span>
+              <h2>Sistemas & Módulos Desenvolvidos</h2>
+            </div>
+            <div class="filter-pills">
+              <button type="button" class="filter-pill active" data-filter="all">Todos</button>
+              <button type="button" class="filter-pill" data-filter="fullstack">Full-Stack</button>
+              <button type="button" class="filter-pill" data-filter="automacao">Automação & ERP</button>
+              <button type="button" class="filter-pill" data-filter="backend">Backend & API</button>
+            </div>
+          </div>
+
+          <div id="projects-grid" class="projects-grid"></div>
+        </div>
+      </section>
+
+      <!-- STACK & ARCHITECTURE SECTION -->
+      <section id="arquitetura" class="section-block">
+        <div class="container">
+          <div class="section-header">
+            <div>
+              <span class="section-eyebrow">COMPETÊNCIAS TÉCNICAS</span>
+              <h2>Stack de Tecnologias & Ferramentas</h2>
+            </div>
+          </div>
+
+          <div class="stack-grid">
+            <article class="stack-card">
+              <span class="stack-icon">⚡</span>
+              <h3>Frontend & UX/UI</h3>
+              <p>Criação de interfaces responsivas, dashboards operacionais, temas Dark/ERP sob medida e Progressive Web Apps (PWA).</p>
+              <div class="tag-list">
+                <span>JavaScript (ES6+)</span>
+                <span>HTML5 Semântico</span>
+                <span>CSS3 / Grid / Flexbox</span>
+                <span>PWA & Service Workers</span>
+                <span>Design de Sistemas</span>
+              </div>
+            </article>
+
+            <article class="stack-card">
+              <span class="stack-icon">🛠️</span>
+              <h3>Backend & Segurança</h3>
+              <p>APIs RESTful escaláveis, controle de acesso por cargos e setores, proteção contra concorrência e validação rigorosa.</p>
+              <div class="tag-list">
+                <span>Node.js</span>
+                <span>Express.js</span>
+                <span>JWT & Cookies HttpOnly</span>
+                <span>Bcrypt</span>
+                <span>Rate Limiting</span>
+              </div>
+            </article>
+
+            <article class="stack-card">
+              <span class="stack-icon">🗄️</span>
+              <h3>Banco de Dados & Cloud</h3>
+              <p>Modelagem relacional, transações ACID, migrações automatizadas e deploy contínuo em nuvem.</p>
+              <div class="tag-list">
+                <span>PostgreSQL</span>
+                <span>Supabase</span>
+                <span>Firebase Hosting</span>
+                <span>Render Cloud</span>
+                <span>Git & GitHub</span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- LINKEDIN KIT SECTION -->
+      <section id="linkedin-kit" class="section-block linkedin-section">
+        <div class="container">
+          <div class="section-header">
+            <div>
+              <span class="section-eyebrow">PRONTO PARA PUBLICAR</span>
+              <h2>Kit de Postagem para o seu LinkedIn</h2>
+              <p class="section-sub">Escolha um dos modelos abaixo, clique em <strong>Copiar Texto para o LinkedIn</strong> e publique junto com o link deste portfólio.</p>
+            </div>
+          </div>
+
+          <div class="linkedin-grid">
+            <article class="linkedin-card">
+              <div class="linkedin-card-head">
+                <span class="li-badge">Opção 1 · Case Completo StockFlow</span>
+                <button type="button" class="btn btn-sm btn-primary" data-copy-post="post-1">📋 Copiar Post</button>
+              </div>
+              <pre id="post-1" class="linkedin-post-text">🚀 Transformando controle de estoque e faturamento em um sistema web em produção!
+
+Nos últimos dias desenvolvi e coloquei em produção o StockFlow — um sistema Full-Stack criado para resolver dores reais de operação e controle de insumos.
+
+O maior desafio foi atender dois setores com rotinas completamente diferentes dentro da mesma arquitetura:
+
+🔧 1. Assistência Técnica (Interface Dark Crimson):
+• Fluxo de solicitação e aprovação de insumos com rastreabilidade nominal por técnico e bancada;
+• Tela de Contagem Física / Balanço integrada à auditoria;
+• Alertas automáticos de estoque crítico e exportação de pedidos em CSV.
+
+📦 2. Setor de Faturamento (Planilha ERP Automatizada):
+• Transformei uma planilha manual de controle de termos de garantia, embalagens e materiais de expedição em um painel web inteligente;
+• Cálculo automático de Entradas, Saídas, Estoque Atual e Status visual (🔴 REPOR, 🟡 ATENÇÃO, 🟢 OK);
+• Criação de referências/IDs e células editáveis em tempo real.
+
+🛠️ Tecnologias utilizadas:
+Node.js | Express | PostgreSQL (Supabase) | JavaScript | HTML5 & CSS3 | PWA | Firebase Hosting & Render
+
+🔗 Confira meu portfólio e veja o projeto funcionando:
+https://stockflow-outlet.web.app/portfolio/
+
+#DesenvolvimentoWeb #FullStack #NodeJS #PostgreSQL #JavaScript #EngenhariaDeSoftware #Portfolio #SistemasWeb</pre>
+            </article>
+
+            <article class="linkedin-card">
+              <div class="linkedin-card-head">
+                <span class="li-badge">Opção 2 · De Planilha para Sistema Web</span>
+                <button type="button" class="btn btn-sm btn-primary" data-copy-post="post-2">📋 Copiar Post</button>
+              </div>
+              <pre id="post-2" class="linkedin-post-text">💡 Como substituir planilhas manuais por um sistema web com regras automatizadas e auditoria em tempo real?
+
+Acabei de lançar um novo módulo no StockFlow voltado exclusivamente para o Setor de Faturamento e Expedição!
+
+Antes, o controle de embalagens, etiquetas térmicas e termos de garantia dependia de fórmulas manuais em planilhas. Agora, o setor conta com um sistema web próprio onde:
+✅ O Estoque Atual soma e subtrai sozinho a partir da aba de Movimentações;
+✅ O alerta de Status muda automaticamente (🔴 REPOR quando atinge o mínimo, 🟡 ATENÇÃO até 50% acima e 🟢 OK para estoque saudável);
+✅ Contagem física de prateleira e auditoria completa ficam salvas no banco de dados PostgreSQL.
+
+Também coloquei no ar meu novo site de Portfólio com uma demonstração interativa desse sistema!
+
+👉 Acesse aqui: https://stockflow-outlet.web.app/portfolio/
+
+#FullStackDeveloper #JavaScript #NodeJS #Automacao #PostgreSQL #WebDev #Tech</pre>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONTACT / FOOTER -->
+      <section id="contato" class="section-block contact-section">
+        <div class="container">
+          <div class="contact-box">
+            <div>
+              <span class="section-eyebrow">VAMOS CONVERSAR</span>
+              <h2>Gostou dos projetos? Vamos conectar no LinkedIn!</h2>
+              <p>Estou sempre aberto a trocar ideias sobre desenvolvimento de sistemas web, automação de processos e novas oportunidades na área de tecnologia.</p>
+            </div>
+            <div class="contact-actions">
+              <button type="button" id="copy-portfolio-link-btn" class="btn btn-primary">
+                🔗 Copiar Link do Portfólio
+              </button>
+              <a href="https://stockflow-outlet.web.app" target="_blank" rel="noopener" class="btn btn-outline">
+                Abrir StockFlow em Produção ↗
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <span>&copy; 2026 <strong>Luiz</strong> — Desenvolvedor Full-Stack & Criador de Sistemas Web.</span>
+        <span class="mono-small">Construído com código limpo, performance e foco em resultados reais.</span>
+      </div>
+    </footer>
+
+    <!-- MODAL PARA ADICIONAR NOVO PROJETO AO PORTFÓLIO -->
+    <dialog id="add-project-dialog" class="portfolio-dialog">
+      <form id="add-project-form">
+        <div class="dialog-header">
+          <h3>+ Adicionar Projeto ao Portfólio</h3>
+          <button type="button" id="close-project-dialog" class="dialog-close" aria-label="Fechar">✕</button>
+        </div>
+        <p class="dialog-sub">Adicione novos sistemas, APIs ou sites que você desenvolver. Eles ficarão salvos na sua vitrine.</p>
+
+        <div class="dialog-fields">
+          <label>
+            <span>Nome do Projeto *</span>
+            <input type="text" id="proj-title" required placeholder="Ex: Sistema de Gestão Comercial">
+          </label>
+          <div class="field-row">
+            <label>
+              <span>Categoria *</span>
+              <select id="proj-category" required>
+                <option value="fullstack">Full-Stack</option>
+                <option value="automacao">Automação & ERP</option>
+                <option value="backend">Backend & API</option>
+              </select>
+            </label>
+            <label>
+              <span>Status *</span>
+              <input type="text" id="proj-status" value="Em Produção" required>
+            </label>
+          </div>
+          <label>
+            <span>Descrição do Projeto e Problema Resolvido *</span>
+            <textarea id="proj-desc" rows="3" required placeholder="Descreva o que o projeto faz e os resultados..."></textarea>
+          </label>
+          <label>
+            <span>Tecnologias (separadas por vírgula) *</span>
+            <input type="text" id="proj-tags" required placeholder="Ex: Node.js, PostgreSQL, React, Docker">
+          </label>
+          <label>
+            <span>Link do Projeto ou Repositório (Opcional)</span>
+            <input type="url" id="proj-link" placeholder="https://...">
+          </label>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="submit" class="btn btn-primary" style="flex:1;">Salvar na Vitrine</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="script.js"></script>
+  </body>
+</html>
