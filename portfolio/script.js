@@ -1,12 +1,36 @@
 const DEFAULT_PROJECTS = [
   {
+    id: "datasys-automove-rpa",
+    title: "DataSys AutoMove RPA — Automação de Movimentação por IMEI",
+    category: "automacao",
+    categoryLabel: "Automação RPA · Python",
+    status: "🟢 Em Operação",
+    description:
+      "Aplicação RPA completa para conferência e movimentação em lote de aparelhos no sistema DataSys ERP. Inclui download automatizado do Relatório de Estoque de Seriais via Playwright, sanitização rigorosa de planilhas com Pandas/openpyxl (preservando 15 dígitos e zeros à esquerda), validação de duplicidades, modo Dry-Run, pausa inteligente Human-in-the-Loop e terminal de logs em tempo real via WebSocket.",
+    tags: ["Python 3.12+", "FastAPI", "Playwright RPA", "WebSockets", "Pandas & openpyxl", "SQLite", "Tailwind CSS"],
+    link: "#case-stockflow",
+    linkLabel: "Testar Simulador RPA Acima ↑"
+  },
+  {
+    id: "painel-triadores-rpa",
+    title: "Painel de Triagem & Automação de Transferências",
+    category: "automacao",
+    categoryLabel: "Automação & Auditoria",
+    status: "🟢 Em Operação",
+    description:
+      "Sistema operacional em Python para automação de transferências do setor de Triagem, com geração automática de logs de auditoria detalhados e módulo integrado de disparo de notificações por e-mail.",
+    tags: ["Python", "Automação de Processos", "Logs de Auditoria", "Notificação E-mail"],
+    link: "#case-stockflow",
+    linkLabel: "Ver Ecossistema RPA ↑"
+  },
+  {
     id: "stockflow-core",
     title: "StockFlow — Sistema Integrado de Estoque & Laboratório",
     category: "fullstack",
     categoryLabel: "Full-Stack · Produção",
     status: "🟢 Em Produção",
     description:
-      "Sistema web completo desenvolvido para controle de insumos técnicos, fila de aprovação de retiradas em tempo real, rastreabilidade por técnico e bancada, devoluções e balanço físico auditável.",
+      "Sistema web completo desenvolvido para controle de insumos técnicos com interface Vermelho Dark Sofisticado, fila de aprovação de retiradas em tempo real, rastreabilidade por técnico e bancada, devoluções e balanço físico auditável.",
     tags: ["Node.js", "PostgreSQL", "Supabase", "Express", "PWA", "Firebase Hosting"],
     link: "https://stockflow-outlet.web.app",
     linkLabel: "Acessar Sistema ↗"
@@ -146,16 +170,135 @@ function renderProjects(filter = "all") {
           ${(p.tags || []).map(t => `<span>${t}</span>`).join("")}
         </div>
         <div class="proj-links">
-          <a href="${p.link || '#'}" target="_blank" rel="noopener" class="proj-link">${p.linkLabel || 'Ver Detalhes ↗'}</a>
+          <a href="${p.link || '#'}" ${String(p.link || '').startsWith('http') ? 'target="_blank" rel="noopener"' : ''} class="proj-link">${p.linkLabel || 'Ver Detalhes ↗'}</a>
         </div>
       </div>
     </article>
   `).join("");
 }
 
+// Simulador DataSys AutoMove RPA
+let rpaSimRunning = false;
+
+function parseImeis() {
+  const raw = document.getElementById("rpa-imei-input")?.value || "";
+  const lines = raw.split(/\r?\n/).map(l => l.trim().replace(/^'/, "").replace(/\.0$/, "")).filter(Boolean);
+  const valid = [];
+  const invalid = [];
+  const seen = new Set();
+  const duplicates = [];
+
+  lines.forEach(imei => {
+    if (!/^\d{15}$/.test(imei)) {
+      invalid.push(imei);
+    } else if (seen.has(imei)) {
+      duplicates.push(imei);
+    } else {
+      seen.add(imei);
+      valid.push(imei);
+    }
+  });
+  return { valid, invalid, duplicates };
+}
+
+function updateImeiCounter() {
+  const counter = document.getElementById("rpa-imei-counter");
+  if (!counter) return;
+  const { valid, invalid, duplicates } = parseImeis();
+  counter.textContent = `${valid.length} válidos (15 dígitos)` +
+    (invalid.length ? ` · ${invalid.length} inválidos` : "") +
+    (duplicates.length ? ` · ${duplicates.length} duplicados` : "");
+}
+
+function appendRpaLog(text, cls = "log-info") {
+  const box = document.getElementById("rpa-console-logs");
+  if (!box) return;
+  const ts = new Date().toLocaleTimeString("pt-BR");
+  const div = document.createElement("div");
+  div.className = `log-line ${cls}`;
+  div.textContent = `[${ts}] ${text}`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function runRpaSimulation() {
+  if (rpaSimRunning) return;
+  const { valid, invalid, duplicates } = parseImeis();
+  const dest = document.getElementById("rpa-dest-select")?.value || "TRIAGEM";
+  const pill = document.getElementById("rpa-state-pill");
+  const runBtn = document.getElementById("rpa-run-btn");
+
+  rpaSimRunning = true;
+  if (runBtn) runBtn.disabled = true;
+  if (pill) {
+    pill.className = "rpa-pill-running";
+    pill.textContent = "⚡ EXECUTANDO RPA";
+  }
+
+  const box = document.getElementById("rpa-console-logs");
+  if (box) box.innerHTML = "";
+
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+  appendRpaLog(`[WS-CONNECTED] Iniciando job de movimentação no DataSys ERP (Empresa: OUTLETDOCELULAR)...`, "log-info");
+  await wait(450);
+
+  if (invalid.length > 0) {
+    appendRpaLog(`[VALIDATOR] ⚠️ ${invalid.length} serial(is) ignorado(s) por não terem 15 dígitos: ${invalid.join(", ")}`, "log-warn");
+    await wait(400);
+  }
+  if (duplicates.length > 0) {
+    appendRpaLog(`[VALIDATOR] ⚠️ ${duplicates.length} duplicidade(s) removida(s) automaticamente.`, "log-warn");
+    await wait(400);
+  }
+
+  if (valid.length === 0) {
+    appendRpaLog(`[ERROR] Nenhum IMEI válido de 15 dígitos para processar.`, "log-err");
+    rpaSimRunning = false;
+    if (runBtn) runBtn.disabled = false;
+    if (pill) { pill.className = "rpa-pill-idle"; pill.textContent = "● PRONTO"; }
+    return;
+  }
+
+  appendRpaLog(`[PLAYWRIGHT] Navegando: Administrativo -> Relatórios -> Estoque -> Estoque de Seriais...`, "log-info");
+  await wait(550);
+  appendRpaLog(`[PANDAS] Sanitizando planilha (Coluna B texto 15 dígitos, Coluna D Produto, Coluna P Estoque Atual)...`, "log-info");
+  await wait(550);
+
+  const sampleProducts = ["IPHONE 13 128GB MIDNIGHT", "IPHONE 11 64GB BRANCO", "GALAXY S22 128GB PRETO", "IPHONE 12 128GB AZUL"];
+  const sampleOrigins = ["ESTOQUE GERAL", "LABORATÓRIO", "ASSISTÊNCIA", "QUARENTENA"];
+
+  for (let i = 0; i < valid.length; i++) {
+    const imei = valid[i];
+    const prod = sampleProducts[i % sampleProducts.length];
+    const orig = sampleOrigins[i % sampleOrigins.length];
+    appendRpaLog(`[PLAYWRIGHT] (${i + 1}/${valid.length}) IMEI ${imei} localizado: ${prod} | Origem: ${orig} ➔ Destino: ${dest}`, "log-ok");
+    await wait(450);
+  }
+
+  appendRpaLog(`[SQLITE & EXCEL] ✅ Lote finalizado! ${valid.length}/${valid.length} aparelhos movimentados para "${dest}". Relatório .xlsx gerado.`, "log-ok");
+
+  rpaSimRunning = false;
+  if (runBtn) runBtn.disabled = false;
+  if (pill) {
+    pill.className = "rpa-pill-idle";
+    pill.textContent = "✅ CONCLUÍDO";
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   renderSimulatorTable();
   renderProjects("all");
+  updateImeiCounter();
+
+  document.getElementById("rpa-imei-input")?.addEventListener("input", updateImeiCounter);
+  document.getElementById("rpa-run-btn")?.addEventListener("click", runRpaSimulation);
+  document.getElementById("rpa-reset-btn")?.addEventListener("click", () => {
+    const box = document.getElementById("rpa-console-logs");
+    if (box) {
+      box.innerHTML = `<div class="log-line log-info">[SYSTEM] Console limpo. Pronto para nova execução RPA.</div>`;
+    }
+  });
 
   // Interactive simulator cells
   const simTbody = document.getElementById("sim-fat-tbody");
@@ -242,8 +385,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const link = document.getElementById("proj-link").value.trim() || "https://stockflow-outlet.web.app";
 
     const catMap = {
-      fullstack: "Full-Stack",
-      automacao: "Automação & ERP",
+      fullstack: "Full-Stack Web",
+      automacao: "Automação & RPA",
       backend: "Backend & API"
     };
 

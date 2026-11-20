@@ -505,6 +505,100 @@ body {
   border-radius: 999px;
 }
 
+/* DataSys AutoMove RPA Simulator inside Portfolio */
+.rpa-sim-grid {
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: 1.25rem;
+}
+.rpa-config-box,
+.rpa-console-box {
+  background: #090d16;
+  border: 1px solid rgba(14, 165, 233, 0.28);
+  border-radius: 12px;
+  padding: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.rpa-box-head,
+.rpa-console-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #e0f2fe;
+}
+.rpa-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.rpa-config-box label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.rpa-input,
+.rpa-textarea {
+  background: #04070d;
+  color: #f8fafc;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.rpa-textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.rpa-actions-bar {
+  display: flex;
+  gap: 0.65rem;
+}
+.rpa-pill-idle {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.rpa-pill-running {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  background: rgba(14, 165, 233, 0.22);
+  color: #38bdf8;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.rpa-console-logs {
+  background: #030509;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 0.85rem;
+  height: 250px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 0.77rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.log-line {
+  line-height: 1.45;
+}
+.log-info { color: #93c5fd; }
+.log-ok { color: #34d399; }
+.log-warn { color: #fcd34d; }
+.log-err { color: #f87171; }
+
 /* Faturamento Sheet Preview inside Portfolio */
 .sim-sheet-wrap {
   overflow-x: auto;
@@ -974,6 +1068,7 @@ body {
 
 @media (max-width: 960px) {
   .hero-grid,
+  .rpa-sim-grid,
   .sim-tech-preview,
   .sim-code-grid,
   .linkedin-grid {
